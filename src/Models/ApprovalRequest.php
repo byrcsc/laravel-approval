@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
+use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 
 /**
@@ -115,6 +118,64 @@ final class ApprovalRequest extends Model
         $query
             ->where('approvable_type', $approvable->getMorphClass())
             ->where('approvable_id', $approvable->getKey());
+    }
+
+    /**
+     * Open requests whose active level is past its deadline.
+     *
+     * Says nothing about whether the escalation policy has run - that is
+     * `escalated_at` on the step, and a level stays overdue for as long as
+     * nobody decides it.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeOverdue(Builder $query): void
+    {
+        $query->pending()->whereHas('steps', function (Builder $step): void {
+            $step->where('state', StepState::Active->value)
+                ->whereNotNull('deadline_at')
+                ->where('deadline_at', '<=', Date::now());
+        });
+    }
+
+    /**
+     * The inbox query.
+     *
+     * A seat that has been delegated belongs to the delegate and not to the
+     * person who delegated it, so it shows in exactly one inbox. The
+     * already-voted exclusion is what keeps a request off somebody's list once
+     * they have dealt with it, while the level waits on their colleagues.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeAwaitingUser(Builder $query, Model $user): void
+    {
+        $type = $user->getMorphClass();
+        $id = $user->getKey();
+
+        $query->pending()->whereHas('steps', function (Builder $step) use ($type, $id): void {
+            $step
+                ->where('state', StepState::Active->value)
+                ->whereHas('approverSlots', function (Builder $slot) use ($type, $id): void {
+                    $slot->where(function (Builder $held) use ($type, $id): void {
+                        $held
+                            ->where(function (Builder $own) use ($type, $id): void {
+                                $own->whereNull('delegated_to_id')
+                                    ->where('approver_type', $type)
+                                    ->where('approver_id', $id);
+                            })
+                            ->orWhere(function (Builder $delegated) use ($type, $id): void {
+                                $delegated->where('delegated_to_type', $type)
+                                    ->where('delegated_to_id', $id);
+                            });
+                    });
+                })
+                ->whereDoesntHave('actions', function (Builder $action) use ($type, $id): void {
+                    $action->where('action', ActionType::Approved->value)
+                        ->where('actor_type', $type)
+                        ->where('actor_id', $id);
+                });
+        });
     }
 
     /**

@@ -14,6 +14,7 @@ enum ApproverSource: string
     case Assigned = 'assigned';
     case Resolved = 'resolved';
     case Delegated = 'delegated';
+    case Reassigned = 'reassigned';
     case Escalated = 'escalated';
     case Resynced = 'resynced';
 }

@@ -29,8 +29,31 @@ abstract class TestCase extends Orchestra
      */
     protected array $bootConfig = [];
 
+    /**
+     * Rebuild the application with extra config, and put the schema back.
+     *
+     * `refreshApplication()` alone hands back an empty database: the SQLite
+     * connection is in memory, so rebuilding the container throws the tables
+     * away with it. Anything that boots differently *and* touches the database
+     * wants this rather than the two calls by hand.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    public function rebootWith(array $config): void
+    {
+        $this->bootConfig = array_merge($this->bootConfig, $config);
+
+        $this->refreshApplication();
+
+        $this->defineDatabaseMigrations();
+    }
+
     protected function defineEnvironment($app): void
     {
+        // The `encrypted` cast needs one, and the draft stale-check has to work
+        // against encrypted attributes.
+        $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+
         $app['config']->set('database.default', 'testing');
         $app['config']->set('database.connections.testing', [
             'driver' => 'sqlite',
@@ -85,6 +108,31 @@ abstract class TestCase extends Orchestra
             $table->string('title');
             $table->text('body')->nullable();
             $table->boolean('published')->default(false);
+            $table->timestamps();
+        });
+
+        Schema::create('purchase_orders', function (Blueprint $table) {
+            $table->id();
+            $table->string('reference');
+            $table->unsignedInteger('amount')->default(0);
+            $table->string('status')->default('draft');
+            $table->timestamps();
+        });
+
+        // Every cast the draft stale-check has to survive, on one table.
+        Schema::create('invoices', function (Blueprint $table) {
+            $table->id();
+            $table->string('reference');
+            $table->date('issued_on')->nullable();
+            $table->timestamp('sent_at')->nullable();
+            $table->string('status')->default('draft');
+            $table->text('account_number')->nullable();
+            $table->decimal('total', 12, 2)->default(0);
+            $table->float('rate')->default(0);
+            $table->integer('quantity')->default(0);
+            $table->boolean('settled')->default(false);
+            $table->json('lines')->nullable();
+            $table->json('meta')->nullable();
             $table->timestamps();
         });
     }

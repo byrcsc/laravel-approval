@@ -2,7 +2,13 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Actions\RecordAction;
+use ByRcsc\LaravelApproval\Commands\Command;
+use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
+use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
+use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalException;
+use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
 use Illuminate\Database\Eloquent\Model;
 
 arch('no debugging leftovers ship')
@@ -43,8 +49,71 @@ arch('support helpers stay below the models')
     ->expect('ByRcsc\LaravelApproval\Support')
     ->not->toUse('ByRcsc\LaravelApproval\Models');
 
+arch('contracts are interfaces')
+    ->expect('ByRcsc\LaravelApproval\Contracts')
+    ->toBeInterfaces();
+
+arch('actions are final and invokable')
+    ->expect('ByRcsc\LaravelApproval\Actions')
+    ->toBeFinal()
+    ->toBeInvokable()
+    // The audit trail is appended to by every other action, so it is the one
+    // that takes named arguments rather than a single subject.
+    ->ignoring(RecordAction::class);
+
+arch('commands share the package base')
+    ->expect('ByRcsc\LaravelApproval\Commands')
+    ->toExtend(Command::class);
+
+arch('only the base command is extendable')
+    ->expect('ByRcsc\LaravelApproval\Commands')
+    ->toBeFinal()
+    ->ignoring(Command::class);
+
+arch('data objects are final and readonly')
+    ->expect('ByRcsc\LaravelApproval\Data')
+    ->toBeFinal()
+    ->toBeReadonly();
+
+arch('escalation strategies implement the escalation contract')
+    ->expect('ByRcsc\LaravelApproval\Escalation')
+    ->toBeFinal()
+    ->toImplement(EscalationStrategy::class);
+
+arch('notifications share the package base')
+    ->expect('ByRcsc\LaravelApproval\Notifications')
+    ->toExtend(ApprovalNotification::class);
+
+arch('only the base notification is extendable')
+    ->expect('ByRcsc\LaravelApproval\Notifications')
+    ->toBeFinal()
+    ->ignoring(ApprovalNotification::class);
+
+arch('listeners are final')
+    ->expect('ByRcsc\LaravelApproval\Listeners')
+    ->toBeFinal();
+
+arch('resolvers implement the resolver contract')
+    ->expect('ByRcsc\LaravelApproval\Resolvers')
+    ->toBeFinal()
+    ->toImplement(ApproverResolver::class);
+
+arch('events carry a request and nothing else')
+    ->expect('ByRcsc\LaravelApproval\Events')
+    ->toExtend(ApprovalEvent::class)
+    ->ignoring(ApprovalEvent::class);
+
+// Audit entries can only be appended through an action, so stateful model code
+// cannot quietly create a second write path.
+arch('only actions write the audit trail')
+    ->expect('ByRcsc\LaravelApproval\Models\ApprovalAction')
+    ->toOnlyBeUsedIn([
+        'ByRcsc\LaravelApproval\Actions',
+        'ByRcsc\LaravelApproval\Models',
+    ]);
+
 // Models describe the schema. Transactions and dispatching belong to the
-// actions that arrive in later phases, and this keeps it that way.
+// actions, and this keeps it that way.
 arch('models stay out of the transaction business')
     ->expect('ByRcsc\LaravelApproval\Models')
     ->not->toUse([
