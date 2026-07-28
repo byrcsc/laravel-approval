@@ -3,38 +3,12 @@
 declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Facades\Approval;
-use ByRcsc\LaravelApproval\Tests\Stubs\Invoice;
 use ByRcsc\LaravelApproval\Tests\Stubs\InvoiceStatus;
 
 /**
  * The stale check compares cast values, not raw columns. These are the casts
  * where the difference decides whether the comparison is right or nonsense.
  */
-
-/**
- * Submits `$attributes` as a draft, approves it, and hands back the request.
- *
- * @param  array<string, mixed>  $attributes
- * @param  callable(Invoice): void|null  $meddle  runs while the request is in flight
- */
-function approveInvoiceDraft(array $attributes, ?callable $meddle = null): array
-{
-    $approver = user('Approver');
-    $invoice = invoice();
-    $workflow = workflow([['approvers' => [$approver]]]);
-
-    $request = $invoice->submitForApproval($workflow, $attributes, user());
-
-    if ($meddle !== null) {
-        $meddle($invoice);
-    }
-
-    Approval::approve($request, $approver);
-
-    return [$request->refresh(), $invoice->fresh()];
-}
-
 describe('a record nobody touched applies cleanly', function (): void {
     it('survives a date cast', function (): void {
         [$request, $invoice] = approveInvoiceDraft(['issued_on' => '2026-08-15']);
@@ -156,10 +130,10 @@ describe('drift detection per cast', function (): void {
         expect($request->state)->toBe(RequestState::Conflicted);
     });
 
-    it('does not call a reordered json object a change', function (): void {
+    it('does not call a json object re-saved with the same pairs a change', function (): void {
         [$request] = approveInvoiceDraft(
             ['meta' => ['source' => 'api']],
-            // Same pairs, written in the other order.
+            // The value it already held, written again.
             fn ($invoice) => $invoice->forceFill(['meta' => ['source' => 'portal']])->save(),
         );
 

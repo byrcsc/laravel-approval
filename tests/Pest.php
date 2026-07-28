@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
+use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
@@ -112,6 +113,31 @@ function invoice(array $attributes = []): Invoice
         'lines' => [['sku' => 'A1', 'qty' => 2]],
         'meta' => ['source' => 'portal'],
     ], $attributes));
+}
+
+/**
+ * Submits `$attributes` as an invoice draft, approves it, and hands back the
+ * refreshed request and record. The cast-matrix and cast-edge suites share it.
+ *
+ * @param  array<string, mixed>  $attributes
+ * @param  callable(Invoice): void|null  $meddle  runs while the request is in flight
+ * @return array{ApprovalRequest, Invoice|null}
+ */
+function approveInvoiceDraft(array $attributes, ?callable $meddle = null): array
+{
+    $approver = user('Approver');
+    $invoice = invoice();
+    $workflow = workflow([['approvers' => [$approver]]]);
+
+    $request = $invoice->submitForApproval($workflow, $attributes, user());
+
+    if ($meddle !== null) {
+        $meddle($invoice);
+    }
+
+    Approval::approve($request, $approver);
+
+    return [$request->refresh(), $invoice->fresh()];
 }
 
 /**
