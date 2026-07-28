@@ -118,6 +118,41 @@ final class ApprovalRequest extends Model
     }
 
     /**
+     * Whether this actor has any standing in the request at all: they submitted
+     * it, or they are named on one of its seats.
+     *
+     * Deliberately wider than eligibility and deliberately not time-bound - a
+     * level-one approver who voted last week is still a participant in the
+     * request, which is the question a "may they read this?" check is asking.
+     * Hosts that want a wider audience still (an auditor, a department head)
+     * should widen it in their own policy rather than here.
+     */
+    public function involves(Model $actor): bool
+    {
+        $type = $actor->getMorphClass();
+        $id = $actor->getKey();
+
+        $isSubmitter = Attributes::nullableString($this, 'submitter_type') === $type
+            && Attributes::nullableString($this, 'submitter_id') === (is_scalar($id) ? (string) $id : '');
+
+        if ($isSubmitter) {
+            return true;
+        }
+
+        return $this->steps()
+            ->whereHas('approverSlots', function (Builder $slot) use ($type, $id): void {
+                $slot
+                    ->where(function (Builder $named) use ($type, $id): void {
+                        $named->where('approver_type', $type)->where('approver_id', $id);
+                    })
+                    ->orWhere(function (Builder $delegated) use ($type, $id): void {
+                        $delegated->where('delegated_to_type', $type)->where('delegated_to_id', $id);
+                    });
+            })
+            ->exists();
+    }
+
+    /**
      * @param  Builder<self>  $query
      */
     public function scopePending(Builder $query): void

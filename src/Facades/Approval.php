@@ -6,6 +6,7 @@ namespace ByRcsc\LaravelApproval\Facades;
 
 use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
+use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalWorkflow workflow(string $slug)
  * @method static ApprovalWorkflow workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null)
  * @method static ApprovalRequest submit(Model $approvable, ApprovalWorkflow|string|null $workflow = null, array<string, mixed>|null $newAttributes = null, Model|null $submitter = null)
+ * @method static Eligibility eligibility(ApprovalRequest $request, Model $actor)
+ * @method static bool canApprove(ApprovalRequest $request, Model $actor)
  * @method static ApprovalRequest decide(ApprovalRequest $request, ApprovalDecision $decision)
  * @method static ApprovalRequest approve(ApprovalRequest $request, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static ApprovalRequest reject(ApprovalRequest $request, Model $actor, string $comment, array<string, mixed> $metadata = [])

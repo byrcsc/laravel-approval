@@ -89,6 +89,12 @@ arch('only the base notification is extendable')
     ->toBeFinal()
     ->ignoring(ApprovalNotification::class);
 
+// The one class in the package meant to be subclassed: a host adding
+// organizational rules on top of the engine's should extend it, not fork it.
+arch('the shipped policy is extendable')
+    ->expect('ByRcsc\LaravelApproval\Policies')
+    ->not->toBeFinal();
+
 arch('listeners are final')
     ->expect('ByRcsc\LaravelApproval\Listeners')
     ->toBeFinal();

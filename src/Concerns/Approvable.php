@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Concerns;
 
+use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Enums\ApprovalMode;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalGuardException;
 use ByRcsc\LaravelApproval\Facades\Approval;
@@ -100,6 +101,29 @@ trait Approvable
     public function isPendingApproval(): bool
     {
         return $this->pendingApprovalRequest() !== null;
+    }
+
+    /**
+     * Whether this user could approve the open request right now.
+     *
+     * The question a view asks before rendering the button. False covers both
+     * "not their turn" and "nothing to approve" - `approvalEligibility()` is
+     * the version that says which.
+     */
+    public function canBeApprovedBy(Model $user): bool
+    {
+        return $this->approvalEligibility($user)?->eligible === true;
+    }
+
+    /**
+     * Why this user may or may not decide the open request, or null when there
+     * is no open request to decide.
+     */
+    public function approvalEligibility(Model $user): ?Eligibility
+    {
+        $request = $this->pendingApprovalRequest();
+
+        return $request === null ? null : Approval::eligibility($request, $user);
     }
 
     /**

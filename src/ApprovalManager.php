@@ -7,6 +7,7 @@ namespace ByRcsc\LaravelApproval;
 use ByRcsc\LaravelApproval\Actions\ApproveStep;
 use ByRcsc\LaravelApproval\Actions\BypassApprovalGuard;
 use ByRcsc\LaravelApproval\Actions\CancelRequest;
+use ByRcsc\LaravelApproval\Actions\CheckEligibility;
 use ByRcsc\LaravelApproval\Actions\DelegateApproval;
 use ByRcsc\LaravelApproval\Actions\EscalateOverdueSteps;
 use ByRcsc\LaravelApproval\Actions\ReassignApprover;
@@ -18,6 +19,7 @@ use ByRcsc\LaravelApproval\Actions\ResyncRequestApprovers;
 use ByRcsc\LaravelApproval\Actions\ReturnRequest;
 use ByRcsc\LaravelApproval\Actions\SubmitForApproval;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
+use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Exceptions\MissingSubmitterException;
@@ -85,6 +87,26 @@ final class ApprovalManager
             $newAttributes,
             $submitter ?? $this->submitterFor($approvable),
         );
+    }
+
+    /**
+     * Whether this actor may decide this request, and if not, why not.
+     *
+     * The same check the vote makes, minus the throwing. Ask this to render a
+     * button, name a reason next to a disabled one, or show where the level's
+     * vote stands - the answer carries the step and ballot it already loaded.
+     */
+    public function eligibility(ApprovalRequest $request, Model $actor): Eligibility
+    {
+        return $this->container->make(CheckEligibility::class)($request, $actor);
+    }
+
+    /**
+     * The boolean, for callers that do not need the reason.
+     */
+    public function canApprove(ApprovalRequest $request, Model $actor): bool
+    {
+        return $this->eligibility($request, $actor)->eligible;
     }
 
     /**
