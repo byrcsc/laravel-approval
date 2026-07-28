@@ -12,6 +12,7 @@ on:
       - 'phpunit.xml.dist'
       - 'composer.json'
   pull_request:
+    branches: [main]
     paths:
       - '**.php'
       - '**.php.stub'
