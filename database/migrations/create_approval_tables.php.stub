@@ -1,0 +1,213 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/*
+ * The whole approval schema, in one migration - the seven tables reference each
+ * other, so a partial install is not a useful state to be in.
+ *
+ * Two things to change before you migrate:
+ *
+ *  - Table names. Set them in `config/approval.php`, not here; the models read
+ *    the same config, so renaming in one place is all it takes.
+ *
+ *  - The key type of the polymorphic columns, which assume the models you point
+ *    at use auto-incrementing integer keys. If yours use ULIDs or UUIDs, swap
+ *    the matching `morphs()` / `nullableMorphs()` call for `ulidMorphs()` /
+ *    `uuidMorphs()`. Approvers, submitters, actors, and the approvable record
+ *    are independent, so mixing key types is fine.
+ *
+ * `state`, `action`, and `source` are plain strings rather than database enums,
+ * so adding a case is a package upgrade rather than an ALTER TABLE.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $tables = $this->tables();
+
+        Schema::create($tables['workflows'], function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->text('description')->nullable();
+            $table->boolean('active')->default(true);
+
+            // Per-workflow overrides of the package config.
+            $table->json('settings')->nullable();
+
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create($tables['levels'], function (Blueprint $table) use ($tables) {
+            $table->id();
+            $table->foreignId('workflow_id')->constrained($tables['workflows'])->cascadeOnDelete();
+            $table->unsignedInteger('sequence');
+            $table->string('name');
+
+            // The quorum. Null means all of this level's approvers.
+            $table->unsignedInteger('required_approvals')->nullable();
+
+            $table->unsignedInteger('sla_minutes')->nullable();
+            $table->string('escalation_strategy')->nullable();
+            $table->json('escalation_config')->nullable();
+            $table->timestamps();
+
+            // Levels are ordered, and two levels cannot share a position.
+            $table->unique(['workflow_id', 'sequence']);
+        });
+
+        Schema::create($tables['level_approvers'], function (Blueprint $table) use ($tables) {
+            $table->id();
+            $table->foreignId('level_id')->index()->constrained($tables['levels'])->cascadeOnDelete();
+
+            // Exactly one of these is set. The engine enforces it, since no
+            // portable database constraint expresses it.
+            $table->nullableMorphs('approver');
+            $table->string('resolver')->nullable();
+            $table->json('resolver_config')->nullable();
+
+            $table->timestamps();
+        });
+
+        Schema::create($tables['requests'], function (Blueprint $table) use ($tables) {
+            $table->id();
+
+            // The public identifier. Sortable, and safe to put in a URL.
+            $table->ulid('ulid')->unique();
+
+            // Written out rather than `morphs()`, whose (type, id) index would
+            // be a redundant prefix of the composite index below.
+            $table->string('approvable_type');
+            $table->unsignedBigInteger('approvable_id');
+
+            // A reference, not a source of behavior. Nullable so that deleting
+            // a workflow never destroys the history of what it approved.
+            $table->foreignId('workflow_id')->nullable()->index()->constrained($tables['workflows'])->nullOnDelete();
+
+            $table->string('state')->default('pending');
+            $table->unsignedInteger('current_level_sequence')->default(1);
+
+            // The draft, and the values it was changed from - the second is
+            // what the stale check reads. Both null when the record itself is
+            // the pending thing, rather than an edit to it.
+            $table->json('new_attributes')->nullable();
+            $table->json('original_attributes')->nullable();
+
+            $table->morphs('submitter');
+
+            // Set on the replacement when a rejected request is resubmitted;
+            // the only link between the two.
+            $table->foreignId('resubmitted_from_id')->nullable()->constrained($tables['requests'])->nullOnDelete();
+
+            $table->timestamp('submitted_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamps();
+
+            // "Is there an open request for this record?"
+            $table->index(['approvable_type', 'approvable_id', 'state']);
+        });
+
+        Schema::create($tables['steps'], function (Blueprint $table) use ($tables) {
+            $table->id();
+            $table->foreignId('request_id')->constrained($tables['requests'])->cascadeOnDelete();
+
+            // Copied from the workflow level at submit time; editing the
+            // workflow afterwards does not reach in here.
+            $table->unsignedInteger('sequence');
+            $table->string('name');
+            $table->unsignedInteger('required_approvals')->nullable();
+            $table->unsignedInteger('sla_minutes')->nullable();
+            $table->string('escalation_strategy')->nullable();
+            $table->json('escalation_config')->nullable();
+
+            // Computed when the step becomes active: the clock only starts
+            // once the level is somebody's turn.
+            $table->timestamp('deadline_at')->nullable();
+
+            // Checked before escalating, so a command on a one-minute schedule
+            // still escalates each step exactly once.
+            $table->timestamp('escalated_at')->nullable();
+
+            $table->string('state')->default('queued');
+            $table->timestamps();
+
+            $table->unique(['request_id', 'sequence']);
+            $table->index(['request_id', 'state']);
+        });
+
+        Schema::create($tables['step_approvers'], function (Blueprint $table) use ($tables) {
+            $table->id();
+            $table->foreignId('step_id')->index()->constrained($tables['steps'])->cascadeOnDelete();
+
+            // Materialized at submit time: concrete approvers copied across,
+            // resolver-backed ones run and expanded.
+            $table->morphs('approver');
+
+            // Who may act on the slot instead. The original approver stays on
+            // the row: who was asked is part of the record.
+            $table->nullableMorphs('delegated_to');
+
+            $table->string('source')->default('assigned');
+            $table->timestamps();
+        });
+
+        Schema::create($tables['actions'], function (Blueprint $table) use ($tables) {
+            $table->id();
+            $table->foreignId('request_id')->index()->constrained($tables['requests'])->cascadeOnDelete();
+            $table->foreignId('step_id')->nullable()->constrained($tables['steps'])->cascadeOnDelete();
+
+            // Null for what the system did on nobody's behalf.
+            $table->nullableMorphs('actor');
+
+            $table->string('action');
+            $table->text('comment')->nullable();
+            $table->json('metadata')->nullable();
+
+            // Append-only, so there is no `updated_at`. The model enforces it.
+            $table->timestamp('created_at')->nullable();
+        });
+    }
+
+    public function down(): void
+    {
+        $tables = $this->tables();
+
+        // Reverse creation order, so nothing is dropped while another table
+        // still points at it.
+        foreach (['actions', 'step_approvers', 'steps', 'requests', 'level_approvers', 'levels', 'workflows'] as $key) {
+            Schema::dropIfExists($tables[$key]);
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function tables(): array
+    {
+        $defaults = [
+            'workflows' => 'approval_workflows',
+            'levels' => 'approval_workflow_levels',
+            'level_approvers' => 'approval_workflow_level_approvers',
+            'requests' => 'approval_requests',
+            'steps' => 'approval_request_steps',
+            'step_approvers' => 'approval_request_step_approvers',
+            'actions' => 'approval_actions',
+        ];
+
+        $configured = config('approval.table_names');
+        $configured = is_array($configured) ? $configured : [];
+
+        $tables = [];
+
+        foreach ($defaults as $key => $default) {
+            $name = $configured[$key] ?? null;
+            $tables[$key] = is_string($name) && $name !== '' ? $name : $default;
+        }
+
+        return $tables;
+    }
+};

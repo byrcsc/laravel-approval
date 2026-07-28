@@ -1,0 +1,47 @@
+name: PHPStan
+
+on:
+  # `main` only: push and pull_request carry different refs, so a branch with
+  # an open pull request would run this twice.
+  push:
+    branches: [main]
+    paths:
+      - '**.php'
+      - 'phpstan.neon.dist'
+      - 'composer.json'
+      - '.github/workflows/phpstan.yml'
+  pull_request:
+    paths:
+      - '**.php'
+      - 'phpstan.neon.dist'
+      - 'composer.json'
+      - '.github/workflows/phpstan.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Reading the repository is all this workflow needs. Without this it inherits
+# the repository default, which on a new repo can be read/write.
+permissions:
+  contents: read
+
+jobs:
+  phpstan:
+    name: phpstan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install composer dependencies
+        uses: ramsey/composer-install@v4
+
+      - name: Run PHPStan
+        run: ./vendor/bin/phpstan --error-format=github

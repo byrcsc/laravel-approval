@@ -1,0 +1,85 @@
+{
+    "name": "byrcsc/laravel-approval",
+    "description": "Multi-level approval workflows for Eloquent models: database-driven workflows, attribute drafts, quorums, and an immutable audit trail.",
+    "keywords": [
+        "laravel",
+        "approval",
+        "approval-workflow",
+        "workflow",
+        "eloquent",
+        "audit-trail",
+        "multi-level",
+        "delegation",
+        "sla"
+    ],
+    "homepage": "https://github.com/byrcsc/laravel-approval",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ryan Catapang",
+            "email": "ryan@ryancatapang.com",
+            "role": "Full-Stack Engineer"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "illuminate/contracts": "^12.0||^13.0",
+        "illuminate/database": "^12.0||^13.0",
+        "illuminate/support": "^12.0||^13.0",
+        "spatie/laravel-package-tools": "^1.16"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.3.1",
+        "laravel/pint": "^1.14",
+        "nunomaduro/collision": "^8.8",
+        "orchestra/testbench": "^10.0||^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-arch": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "ByRcsc\\LaravelApproval\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ByRcsc\\LaravelApproval\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": "@composer run prepare",
+        "prepare": "@php vendor/bin/testbench package:discover --ansi",
+        "analyse": "vendor/bin/phpstan analyse",
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "format": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "ByRcsc\\LaravelApproval\\ApprovalServiceProvider"
+            ],
+            "aliases": {
+                "Approval": "ByRcsc\\LaravelApproval\\Facades\\Approval"
+            }
+        }
+    },
+    "support": {
+        "issues": "https://github.com/byrcsc/laravel-approval/issues",
+        "forum": "https://github.com/byrcsc/laravel-approval/discussions",
+        "docs": "https://github.com/byrcsc/laravel-approval#readme",
+        "security": "https://github.com/byrcsc/laravel-approval/security/policy",
+        "source": "https://github.com/byrcsc/laravel-approval"
+    }
+}

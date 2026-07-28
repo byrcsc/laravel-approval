@@ -1,0 +1,16 @@
+parameters:
+    level: max
+    paths:
+        - src
+        - config
+        # The stub models are what a host app's approvable models look like, so
+        # keeping them in scope is what proves the package's generics line up
+        # against a real Eloquent model rather than only against itself.
+        - tests/Stubs
+    tmpDir: build/phpstan
+
+    # This is a package, so Larastan cannot boot an application to discover
+    # where config files live. Point it at ours, otherwise every `env()` call in
+    # config/approval.php is reported as being outside the config directory.
+    configDirectories:
+        - config
