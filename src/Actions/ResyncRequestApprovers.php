@@ -133,6 +133,7 @@ final class ResyncRequestApprovers
         $snapshot = LevelSnapshot::fromStep($step);
         $wanted = ($this->resolveApprovers)($level, $snapshot, $approvable, $submitter, $slug);
 
+        $health = StepHealth::inspect($step);
         $ballot = Ballot::for($step);
 
         /** @var array<string, ApprovalRequestStepApprover> $held */
@@ -163,7 +164,7 @@ final class ResyncRequestApprovers
             ? $this->prune($step, $held, $wanted, $ballot)
             : [];
 
-        $this->guardQuorum($step, $snapshot, $slug);
+        $this->guardQuorum($step, $snapshot, $slug, $health);
 
         return ['added' => $added, 'removed' => $removed];
     }
@@ -205,8 +206,12 @@ final class ResyncRequestApprovers
      * A resync that leaves a level unable to reach its quorum has stranded the
      * request, so it fails and the transaction takes the changes with it.
      */
-    private function guardQuorum(ApprovalRequestStep $step, LevelSnapshot $snapshot, string $slug): void
-    {
+    private function guardQuorum(
+        ApprovalRequestStep $step,
+        LevelSnapshot $snapshot,
+        string $slug,
+        StepHealth $before,
+    ): void {
         $seats = $step->approverSlots()->count();
 
         if ($seats === 0) {
@@ -219,7 +224,7 @@ final class ResyncRequestApprovers
             throw InvalidWorkflowException::quorumUnreachable($slug, $snapshot->sequence, $required, $seats);
         }
 
-        StepHealth::assertCarryable($step, $slug);
+        StepHealth::assertNotWorsened($step, $slug, $before);
     }
 
     /**

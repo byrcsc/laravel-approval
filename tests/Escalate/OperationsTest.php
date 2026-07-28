@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
+use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Events\StepOverdue;
 use ByRcsc\LaravelApproval\Events\StepStranded;
 use ByRcsc\LaravelApproval\Facades\Approval;
+use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
 
@@ -82,6 +84,107 @@ it('clears the stranded marker when a dead seat is reassigned', function (): voi
     Approval::reassign($request, $seat, $replacement, user('Administrator'));
 
     expect($request->steps()->sole()->stranded_at)->toBeNull();
+});
+
+it('keeps the cadence the request was submitted under', function (): void {
+    Date::setTestNow('2026-07-28 10:00:00');
+    $workflow = workflow([[
+        'sla_minutes' => 60,
+        'remind_every_minutes' => 30,
+        'approvers' => [user('Approver')],
+    ]]);
+
+    post()->submitForApproval($workflow, null, user('Author'));
+
+    // The workflow is edited while the request is in flight. Per the snapshot
+    // rule, the request keeps the cadence it was submitted under.
+    $workflow->levels()->sole()->update(['remind_every_minutes' => 5]);
+
+    Date::setTestNow('2026-07-28 11:01:00');
+    Approval::escalateOverdue();
+
+    Date::setTestNow('2026-07-28 11:10:00');
+    expect(Approval::escalateOverdue()['reminded'])->toBe([]);
+
+    Date::setTestNow('2026-07-28 11:31:00');
+    expect(Approval::escalateOverdue()['reminded'])->toHaveCount(1);
+});
+
+it('stops reminding once the strategy has decided the level', function (): void {
+    Date::setTestNow('2026-07-28 10:00:00');
+    $request = post()->submitForApproval(workflow([[
+        'sla_minutes' => 60,
+        'remind_every_minutes' => 30,
+        'escalation_strategy' => EscalationAction::AutoApprove,
+        'approvers' => [user('Approver')],
+    ]]), null, user('Author'));
+
+    Date::setTestNow('2026-07-28 11:01:00');
+    Approval::escalateOverdue();
+
+    Date::setTestNow('2026-07-28 13:00:00');
+
+    expect(Approval::escalateOverdue()['reminded'])->toBe([])
+        ->and($request->refresh()->state)->toBe(RequestState::Approved)
+        ->and($request->actions()->where('action', ActionType::Reminded->value)->count())->toBe(0);
+});
+
+it('never escalates a second time, however many reminders it sends', function (): void {
+    Date::setTestNow('2026-07-28 10:00:00');
+    HeadOfDepartmentResolver::$heads = [user('Duty officer')];
+
+    $request = post()->submitForApproval(workflow([[
+        'sla_minutes' => 60,
+        'remind_every_minutes' => 30,
+        'escalation_strategy' => EscalationAction::Escalate,
+        'escalation_config' => ['resolver' => HeadOfDepartmentResolver::class],
+        'approvers' => [user('Approver')],
+    ]]), null, user('Author'));
+
+    Date::setTestNow('2026-07-28 11:01:00');
+    Approval::escalateOverdue();
+
+    HeadOfDepartmentResolver::$heads = [user('Somebody else entirely')];
+
+    Date::setTestNow('2026-07-28 11:31:00');
+    Approval::escalateOverdue();
+
+    Date::setTestNow('2026-07-28 12:01:00');
+    Approval::escalateOverdue();
+
+    expect($request->steps()->sole()->approverSlots()->count())->toBe(2)
+        ->and($request->actions()->where('action', ActionType::Reminded->value)->count())->toBe(2);
+});
+
+it('strands an all-of-them level the moment one holder goes', function (): void {
+    $first = user('First');
+    $second = user('Second');
+    $request = post()->submitForApproval(
+        workflow([['required_approvals' => null, 'approvers' => [$first, $second]]]),
+        null,
+        user('Author'),
+    );
+
+    expect(Approval::escalateOverdue()['stranded'])->toBe([]);
+
+    $second->delete();
+
+    expect(Approval::escalateOverdue()['stranded'])->toHaveCount(1)
+        ->and($request->steps()->sole()->stranded_at)->not->toBeNull();
+});
+
+it('caps what the doctor lists without hiding that it found more', function (): void {
+    $this->artisan('approval:doctor')->assertSuccessful();
+
+    foreach (range(1, 3) as $index) {
+        $approver = user('Departed '.$index);
+        post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user('Author'));
+        $approver->delete();
+    }
+
+    $this->artisan('approval:doctor --limit=2')
+        ->expectsOutputToContain('Found 2 stranded approval levels')
+        ->assertFailed();
 });
 
 it('does not treat the original approver as living when a delegate is deleted', function (): void {

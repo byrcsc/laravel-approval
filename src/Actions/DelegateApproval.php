@@ -78,13 +78,21 @@ final class DelegateApproval
                 throw DelegationException::alreadySeated($delegate);
             }
 
+            // Nobody can hold a seat on somebody's behalf if they are no longer
+            // there to hold it.
+            if (! $delegate->exists) {
+                throw DelegationException::doesNotExist($delegate);
+            }
+
+            $health = StepHealth::inspect($step);
+
             $seat->forceFill([
                 'delegated_to_type' => $delegate->getMorphClass(),
                 'delegated_to_id' => $delegate->getKey(),
                 'source' => ApproverSource::Delegated,
             ])->save();
 
-            StepHealth::assertCarryable($step, $request->workflowName());
+            StepHealth::assertNotWorsened($step, $request->workflowName(), $health);
 
             ($this->recordAction)(
                 request: $request,

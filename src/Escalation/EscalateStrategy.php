@@ -62,6 +62,7 @@ final class EscalateStrategy implements EscalationStrategy
 
         $seated = $this->seated($step);
         $before = $step->approverSlots()->count();
+        $health = StepHealth::inspect($step);
 
         $added = 0;
 
@@ -91,7 +92,7 @@ final class EscalateStrategy implements EscalationStrategy
         }
 
         if ($added > 0) {
-            StepHealth::assertCarryable($step, $request->workflowName());
+            StepHealth::assertNotWorsened($step, $request->workflowName(), $health);
         }
     }
 

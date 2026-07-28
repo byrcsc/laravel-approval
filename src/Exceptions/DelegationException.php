@@ -21,6 +21,14 @@ final class DelegationException extends ApprovalException
         return new self(sprintf('[%s] cannot delegate their approval to themselves.', $actor::class));
     }
 
+    public static function doesNotExist(Model $model): self
+    {
+        return new self(sprintf(
+            'The [%s] receiving this seat no longer exists. A seat can only be handed to somebody who is still there to use it.',
+            $model::class,
+        ));
+    }
+
     public static function alreadySeated(Model $delegate): self
     {
         return new self(sprintf(

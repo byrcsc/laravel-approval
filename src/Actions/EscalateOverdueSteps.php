@@ -213,7 +213,7 @@ final class EscalateOverdueSteps
             // marker has to move, and on a healthy install it almost never does.
             $marked = $step->getAttributeValue('stranded_at') !== null;
 
-            if (StepHealth::inspect($step)['stranded'] === $marked) {
+            if (StepHealth::inspect($step)->stranded() === $marked) {
                 continue;
             }
 
@@ -237,7 +237,7 @@ final class EscalateOverdueSteps
 
                 $health = StepHealth::inspect($step);
 
-                if (! $health['stranded']) {
+                if (! $health->stranded()) {
                     if ($step->getAttributeValue('stranded_at') !== null) {
                         $step->forceFill(['stranded_at' => null])->save();
                     }
@@ -256,8 +256,8 @@ final class EscalateOverdueSteps
                 Event::dispatch(new StepStranded(
                     $request,
                     $step,
-                    $health['living'],
-                    $health['quorum'],
+                    $health->living,
+                    $health->quorum,
                 ));
             });
         }

@@ -80,7 +80,14 @@ final class ReassignApprover
                 throw DelegationException::alreadySeated($to);
             }
 
+            // A seat handed to somebody who has themselves gone is the problem
+            // this action exists to solve, not a solution to it.
+            if (! $to->exists) {
+                throw DelegationException::doesNotExist($to);
+            }
+
             $from = $seat->approver;
+            $health = StepHealth::inspect($step);
 
             $seat->forceFill([
                 'approver_type' => $to->getMorphClass(),
@@ -90,7 +97,7 @@ final class ReassignApprover
                 'source' => ApproverSource::Reassigned,
             ])->save();
 
-            StepHealth::assertCarryable($step, $request->workflowName());
+            StepHealth::assertNotWorsened($step, $request->workflowName(), $health);
 
             ($this->recordAction)(
                 request: $request,

@@ -55,7 +55,7 @@ final class StatusCommand extends Command
             ->whereHas('request', fn ($query) => $query->where('state', RequestState::Pending->value))
             ->orderBy('id')
             ->get()
-            ->filter(fn (ApprovalRequestStep $step): bool => StepHealth::inspect($step)['stranded'])
+            ->filter(fn (ApprovalRequestStep $step): bool => StepHealth::inspect($step)->stranded())
             ->take($limit);
 
         if ($steps->isEmpty()) {
@@ -71,7 +71,7 @@ final class StatusCommand extends Command
 
             $this->components->twoColumnDetail(
                 $request === null ? '?' : Attributes::string($request, 'ulid'),
-                sprintf('%s, %d living / %d required', Attributes::string($step, 'name'), $health['living'], $health['quorum']),
+                sprintf('%s, %d living / %d required', Attributes::string($step, 'name'), $health->living, $health->quorum),
             );
         }
     }
