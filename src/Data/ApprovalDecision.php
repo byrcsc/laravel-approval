@@ -27,8 +27,14 @@ final readonly class ApprovalDecision
         public ?string $comment = null,
         public array $metadata = [],
     ) {
-        if ($verdict === Verdict::Reject && trim($comment ?? '') === '') {
-            throw CommentRequiredException::toReject();
+        if (trim($comment ?? '') === '') {
+            if ($verdict === Verdict::Reject) {
+                throw CommentRequiredException::toReject();
+            }
+
+            if ($verdict === Verdict::Return) {
+                throw CommentRequiredException::toReturn();
+            }
         }
     }
 
@@ -46,6 +52,14 @@ final readonly class ApprovalDecision
     public static function reject(Model $actor, string $comment, array $metadata = []): self
     {
         return new self($actor, Verdict::Reject, $comment, $metadata);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    public static function return(Model $actor, string $comment, array $metadata = []): self
+    {
+        return new self($actor, Verdict::Return, $comment, $metadata);
     }
 
     /**

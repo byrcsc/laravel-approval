@@ -13,7 +13,7 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
  */
 final class ApprovalSubmitted extends ApprovalEvent
 {
-    public function __construct(ApprovalRequest $request, public readonly ApprovalRequestStep $step)
+    public function __construct(ApprovalRequest $request, public readonly ?ApprovalRequestStep $step)
     {
         parent::__construct($request);
     }

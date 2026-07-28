@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Concerns;
 
+use ByRcsc\LaravelApproval\Enums\ApprovalMode;
+use ByRcsc\LaravelApproval\Exceptions\ApprovalGuardException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
+use ByRcsc\LaravelApproval\Support\ApprovalGuard;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -15,13 +18,12 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 /**
  * Makes a model something that can be put through a workflow.
  *
- * Nothing here intercepts `save()`. A record only enters a workflow because
- * something called `submitForApproval()`, which means the trait cannot silently
- * change what existing code does - and equally, that code which bypasses it
- * bypasses the engine. That is the trade v1 makes, and enforce mode is where
- * the other half of it lives.
+ * Submission is explicit. Guard mode can additionally intercept Eloquent
+ * saves to attributes held in a pending draft; explicit mode, the default,
+ * intercepts nothing. Query-builder and raw writes remain outside model
+ * events, with the final stale check as their backstop.
  *
- * The three `approval*` methods below are the seams. Override them on the model
+ * The `approval*` methods below are the seams. Override them on the model
  * rather than configuring them from outside: which workflow a purchase order
  * uses is a fact about purchase orders.
  *
@@ -29,6 +31,33 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  */
 trait Approvable
 {
+    public static function bootApprovable(): void
+    {
+        static::saving(function (Model $model): void {
+            if (! $model->exists || ApprovalGuard::bypassing($model)) {
+                return;
+            }
+
+            if (! method_exists($model, 'approvalMode') || $model->approvalMode() !== ApprovalMode::Guard) {
+                return;
+            }
+
+            /** @var ApprovalRequest|null $request */
+            $request = Approval::pendingFor($model);
+
+            if ($request === null) {
+                return;
+            }
+
+            $drafted = array_keys(Attributes::object($request, 'new_attributes'));
+            $guarded = array_values(array_intersect($drafted, array_keys($model->getDirty())));
+
+            if ($guarded !== []) {
+                throw ApprovalGuardException::draftedAttributes($model, $request, $guarded);
+            }
+        });
+    }
+
     /**
      * Newest first, including the closed ones - a rejected request is history,
      * not rubbish.
@@ -105,12 +134,47 @@ trait Approvable
     }
 
     /**
+     * Run an exceptional correction while guard mode is active. The bypass is
+     * always appended to the open request's audit trail.
+     *
+     * @template TValue
+     *
+     * @param  callable($this): TValue  $callback
+     * @return TValue
+     */
+    public function withoutApprovalGuard(
+        callable $callback,
+        ?Model $actor = null,
+        ?string $comment = null,
+    ): mixed {
+        return Approval::withoutGuard($this, $callback, $actor, $comment);
+    }
+
+    /**
      * Which workflow this model goes through. Return a slug or a workflow;
      * returning null falls through to the `approval.workflows` config map.
      */
     public function approvalWorkflow(): ApprovalWorkflow|string|null
     {
         return null;
+    }
+
+    /**
+     * Explicit mode is the default. Configure
+     * `approval.models.<class>.mode` as `guard`, or override this method.
+     */
+    public function approvalMode(): ApprovalMode
+    {
+        /** @var mixed $models */
+        $models = config('approval.models');
+        $models = is_array($models) ? $models : [];
+        $settings = $models[$this::class] ?? $models[$this->getMorphClass()] ?? [];
+        $settings = is_array($settings) ? $settings : [];
+        $mode = $settings['mode'] ?? ApprovalMode::Explicit->value;
+
+        return $mode instanceof ApprovalMode
+            ? $mode
+            : ApprovalMode::tryFrom(is_string($mode) ? $mode : '') ?? ApprovalMode::Explicit;
     }
 
     /**

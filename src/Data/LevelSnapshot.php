@@ -20,6 +20,7 @@ final readonly class LevelSnapshot
 {
     /**
      * @param  array<string, mixed>  $escalationConfig
+     * @param  array<string, mixed>  $conditionConfig
      */
     public function __construct(
         public int $sequence,
@@ -28,6 +29,9 @@ final readonly class LevelSnapshot
         public ?int $slaMinutes,
         public ?EscalationAction $escalationStrategy,
         public array $escalationConfig = [],
+        public ?string $condition = null,
+        public array $conditionConfig = [],
+        public bool $conditionPassed = true,
     ) {}
 
     public static function fromLevel(ApprovalWorkflowLevel $level): self
@@ -39,6 +43,8 @@ final readonly class LevelSnapshot
             slaMinutes: Attributes::nullableInt($level, 'sla_minutes'),
             escalationStrategy: Attributes::enum($level, 'escalation_strategy', EscalationAction::class),
             escalationConfig: Attributes::object($level, 'escalation_config'),
+            condition: Attributes::nullableString($level, 'condition'),
+            conditionConfig: Attributes::object($level, 'condition_config'),
         );
     }
 
@@ -55,6 +61,24 @@ final readonly class LevelSnapshot
             slaMinutes: Attributes::nullableInt($step, 'sla_minutes'),
             escalationStrategy: Attributes::enum($step, 'escalation_strategy', EscalationAction::class),
             escalationConfig: Attributes::object($step, 'escalation_config'),
+            condition: Attributes::nullableString($step, 'condition'),
+            conditionConfig: Attributes::object($step, 'condition_config'),
+            conditionPassed: Attributes::bool($step, 'condition_result'),
+        );
+    }
+
+    public function withConditionResult(bool $passed): self
+    {
+        return new self(
+            sequence: $this->sequence,
+            name: $this->name,
+            requiredApprovals: $this->requiredApprovals,
+            slaMinutes: $this->slaMinutes,
+            escalationStrategy: $this->escalationStrategy,
+            escalationConfig: $this->escalationConfig,
+            condition: $this->condition,
+            conditionConfig: $this->conditionConfig,
+            conditionPassed: $passed,
         );
     }
 
@@ -82,7 +106,10 @@ final readonly class LevelSnapshot
             'sla_minutes' => $this->slaMinutes,
             'escalation_strategy' => $this->escalationStrategy,
             'escalation_config' => $this->escalationConfig === [] ? null : $this->escalationConfig,
-            'state' => StepState::Queued,
+            'condition' => $this->condition,
+            'condition_config' => $this->conditionConfig === [] ? null : $this->conditionConfig,
+            'condition_result' => $this->conditionPassed,
+            'state' => $this->conditionPassed ? StepState::Queued : StepState::Skipped,
         ];
     }
 }

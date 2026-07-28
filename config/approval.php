@@ -66,6 +66,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Model modes
+    |--------------------------------------------------------------------------
+    |
+    | Explicit is the default. Guard mode rejects Eloquent `save()` and
+    | `update()` calls that touch attributes in a pending draft. Query-builder
+    | updates, upserts, and raw SQL do not dispatch model events and therefore
+    | remain outside this boundary; the final stale check still catches them.
+    |
+    */
+
+    'models' => [
+        // App\Models\PurchaseOrder::class => ['mode' => 'guard'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Self-approval
     |--------------------------------------------------------------------------
     |

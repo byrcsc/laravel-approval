@@ -82,6 +82,15 @@ final class AlreadyDecidedException extends ApprovalException
         ));
     }
 
+    public static function notReturned(ApprovalRequest $request, RequestState $state): self
+    {
+        return new self(sprintf(
+            'Approval request %s is %s and cannot be resumed. Only returned requests can.',
+            self::ulid($request),
+            $state->value,
+        ));
+    }
+
     private static function ulid(ApprovalRequest $request): string
     {
         $ulid = $request->getAttributeValue('ulid');

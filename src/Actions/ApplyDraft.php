@@ -10,6 +10,7 @@ use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Events\DraftApplied;
 use ByRcsc\LaravelApproval\Events\DraftConflicted;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
+use ByRcsc\LaravelApproval\Support\ApprovalGuard;
 use ByRcsc\LaravelApproval\Support\DraftDiffer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
@@ -64,7 +65,9 @@ final class ApplyDraft
         // Guarding is the host model's rule about mass assignment from a form.
         // This is not a form: the attributes were checked against
         // `approvableAttributes()` at submit and then approved by people.
-        $approvable->forceFill($draft->new)->save();
+        ApprovalGuard::without($approvable, function () use ($approvable, $draft): void {
+            $approvable->forceFill($draft->new)->save();
+        });
 
         ($this->recordAction)(
             request: $request,

@@ -8,6 +8,8 @@ use ByRcsc\LaravelApproval\Data\ApproverSlot;
 use ByRcsc\LaravelApproval\Data\LevelSnapshot;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
+use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Events\ApprovalCompleted;
 use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalInProgressException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidDraftException;
@@ -38,8 +40,10 @@ final class SubmitForApproval
 {
     public function __construct(
         private readonly ResolveLevelApprovers $resolveApprovers,
+        private readonly EvaluateLevelCondition $evaluateCondition,
         private readonly RecordAction $recordAction,
         private readonly ActivateStep $activateStep,
+        private readonly ApplyDraft $applyDraft,
     ) {}
 
     /**
@@ -57,8 +61,8 @@ final class SubmitForApproval
 
         $this->guardAgainstOpenRequest($approvable);
 
-        $plan = $this->plan($workflow, $approvable, $submitter);
         $draft = $this->draft($approvable, $newAttributes);
+        $plan = $this->plan($workflow, $approvable, $submitter, $draft['new']);
 
         return DB::transaction(function () use ($approvable, $workflow, $submitter, $plan, $draft): ApprovalRequest {
             $this->lockApprovable($approvable);
@@ -82,9 +86,6 @@ final class SubmitForApproval
                 $plan,
             );
 
-            // Only the first level is anybody's turn; the rest stay queued.
-            $first = ($this->activateStep)($steps[0]);
-
             ($this->recordAction)(
                 request: $request,
                 action: ActionType::Submitted,
@@ -92,7 +93,37 @@ final class SubmitForApproval
                 metadata: ['workflow' => Attributes::string($workflow, 'slug')],
             );
 
+            foreach ($steps as $step) {
+                if (Attributes::enum($step, 'state', StepState::class) === StepState::Skipped) {
+                    ($this->recordAction)(
+                        request: $request,
+                        action: ActionType::LevelSkipped,
+                        step: $step,
+                        metadata: ['condition' => Attributes::nullableString($step, 'condition')],
+                    );
+                }
+            }
+
+            /** @var ApprovalRequestStep|null $first */
+            $first = collect($steps)->first(
+                fn (ApprovalRequestStep $step): bool => Attributes::enum($step, 'state', StepState::class) === StepState::Queued,
+            );
+
+            if ($first !== null) {
+                ($this->activateStep)($first);
+                $request->forceFill(['current_level_sequence' => Attributes::int($first, 'sequence')])->save();
+            } else {
+                // Every level was skipped. The pointer rests where a fully run
+                // chain would leave it: on the last level.
+                $request->forceFill(['current_level_sequence' => Attributes::int($steps[count($steps) - 1], 'sequence')])->save();
+            }
+
             Event::dispatch(new ApprovalSubmitted($request, $first));
+
+            if ($first === null) {
+                Event::dispatch(new ApprovalCompleted($request));
+                ($this->applyDraft)($request);
+            }
 
             return $request;
         });
@@ -117,10 +148,15 @@ final class SubmitForApproval
      * Everything the workflow says, worked out in full before anything is
      * written. A workflow that cannot reach a decision fails here.
      *
-     * @return non-empty-list<array{snapshot: LevelSnapshot, approvers: non-empty-list<ApproverSlot>}>
+     * @param  array<string, mixed>|null  $newAttributes
+     * @return non-empty-list<array{snapshot: LevelSnapshot, approvers: list<ApproverSlot>}>
      */
-    private function plan(ApprovalWorkflow $workflow, Model $approvable, Model $submitter): array
-    {
+    private function plan(
+        ApprovalWorkflow $workflow,
+        Model $approvable,
+        Model $submitter,
+        ?array $newAttributes,
+    ): array {
         $slug = Attributes::string($workflow, 'slug');
 
         if (! Attributes::bool($workflow, 'active')) {
@@ -134,9 +170,19 @@ final class SubmitForApproval
         }
 
         $plan = [];
+        $proposed = $this->proposed($approvable, $newAttributes);
 
         foreach ($levels as $level) {
             $snapshot = LevelSnapshot::fromLevel($level);
+            $passes = ($this->evaluateCondition)($snapshot, $proposed, $submitter, $slug);
+            $snapshot = $snapshot->withConditionResult($passes);
+
+            if (! $passes) {
+                $plan[] = ['snapshot' => $snapshot, 'approvers' => []];
+
+                continue;
+            }
+
             $approvers = ($this->resolveApprovers)($level, $snapshot, $approvable, $submitter, $slug);
 
             if ($approvers === []) {
@@ -152,6 +198,24 @@ final class SubmitForApproval
         assert($plan !== []);
 
         return $plan;
+    }
+
+    /**
+     * Conditions judge the proposal, including held draft values, without
+     * mutating the real model or changing what approver resolvers receive.
+     *
+     * @param  array<string, mixed>|null  $newAttributes
+     */
+    private function proposed(Model $approvable, ?array $newAttributes): Model
+    {
+        if ($newAttributes === null) {
+            return $approvable;
+        }
+
+        $proposed = clone $approvable;
+        $proposed->forceFill($newAttributes);
+
+        return $proposed;
     }
 
     private function guardQuorum(string $slug, LevelSnapshot $snapshot, int $available): void

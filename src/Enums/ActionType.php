@@ -22,4 +22,8 @@ enum ActionType: string
     case Applied = 'applied';
     case Conflicted = 'conflicted';
     case Resynced = 'resynced';
+    case GuardBypassed = 'guard_bypassed';
+    case Returned = 'returned';
+    case Resumed = 'resumed';
+    case LevelSkipped = 'level_skipped';
 }

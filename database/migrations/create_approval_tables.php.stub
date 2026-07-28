@@ -54,6 +54,8 @@ return new class extends Migration
             $table->unsignedInteger('sla_minutes')->nullable();
             $table->string('escalation_strategy')->nullable();
             $table->json('escalation_config')->nullable();
+            $table->string('condition')->nullable();
+            $table->json('condition_config')->nullable();
             $table->timestamps();
 
             // Levels are ordered, and two levels cannot share a position.
@@ -123,6 +125,9 @@ return new class extends Migration
             $table->unsignedInteger('sla_minutes')->nullable();
             $table->string('escalation_strategy')->nullable();
             $table->json('escalation_config')->nullable();
+            $table->string('condition')->nullable();
+            $table->json('condition_config')->nullable();
+            $table->boolean('condition_result')->default(true);
 
             // Computed when the step becomes active: the clock only starts
             // once the level is somebody's turn.

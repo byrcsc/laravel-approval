@@ -8,6 +8,7 @@ use ByRcsc\LaravelApproval\Commands\EscalateOverdueCommand;
 use ByRcsc\LaravelApproval\Commands\ResyncRequestCommand;
 use ByRcsc\LaravelApproval\Commands\StatusCommand;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
+use ByRcsc\LaravelApproval\Enums\ApprovalMode;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Exceptions\InvalidConfigurationException;
 use ByRcsc\LaravelApproval\Listeners\SendApprovalNotification;
@@ -46,6 +47,7 @@ final class ApprovalServiceProvider extends PackageServiceProvider
 
         $this->validateTableNames(Payload::object($config, 'table_names') ?? []);
         $this->validateUserModel(Payload::string($config, 'user_model'));
+        $this->validateModelModes(Payload::object($config, 'models') ?? []);
         $this->validateEscalationStrategies(Payload::object($config, 'escalation') ?? []);
 
         NotificationMap::validate(Payload::object($config, 'notifications') ?? []);
@@ -130,6 +132,20 @@ final class ApprovalServiceProvider extends PackageServiceProvider
 
         if (class_exists($userModel) && ! is_subclass_of($userModel, Model::class)) {
             throw InvalidConfigurationException::userModelIsNotAModel($userModel);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $models
+     */
+    private function validateModelModes(array $models): void
+    {
+        foreach ($models as $model => $settings) {
+            $mode = is_array($settings) ? ($settings['mode'] ?? ApprovalMode::Explicit->value) : null;
+
+            if (! is_string($mode) || ApprovalMode::tryFrom($mode) === null) {
+                throw InvalidConfigurationException::invalidModelMode($model, $mode);
+            }
         }
     }
 }

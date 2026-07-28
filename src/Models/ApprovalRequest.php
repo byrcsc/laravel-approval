@@ -21,7 +21,8 @@ use Illuminate\Support\Str;
  *
  * `workflow_id` is a reference for reporting only - the steps hanging off the
  * request are the snapshot that decides who approves what. Requests are never
- * reopened; resubmitting creates a fresh one that points back at this.
+ * reopened; resubmitting or resuming creates a fresh one that points back at
+ * this.
  */
 final class ApprovalRequest extends Model
 {

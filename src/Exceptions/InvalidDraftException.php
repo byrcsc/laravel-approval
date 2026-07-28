@@ -51,4 +51,17 @@ final class InvalidDraftException extends ApprovalException
             $approvable::class,
         ));
     }
+
+    /**
+     * @param  list<string>  $attributes
+     * @param  list<string>  $allowed
+     */
+    public static function resumeAddsAttributes(array $attributes, array $allowed): self
+    {
+        return new self(sprintf(
+            'A returned draft may only edit its original attributes. New attributes: %s. Original draft: %s.',
+            implode(', ', $attributes),
+            $allowed === [] ? 'none' : implode(', ', $allowed),
+        ));
+    }
 }

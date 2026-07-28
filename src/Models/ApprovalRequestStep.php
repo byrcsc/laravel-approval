@@ -61,6 +61,8 @@ final class ApprovalRequestStep extends Model
             'sla_minutes' => 'integer',
             'escalation_strategy' => EscalationAction::class,
             'escalation_config' => 'array',
+            'condition_config' => 'array',
+            'condition_result' => 'boolean',
             'deadline_at' => 'datetime',
             'escalated_at' => 'datetime',
             'state' => StepState::class,

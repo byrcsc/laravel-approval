@@ -15,4 +15,5 @@ enum Verdict: string
 {
     case Approve = 'approve';
     case Reject = 'reject';
+    case Return = 'return';
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval;
 
 use ByRcsc\LaravelApproval\Actions\ApproveStep;
+use ByRcsc\LaravelApproval\Actions\BypassApprovalGuard;
 use ByRcsc\LaravelApproval\Actions\CancelRequest;
 use ByRcsc\LaravelApproval\Actions\DelegateApproval;
 use ByRcsc\LaravelApproval\Actions\EscalateOverdueSteps;
@@ -12,7 +13,9 @@ use ByRcsc\LaravelApproval\Actions\ReassignApprover;
 use ByRcsc\LaravelApproval\Actions\RejectRequest;
 use ByRcsc\LaravelApproval\Actions\ResolveConflict;
 use ByRcsc\LaravelApproval\Actions\ResubmitRequest;
+use ByRcsc\LaravelApproval\Actions\ResumeReturnedRequest;
 use ByRcsc\LaravelApproval\Actions\ResyncRequestApprovers;
+use ByRcsc\LaravelApproval\Actions\ReturnRequest;
 use ByRcsc\LaravelApproval\Actions\SubmitForApproval;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
@@ -93,6 +96,7 @@ final class ApprovalManager
         return match ($decision->verdict) {
             Verdict::Approve => $this->container->make(ApproveStep::class)($request, $decision),
             Verdict::Reject => $this->container->make(RejectRequest::class)($request, $decision),
+            Verdict::Return => $this->container->make(ReturnRequest::class)($request, $decision),
         };
     }
 
@@ -113,6 +117,14 @@ final class ApprovalManager
     }
 
     /**
+     * @param  array<string, mixed>  $metadata
+     */
+    public function returnToSubmitter(ApprovalRequest $request, Model $actor, string $comment, array $metadata = []): ApprovalRequest
+    {
+        return $this->decide($request, ApprovalDecision::return($actor, $comment, $metadata));
+    }
+
+    /**
      * `force` is the admin escape hatch: without it, only the submitter may
      * withdraw their own request.
      */
@@ -122,6 +134,30 @@ final class ApprovalManager
         $cancel = $this->container->make(CancelRequest::class);
 
         return $cancel($request, $actor, $comment, $force);
+    }
+
+    /**
+     * @template TValue
+     *
+     * @param  callable(Model): TValue  $callback
+     * @return TValue
+     */
+    public function withoutGuard(
+        Model $approvable,
+        callable $callback,
+        ?Model $actor = null,
+        ?string $comment = null,
+    ): mixed {
+        $request = $this->pendingFor($approvable);
+
+        if ($request === null) {
+            return $callback($approvable);
+        }
+
+        /** @var BypassApprovalGuard $bypass */
+        $bypass = $this->container->make(BypassApprovalGuard::class);
+
+        return $bypass($approvable, $request, $callback, $actor, $comment);
     }
 
     /**
@@ -203,6 +239,23 @@ final class ApprovalManager
         $resubmit = $this->container->make(ResubmitRequest::class);
 
         return $resubmit($request, $newAttributes, $submitter, $workflow);
+    }
+
+    /**
+     * Resume a returned proposal as a new request. Changes may only name keys
+     * that were already present in the returned draft.
+     *
+     * @param  array<string, mixed>|null  $changes
+     */
+    public function resume(
+        ApprovalRequest $request,
+        ?array $changes = null,
+        ApprovalWorkflow|string|null $workflow = null,
+    ): ApprovalRequest {
+        /** @var ResumeReturnedRequest $resume */
+        $resume = $this->container->make(ResumeReturnedRequest::class);
+
+        return $resume($request, $changes, $workflow);
     }
 
     /**

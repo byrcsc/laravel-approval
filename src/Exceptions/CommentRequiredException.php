@@ -14,4 +14,9 @@ final class CommentRequiredException extends ApprovalException
     {
         return new self('Rejecting an approval request requires a comment explaining why.');
     }
+
+    public static function toReturn(): self
+    {
+        return new self('Returning an approval request requires a comment explaining what the submitter must change.');
+    }
 }

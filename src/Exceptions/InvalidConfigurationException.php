@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Exceptions;
 
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
+use ByRcsc\LaravelApproval\Enums\ApprovalMode;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
 
@@ -82,5 +83,15 @@ final class InvalidConfigurationException extends ApprovalException
     public static function userModelIsNotAModel(string $model): self
     {
         return new self("The [approval.user_model] config points at [{$model}], which is not an Eloquent model.");
+    }
+
+    public static function invalidModelMode(string $model, mixed $mode): self
+    {
+        return new self(sprintf(
+            'The [approval.models.%s.mode] config is [%s]. Expected one of: %s.',
+            $model,
+            is_scalar($mode) ? (string) $mode : get_debug_type($mode),
+            implode(', ', array_column(ApprovalMode::cases(), 'value')),
+        ));
     }
 }

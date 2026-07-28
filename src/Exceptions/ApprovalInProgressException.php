@@ -9,8 +9,8 @@ use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * One open request per record, which is the v1 answer to "two people drafted
- * conflicting edits". Cancel the open one, or wait for it to close.
+ * One open request per record, which is this engine's answer to "two people
+ * drafted conflicting edits". Cancel the open one, or wait for it to close.
  */
 final class ApprovalInProgressException extends ApprovalException
 {

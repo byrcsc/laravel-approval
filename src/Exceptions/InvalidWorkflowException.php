@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Exceptions;
 
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
+use ByRcsc\LaravelApproval\Contracts\LevelCondition;
 
 /**
  * A workflow that cannot produce a decision. Every one of these is raised at
@@ -103,5 +104,23 @@ final class InvalidWorkflowException extends ApprovalException
     public static function resolverReturnedUnsavedModel(string $resolver): self
     {
         return new self("The approver resolver [{$resolver}] returned a model that has not been saved, so it cannot hold an approver slot.");
+    }
+
+    public static function unknownCondition(string $slug, int $sequence, string $condition): self
+    {
+        return new self(
+            "Level {$sequence} of the approval workflow [{$slug}] names the condition [{$condition}], which does not exist."
+        );
+    }
+
+    public static function notACondition(string $slug, int $sequence, string $condition): self
+    {
+        return new self(sprintf(
+            'Level %d of the approval workflow [%s] names the condition [%s], which does not implement %s.',
+            $sequence,
+            $slug,
+            $condition,
+            LevelCondition::class,
+        ));
     }
 }
