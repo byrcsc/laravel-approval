@@ -5,6 +5,7 @@ declare(strict_types=1);
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\DelegationException;
+use ByRcsc\LaravelApproval\Exceptions\SelfApprovalException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use Illuminate\Support\Facades\Date;
@@ -177,6 +178,85 @@ it('still refuses a delegation that would strand the escalated level', function 
     // holder on two seats.
     expect(fn () => Approval::delegate($request, $original, $duty))
         ->toThrow(DelegationException::class, 'already holds a seat');
+});
+
+it('lets an escalated seat be delegated onward like any other', function (): void {
+    $duty = user('Duty Officer');
+    HeadOfDepartmentResolver::$heads = [$duty];
+
+    $request = overdueRequest(
+        EscalationAction::Escalate,
+        ['resolver' => HeadOfDepartmentResolver::class],
+    );
+
+    Date::setTestNow('2026-07-28 10:01:00');
+    Approval::escalateOverdue();
+
+    // The duty officer escalation brought in is away too. Their seat obeys
+    // the same rules as one the workflow assigned.
+    $stand = user('Stand-in');
+    Approval::delegate($request, $duty, $stand);
+
+    Approval::approve($request, $stand);
+
+    expect($request->refresh()->state)->toBe(RequestState::Approved);
+});
+
+it('seats the submitter when escalation names them, but the vote rule still holds', function (): void {
+    $request = overdueRequest(
+        EscalationAction::Escalate,
+        ['resolver' => HeadOfDepartmentResolver::class],
+    );
+
+    $submitter = $request->submitter;
+    assert($submitter !== null);
+
+    // The org chart says escalations go to the author of this very request.
+    HeadOfDepartmentResolver::$heads = [$submitter];
+
+    Date::setTestNow('2026-07-28 10:01:00');
+    Approval::escalateOverdue();
+
+    expect($request->steps()->sole()->approverSlots()->count())->toBe(2);
+
+    // The seat exists; the self-approval rule bites at the vote, as always.
+    expect(fn () => Approval::approve($request, $submitter))
+        ->toThrow(SelfApprovalException::class);
+
+    $original = $request->steps()->sole()->approverSlots()->orderBy('id')->first()->approver;
+    Approval::approve($request, $original);
+
+    expect($request->refresh()->state)->toBe(RequestState::Approved);
+});
+
+it('counts a vote cast before the escalation toward the pinned quorum', function (): void {
+    $duty = user('Duty Officer');
+    HeadOfDepartmentResolver::$heads = [$duty];
+
+    // All-of-them across two seats; one vote lands in time, one does not.
+    $request = overdueRequest(
+        EscalationAction::Escalate,
+        ['resolver' => HeadOfDepartmentResolver::class],
+        requiredApprovals: null,
+        approvers: 2,
+    );
+
+    $seats = $request->steps()->sole()->approverSlots()->orderBy('id')->get();
+    Approval::approve($request, $seats[0]->approver);
+
+    Date::setTestNow('2026-07-28 10:01:00');
+    Approval::escalateOverdue();
+
+    $step = $request->steps()->sole();
+
+    expect($step->getAttributeValue('required_approvals'))->toBe(2)
+        ->and($step->approverSlots()->count())->toBe(3);
+
+    // The slow original comes through after all: their vote joins the early
+    // one, and the duty officer never has to act.
+    Approval::approve($request, $seats[1]->approver);
+
+    expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
 
 it('escalates a resynced level on the deadline it already had', function (): void {
