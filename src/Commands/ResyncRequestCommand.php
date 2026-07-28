@@ -23,7 +23,11 @@ final class ResyncRequestCommand extends Command
 
     public function handle(ResyncRequestApprovers $resync): int
     {
-        $identifier = (string) $this->argument('request');
+        // Read through the raw input: `argument()` types differently depending
+        // on whether static analysis could boot the application, and this has
+        // to hold in environments where it cannot.
+        $argument = $this->input->getArgument('request');
+        $identifier = is_scalar($argument) ? (string) $argument : '';
         $request = $this->findRequest($identifier);
 
         if ($request === null) {
