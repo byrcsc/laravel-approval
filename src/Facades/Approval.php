@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalRequest resolve(ApprovalRequest $request, ConflictResolution $resolution, Model|null $actor = null, string|null $comment = null)
  * @method static ApprovalRequest resubmit(ApprovalRequest $request, array<string, mixed>|null $newAttributes = null, Model|null $submitter = null, ApprovalWorkflow|string|null $workflow = null)
  * @method static ApprovalRequest resume(ApprovalRequest $request, array<string, mixed>|null $changes = null, ApprovalWorkflow|string|null $workflow = null)
- * @method static array{escalated: list<string>, failed: array<string, string>} escalateOverdue()
+ * @method static array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>} escalateOverdue()
  * @method static Builder<ApprovalRequest> overdue()
  * @method static Builder<ApprovalRequest> awaiting(Model $user)
  * @method static Builder<ApprovalRequest> requestsFor(Model $approvable)

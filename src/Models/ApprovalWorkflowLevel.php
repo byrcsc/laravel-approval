@@ -50,6 +50,7 @@ final class ApprovalWorkflowLevel extends Model
             'sla_minutes' => 'integer',
             'escalation_strategy' => EscalationAction::class,
             'escalation_config' => 'array',
+            'remind_every_minutes' => 'integer',
             'condition_config' => 'array',
         ];
     }

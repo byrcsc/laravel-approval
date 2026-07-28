@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Data\Ballot;
+use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\RequestState;
@@ -88,6 +89,8 @@ final class ReassignApprover
                 'delegated_to_id' => null,
                 'source' => ApproverSource::Reassigned,
             ])->save();
+
+            StepHealth::assertCarryable($step, $request->workflowName());
 
             ($this->recordAction)(
                 request: $request,

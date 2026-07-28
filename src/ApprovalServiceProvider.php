@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval;
 
+use ByRcsc\LaravelApproval\Commands\DoctorCommand;
 use ByRcsc\LaravelApproval\Commands\EscalateOverdueCommand;
 use ByRcsc\LaravelApproval\Commands\ResyncRequestCommand;
 use ByRcsc\LaravelApproval\Commands\StatusCommand;
@@ -29,6 +30,7 @@ final class ApprovalServiceProvider extends PackageServiceProvider
             ->hasMigration('create_approval_tables')
             ->hasCommands([
                 EscalateOverdueCommand::class,
+                DoctorCommand::class,
                 ResyncRequestCommand::class,
                 StatusCommand::class,
             ]);

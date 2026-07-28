@@ -7,6 +7,7 @@ namespace ByRcsc\LaravelApproval\Models;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Support\Attributes;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -101,6 +102,19 @@ final class ApprovalRequest extends Model
     public function resubmissions(): HasMany
     {
         return $this->hasMany(self::class, 'resubmitted_from_id');
+    }
+
+    /**
+     * The workflow's slug, or a request-scoped placeholder when the workflow
+     * row is gone. For messages, never for lookups.
+     */
+    public function workflowName(): string
+    {
+        $workflow = $this->workflow;
+
+        return $workflow === null
+            ? 'request-'.Attributes::string($this, 'id')
+            : Attributes::string($workflow, 'slug');
     }
 
     /**

@@ -16,8 +16,8 @@ use Illuminate\Notifications\Messages\MailMessage;
  * `notify` policy, which changes nothing about the request and relies on this
  * to do the actual telling.
  *
- * Sent once per level, because the escalation that triggers it happens once.
- * A daily nag is a scheduled job in the host app, not this.
+ * Sent once at escalation by default. A level with `remind_every_minutes`
+ * receives the same notification again at that snapshotted cadence.
  */
 final class ApprovalOverdueNotification extends ApprovalNotification
 {

@@ -9,6 +9,7 @@ use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
 use ByRcsc\LaravelApproval\Data\ApproverSlot;
 use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowException;
@@ -87,6 +88,10 @@ final class EscalateStrategy implements EscalationStrategy
             $step->approverSlots()->create($slot->toAttributes());
 
             $added++;
+        }
+
+        if ($added > 0) {
+            StepHealth::assertCarryable($step, $request->workflowName());
         }
     }
 

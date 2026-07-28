@@ -111,7 +111,9 @@ final readonly class Ballot
         $holders = [];
 
         foreach ($this->slots as $slot) {
-            $holder = $slot->delegatedTo ?? $slot->approver;
+            $holder = $slot->getAttributeValue('delegated_to_id') === null
+                ? $slot->approver
+                : $slot->delegatedTo;
 
             if ($holder instanceof Model) {
                 $holders[] = $holder;

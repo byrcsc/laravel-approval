@@ -7,6 +7,7 @@ namespace ByRcsc\LaravelApproval\Actions;
 use ByRcsc\LaravelApproval\Data\ApproverSlot;
 use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\RequestState;
@@ -217,6 +218,8 @@ final class ResyncRequestApprovers
         if ($required !== null && $required > $seats) {
             throw InvalidWorkflowException::quorumUnreachable($slug, $snapshot->sequence, $required, $seats);
         }
+
+        StepHealth::assertCarryable($step, $slug);
     }
 
     /**

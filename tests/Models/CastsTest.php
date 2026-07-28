@@ -30,6 +30,9 @@ it('round-trips the level escalation settings', function () {
         'sla_minutes' => 120,
         'escalation_strategy' => EscalationAction::Escalate,
         'escalation_config' => ['resolver' => 'App\\Approvals\\HeadOfFinance'],
+        'remind_every_minutes' => 30,
+        'condition' => 'App\\Approvals\\LargeAmount',
+        'condition_config' => ['amount' => 500_000],
     ]]);
 
     $level = $workflow->levels()->first();
@@ -37,7 +40,9 @@ it('round-trips the level escalation settings', function () {
 
     expect($level?->escalation_strategy)->toBe(EscalationAction::Escalate)
         ->and($level?->sla_minutes)->toBe(120)
-        ->and($level?->escalation_config)->toBe(['resolver' => 'App\\Approvals\\HeadOfFinance']);
+        ->and($level?->escalation_config)->toBe(['resolver' => 'App\\Approvals\\HeadOfFinance'])
+        ->and($level?->remind_every_minutes)->toBe(30)
+        ->and($level?->condition_config)->toBe(['amount' => 500_000]);
 });
 
 it('round-trips a request state, draft, and timestamps', function () {

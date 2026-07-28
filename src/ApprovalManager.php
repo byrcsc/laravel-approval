@@ -263,7 +263,7 @@ final class ApprovalManager
      * command is the usual caller; this is here for hosts who would rather
      * drive it from their own job.
      *
-     * @return array{escalated: list<string>, failed: array<string, string>}
+     * @return array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>}
      */
     public function escalateOverdue(): array
     {

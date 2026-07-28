@@ -54,6 +54,7 @@ return new class extends Migration
             $table->unsignedInteger('sla_minutes')->nullable();
             $table->string('escalation_strategy')->nullable();
             $table->json('escalation_config')->nullable();
+            $table->unsignedInteger('remind_every_minutes')->nullable();
             $table->string('condition')->nullable();
             $table->json('condition_config')->nullable();
             $table->timestamps();
@@ -125,6 +126,7 @@ return new class extends Migration
             $table->unsignedInteger('sla_minutes')->nullable();
             $table->string('escalation_strategy')->nullable();
             $table->json('escalation_config')->nullable();
+            $table->unsignedInteger('remind_every_minutes')->nullable();
             $table->string('condition')->nullable();
             $table->json('condition_config')->nullable();
             $table->boolean('condition_result')->default(true);
@@ -136,6 +138,8 @@ return new class extends Migration
             // Checked before escalating, so a command on a one-minute schedule
             // still escalates each step exactly once.
             $table->timestamp('escalated_at')->nullable();
+            $table->timestamp('last_reminded_at')->nullable();
+            $table->timestamp('stranded_at')->nullable();
 
             $table->string('state')->default('queued');
             $table->timestamps();

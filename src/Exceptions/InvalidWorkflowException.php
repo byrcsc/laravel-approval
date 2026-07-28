@@ -46,6 +46,13 @@ final class InvalidWorkflowException extends ApprovalException
         );
     }
 
+    public static function livingQuorumUnreachable(string $slug, int $sequence, int $required, int $living): self
+    {
+        return new self(
+            "Level {$sequence} of the approval workflow [{$slug}] requires {$required} approvals but has only {$living} living seat holders."
+        );
+    }
+
     public static function ambiguousApprover(string $slug, int $sequence): self
     {
         return new self(

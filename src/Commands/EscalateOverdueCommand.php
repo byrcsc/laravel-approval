@@ -30,8 +30,9 @@ final class EscalateOverdueCommand extends Command
         $result = $escalate();
 
         $count = count($result['escalated']);
+        $reminders = count($result['reminded']);
 
-        if ($count === 0 && $result['failed'] === []) {
+        if ($count === 0 && $reminders === 0 && $result['stranded'] === [] && $result['failed'] === []) {
             $this->components->info('Nothing overdue.');
 
             return self::SUCCESS;
@@ -39,6 +40,18 @@ final class EscalateOverdueCommand extends Command
 
         if ($count > 0) {
             $this->components->info(sprintf('Escalated %d %s.', $count, $count === 1 ? 'level' : 'levels'));
+        }
+
+        if ($reminders > 0) {
+            $this->components->info(sprintf('Sent %d overdue %s.', $reminders, $reminders === 1 ? 'reminder' : 'reminders'));
+        }
+
+        if ($result['stranded'] !== []) {
+            $this->components->warn(sprintf(
+                'Detected %d newly stranded %s.',
+                count($result['stranded']),
+                count($result['stranded']) === 1 ? 'level' : 'levels',
+            ));
         }
 
         foreach ($result['failed'] as $step => $message) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Commands;
 
+use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -41,9 +42,38 @@ final class StatusCommand extends Command
         $limit = max(1, (int) $this->option('limit'));
 
         $this->listOverdue($limit);
+        $this->listStranded($limit);
         $this->listConflicted($limit);
 
         return self::SUCCESS;
+    }
+
+    private function listStranded(int $limit): void
+    {
+        $steps = ApprovalRequestStep::query()
+            ->where('state', StepState::Active->value)
+            ->whereHas('request', fn ($query) => $query->where('state', RequestState::Pending->value))
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (ApprovalRequestStep $step): bool => StepHealth::inspect($step)['stranded'])
+            ->take($limit);
+
+        if ($steps->isEmpty()) {
+            return;
+        }
+
+        $this->newLine();
+        $this->components->error('Stranded, living holders cannot meet quorum');
+
+        foreach ($steps as $step) {
+            $health = StepHealth::inspect($step);
+            $request = $step->request;
+
+            $this->components->twoColumnDetail(
+                $request === null ? '?' : Attributes::string($request, 'ulid'),
+                sprintf('%s, %d living / %d required', Attributes::string($step, 'name'), $health['living'], $health['quorum']),
+            );
+        }
     }
 
     private function listOverdue(int $limit): void
