@@ -17,10 +17,19 @@ final class ApprovalGuard
 
     public static function bypassing(Model $model): bool
     {
-        return (self::$bypasses[self::key($model)] ?? 0) > 0;
+        foreach (self::keys($model) as $key) {
+            if ((self::$bypasses[$key] ?? 0) > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
+     * Re-entrant: the count is what lets a nested bypass close without
+     * disarming the one around it.
+     *
      * @template TValue
      *
      * @param  callable(): TValue  $callback
@@ -28,24 +37,46 @@ final class ApprovalGuard
      */
     public static function without(Model $model, callable $callback): mixed
     {
-        $key = self::key($model);
-        self::$bypasses[$key] = (self::$bypasses[$key] ?? 0) + 1;
+        $keys = self::keys($model);
+
+        foreach ($keys as $key) {
+            self::$bypasses[$key] = (self::$bypasses[$key] ?? 0) + 1;
+        }
 
         try {
             return $callback();
         } finally {
-            self::$bypasses[$key]--;
+            foreach ($keys as $key) {
+                self::$bypasses[$key]--;
 
-            if (self::$bypasses[$key] === 0) {
-                unset(self::$bypasses[$key]);
+                if (self::$bypasses[$key] === 0) {
+                    unset(self::$bypasses[$key]);
+                }
             }
         }
     }
 
-    private static function key(Model $model): string
+    /**
+     * Both the row the model stands for and the object in hand: the row key so
+     * that a second instance of the same record is covered by the same bypass,
+     * the object key so that a model which gains its key mid-bypass - it was
+     * inserted inside the callback - is not lost track of halfway through.
+     *
+     * The two live in separate namespaces on purpose. Keying an unsaved model
+     * by `spl_object_id` under the morph class, as this once did, lets an
+     * object id collide with a real primary key of the same class.
+     *
+     * @return list<string>
+     */
+    private static function keys(Model $model): array
     {
+        $keys = ['object:'.spl_object_id($model)];
         $key = $model->getKey();
 
-        return $model->getMorphClass().':'.(is_scalar($key) ? (string) $key : spl_object_id($model));
+        if (is_scalar($key)) {
+            $keys[] = 'row:'.$model->getMorphClass().':'.$key;
+        }
+
+        return $keys;
     }
 }

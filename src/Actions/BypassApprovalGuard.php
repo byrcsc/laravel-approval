@@ -30,32 +30,37 @@ final class BypassApprovalGuard
     ): mixed {
         return DB::transaction(function () use ($approvable, $request, $callback, $actor, $comment): mixed {
             $drafted = array_keys(Attributes::object($request, 'new_attributes'));
-            $before = $this->rawValues($approvable, $drafted);
+            $before = $this->rawValues($this->fresh($approvable) ?? $approvable, $drafted);
 
             $result = ApprovalGuard::without($approvable, fn (): mixed => $callback($approvable));
 
-            // Read back from the database rather than refreshing: the callback
-            // may have deleted the record, and a bypass that removed it is
-            // still a bypass worth its audit line.
-            $after = $this->rawValues($approvable, $drafted);
-            $changed = [];
-
-            foreach ($drafted as $attribute) {
-                if (($before[$attribute] ?? null) !== ($after[$attribute] ?? null)) {
-                    $changed[] = $attribute;
-                }
-            }
+            // Read back from the database rather than refreshing the instance
+            // in hand: the callback may have deleted the record, and a bypass
+            // that removed it is the one most worth an honest audit line.
+            $fresh = $this->fresh($approvable);
 
             ($this->recordAction)(
                 request: $request,
                 action: ActionType::GuardBypassed,
                 actor: $actor,
                 comment: $comment,
-                metadata: ['attributes' => $changed],
+                metadata: $fresh === null
+                    ? ['attributes' => $drafted, 'deleted' => true]
+                    : ['attributes' => $this->changed($drafted, $before, $this->rawValues($fresh, $drafted))],
             );
 
             return $result;
         });
+    }
+
+    /**
+     * The record as the database holds it, or null once it no longer holds it
+     * at all. A soft delete reads as gone here, which is the right answer: the
+     * bypass took the record out of play either way.
+     */
+    private function fresh(Model $model): ?Model
+    {
+        return $model->newQuery()->whereKey($model->getKey())->first();
     }
 
     /**
@@ -64,13 +69,31 @@ final class BypassApprovalGuard
      */
     private function rawValues(Model $model, array $attributes): array
     {
-        $fresh = $model->newQuery()->whereKey($model->getKey())->first() ?? $model;
         $values = [];
 
         foreach ($attributes as $attribute) {
-            $values[$attribute] = $fresh->getRawOriginal($attribute);
+            $values[$attribute] = $model->getRawOriginal($attribute);
         }
 
         return $values;
+    }
+
+    /**
+     * @param  list<string>  $attributes
+     * @param  array<string, mixed>  $before
+     * @param  array<string, mixed>  $after
+     * @return list<string>
+     */
+    private function changed(array $attributes, array $before, array $after): array
+    {
+        $changed = [];
+
+        foreach ($attributes as $attribute) {
+            if (($before[$attribute] ?? null) !== ($after[$attribute] ?? null)) {
+                $changed[] = $attribute;
+            }
+        }
+
+        return $changed;
     }
 }
