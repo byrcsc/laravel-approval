@@ -7,6 +7,8 @@ namespace ByRcsc\LaravelApproval\Facades;
 use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
+use ByRcsc\LaravelApproval\Data\CancellationEligibility;
+use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
@@ -24,6 +26,10 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalRequest submit(Model $approvable, ApprovalWorkflow|string|null $workflow = null, array<string, mixed>|null $newAttributes = null, Model|null $submitter = null, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static Eligibility eligibility(ApprovalRequest $request, Model $actor)
  * @method static bool canApprove(ApprovalRequest $request, Model $actor)
+ * @method static CancellationEligibility cancellationEligibility(ApprovalRequest $request, Model $actor)
+ * @method static bool canCancel(ApprovalRequest $request, Model $actor)
+ * @method static DelegationEligibility delegationEligibility(ApprovalRequest $request, Model $actor, Model|null $delegate = null)
+ * @method static bool canDelegate(ApprovalRequest $request, Model $actor, Model|null $delegate = null)
  * @method static ApprovalRequest decide(ApprovalRequest $request, ApprovalDecision $decision)
  * @method static ApprovalRequest approve(ApprovalRequest $request, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static ApprovalRequest reject(ApprovalRequest $request, Model $actor, string $comment, array<string, mixed> $metadata = [])

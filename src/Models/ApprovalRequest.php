@@ -4,9 +4,15 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\Data\Ballot;
+use ByRcsc\LaravelApproval\Data\CancellationEligibility;
+use ByRcsc\LaravelApproval\Data\DelegationEligibility;
+use ByRcsc\LaravelApproval\Data\TimelineEntry;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\TimelineState;
+use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,6 +20,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 
@@ -126,6 +133,84 @@ final class ApprovalRequest extends Model
             : Attributes::string($workflow, 'slug');
     }
 
+    public function wasSubmittedBy(Model $actor): bool
+    {
+        $key = $actor->getKey();
+
+        return Attributes::nullableString($this, 'submitter_type') === $actor->getMorphClass()
+            && Attributes::nullableString($this, 'submitter_id') === (is_scalar($key) ? (string) $key : '');
+    }
+
+    public function currentStep(): ?ApprovalRequestStep
+    {
+        if ($this->relationLoaded('steps')) {
+            /** @var ApprovalRequestStep|null */
+            return $this->steps->first(
+                fn (ApprovalRequestStep $step): bool => Attributes::enum($step, 'state', StepState::class) === StepState::Active,
+            );
+        }
+
+        /** @var ApprovalRequestStep|null */
+        return $this->steps()->where('state', StepState::Active->value)->first();
+    }
+
+    /**
+     * @return Collection<int, Model>
+     */
+    public function pendingApprovers(): Collection
+    {
+        $step = $this->currentStep();
+        $holders = $step === null ? [] : Ballot::for($step)->holders();
+
+        return self::models($holders);
+    }
+
+    /**
+     * @return Collection<int, TimelineEntry>
+     */
+    public function timeline(): Collection
+    {
+        $this->loadMissing([
+            'steps.approverSlots.approver',
+            'steps.approverSlots.delegatedTo',
+            'steps.actions',
+        ]);
+
+        return $this->steps->map(function (ApprovalRequestStep $step): TimelineEntry {
+            $stepState = Attributes::enum($step, 'state', StepState::class) ?? StepState::Queued;
+            $state = $stepState === StepState::Skipped && ! Attributes::bool($step, 'condition_result')
+                ? TimelineState::ConditionSkipped
+                : TimelineState::from($stepState->value);
+
+            return new TimelineEntry(
+                $step,
+                $state,
+                collect(Ballot::for($step)->holders()),
+                $step->actions,
+            );
+        })->values();
+    }
+
+    public function cancellationEligibility(Model $actor): CancellationEligibility
+    {
+        return Approval::cancellationEligibility($this, $actor);
+    }
+
+    public function canBeCancelledBy(Model $actor): bool
+    {
+        return $this->cancellationEligibility($actor)->eligible;
+    }
+
+    public function delegationEligibility(Model $actor, ?Model $delegate = null): DelegationEligibility
+    {
+        return Approval::delegationEligibility($this, $actor, $delegate);
+    }
+
+    public function canBeDelegatedBy(Model $actor, ?Model $delegate = null): bool
+    {
+        return $this->delegationEligibility($actor, $delegate)->eligible;
+    }
+
     /**
      * Whether this actor has any standing in the request at all: they submitted
      * it, or they are named on one of its seats.
@@ -209,10 +294,20 @@ final class ApprovalRequest extends Model
      */
     public function scopeAwaitingUser(Builder $query, Model $user): void
     {
+        self::constrainAwaitingUser($query, $user);
+    }
+
+    /**
+     * Shared with approvable-model inbox scopes.
+     *
+     * @param  Builder<self>  $query
+     */
+    public static function constrainAwaitingUser(Builder $query, Model $user): void
+    {
         $type = $user->getMorphClass();
         $id = $user->getKey();
 
-        $query->pending()->whereHas('steps', function (Builder $step) use ($type, $id): void {
+        $query->where('state', RequestState::Pending->value)->whereHas('steps', function (Builder $step) use ($type, $id): void {
             $step
                 ->where('state', StepState::Active->value)
                 ->whereHas('approverSlots', function (Builder $slot) use ($type, $id): void {
@@ -238,6 +333,20 @@ final class ApprovalRequest extends Model
     }
 
     /**
+     * Eager-load everything used by current-step summaries and timelines.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeWithProgress(Builder $query): void
+    {
+        $query->with([
+            'steps.approverSlots.approver',
+            'steps.approverSlots.delegatedTo',
+            'steps.actions',
+        ]);
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -250,5 +359,16 @@ final class ApprovalRequest extends Model
             'submitted_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * @template TModel of Model
+     *
+     * @param  list<TModel>  $models
+     * @return Collection<int, TModel>
+     */
+    private static function models(array $models): Collection
+    {
+        return collect($models)->values();
     }
 }

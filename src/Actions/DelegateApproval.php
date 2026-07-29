@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Data\Ballot;
+use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
+use ByRcsc\LaravelApproval\Enums\DelegationIneligibility;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Events\ApprovalDelegated;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\DelegationException;
@@ -36,7 +37,10 @@ use Illuminate\Support\Facades\Event;
  */
 final class DelegateApproval
 {
-    public function __construct(private readonly RecordAction $recordAction) {}
+    public function __construct(
+        private readonly RecordAction $recordAction,
+        private readonly CheckDelegationEligibility $checkEligibility,
+    ) {}
 
     public function __invoke(
         ApprovalRequest $request,
@@ -48,41 +52,8 @@ final class DelegateApproval
             $request->newQuery()->whereKey($request->getKey())->lockForUpdate()->get();
             $request->refresh();
 
-            $state = Attributes::enum($request, 'state', RequestState::class) ?? RequestState::Pending;
-
-            if ($state !== RequestState::Pending) {
-                throw AlreadyDecidedException::requestIsClosed($request, $state);
-            }
-
-            if ($approver->getMorphClass() === $delegate->getMorphClass() && $this->key($approver) === $this->key($delegate)) {
-                throw DelegationException::toSelf($approver);
-            }
-
-            $step = $this->activeStep($request);
-            $ballot = Ballot::for($step);
-            $seat = $ballot->seatFor($approver);
-
-            if ($seat === null) {
-                throw $ballot->hasDelegatedSeat($approver)
-                    ? DelegationException::seatIsTaken($approver)
-                    : UnauthorizedApproverException::notAnApprover($approver, $request);
-            }
-
-            // Nothing to hand over once the seat has been used.
-            if ($ballot->hasVoted($seat)) {
-                throw AlreadyDecidedException::actorHasVoted($approver, $request);
-            }
-
-            // Two seats, one holder, and a quorum that can never be met.
-            if ($ballot->seatFor($delegate) !== null) {
-                throw DelegationException::alreadySeated($delegate);
-            }
-
-            // Nobody can hold a seat on somebody's behalf if they are no longer
-            // there to hold it.
-            if (! $delegate->exists) {
-                throw DelegationException::doesNotExist($delegate);
-            }
+            $eligibility = ($this->checkEligibility)($request, $approver, $delegate);
+            [$step, $ballot, $seat] = $this->authorizedContext($request, $approver, $delegate, $eligibility);
 
             $health = StepHealth::inspect($step);
 
@@ -109,12 +80,37 @@ final class DelegateApproval
         });
     }
 
-    private function activeStep(ApprovalRequest $request): ApprovalRequestStep
-    {
-        /** @var ApprovalRequestStep|null $step */
-        $step = $request->steps()->where('state', StepState::Active->value)->first();
+    /**
+     * @return array{ApprovalRequestStep, Ballot, ApprovalRequestStepApprover}
+     */
+    private function authorizedContext(
+        ApprovalRequest $request,
+        Model $approver,
+        Model $delegate,
+        DelegationEligibility $eligibility,
+    ): array {
+        if ($eligibility->eligible) {
+            assert($eligibility->step !== null);
+            assert($eligibility->ballot !== null);
+            assert($eligibility->seat !== null);
 
-        return $step ?? throw AlreadyDecidedException::noActiveStep($request);
+            return [$eligibility->step, $eligibility->ballot, $eligibility->seat];
+        }
+
+        throw match ($eligibility->reason) {
+            DelegationIneligibility::RequestClosed => AlreadyDecidedException::requestIsClosed(
+                $request,
+                Attributes::enum($request, 'state', RequestState::class) ?? RequestState::Pending,
+            ),
+            DelegationIneligibility::NoActiveStep => AlreadyDecidedException::noActiveStep($request),
+            DelegationIneligibility::SeatDelegated => DelegationException::seatIsTaken($approver),
+            DelegationIneligibility::AlreadyVoted => AlreadyDecidedException::actorHasVoted($approver, $request),
+            DelegationIneligibility::ApproverMissing => DelegationException::doesNotExist($approver),
+            DelegationIneligibility::CannotDelegateToSelf => DelegationException::toSelf($approver),
+            DelegationIneligibility::DelegateAlreadySeated => DelegationException::alreadySeated($delegate),
+            DelegationIneligibility::DelegateMissing => DelegationException::doesNotExist($delegate),
+            default => UnauthorizedApproverException::notAnApprover($approver, $request),
+        };
     }
 
     private function key(Model $model): string

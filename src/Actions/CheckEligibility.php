@@ -8,9 +8,7 @@ use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Enums\Ineligibility;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use ByRcsc\LaravelApproval\Support\Payload;
 use Illuminate\Database\Eloquent\Model;
@@ -40,7 +38,7 @@ final class CheckEligibility
             return Eligibility::denied(Ineligibility::RequestClosed);
         }
 
-        $step = $this->activeStep($request);
+        $step = $request->currentStep();
 
         if ($step === null) {
             return Eligibility::denied(Ineligibility::NoActiveStep);
@@ -68,16 +66,9 @@ final class CheckEligibility
         return Eligibility::granted($step, $ballot, $seat);
     }
 
-    private function activeStep(ApprovalRequest $request): ?ApprovalRequestStep
-    {
-        /** @var ApprovalRequestStep|null */
-        return $request->steps()->where('state', StepState::Active->value)->first();
-    }
-
     private function isSubmitter(ApprovalRequest $request, Model $actor): bool
     {
-        return Attributes::nullableString($request, 'submitter_type') === $actor->getMorphClass()
-            && Attributes::nullableString($request, 'submitter_id') === $this->stringKey($actor);
+        return $request->wasSubmittedBy($actor);
     }
 
     /**
@@ -99,12 +90,5 @@ final class CheckEligibility
         }
 
         return (bool) config('approval.allow_self_approval', false);
-    }
-
-    private function stringKey(Model $model): string
-    {
-        $key = $model->getKey();
-
-        return is_scalar($key) ? (string) $key : '';
     }
 }

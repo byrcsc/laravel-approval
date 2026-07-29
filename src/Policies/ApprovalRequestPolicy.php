@@ -57,4 +57,14 @@ class ApprovalRequestPolicy
     {
         return Approval::canApprove($request, $user);
     }
+
+    public function cancel(Model $user, ApprovalRequest $request): bool
+    {
+        return Approval::canCancel($request, $user);
+    }
+
+    public function delegate(Model $user, ApprovalRequest $request): bool
+    {
+        return Approval::canDelegate($request, $user);
+    }
 }

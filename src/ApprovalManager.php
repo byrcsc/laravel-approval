@@ -8,6 +8,8 @@ use ByRcsc\LaravelApproval\Actions\ApproveStep;
 use ByRcsc\LaravelApproval\Actions\AttachFile;
 use ByRcsc\LaravelApproval\Actions\BypassApprovalGuard;
 use ByRcsc\LaravelApproval\Actions\CancelRequest;
+use ByRcsc\LaravelApproval\Actions\CheckCancellationEligibility;
+use ByRcsc\LaravelApproval\Actions\CheckDelegationEligibility;
 use ByRcsc\LaravelApproval\Actions\CheckEligibility;
 use ByRcsc\LaravelApproval\Actions\DelegateApproval;
 use ByRcsc\LaravelApproval\Actions\EscalateOverdueSteps;
@@ -22,6 +24,8 @@ use ByRcsc\LaravelApproval\Actions\SubmitForApproval;
 use ByRcsc\LaravelApproval\Actions\VerifyAuditTrail;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
+use ByRcsc\LaravelApproval\Data\CancellationEligibility;
+use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
@@ -116,6 +120,29 @@ final class ApprovalManager
     public function canApprove(ApprovalRequest $request, Model $actor): bool
     {
         return $this->eligibility($request, $actor)->eligible;
+    }
+
+    public function cancellationEligibility(ApprovalRequest $request, Model $actor): CancellationEligibility
+    {
+        return $this->container->make(CheckCancellationEligibility::class)($request, $actor);
+    }
+
+    public function canCancel(ApprovalRequest $request, Model $actor): bool
+    {
+        return $this->cancellationEligibility($request, $actor)->eligible;
+    }
+
+    public function delegationEligibility(
+        ApprovalRequest $request,
+        Model $actor,
+        ?Model $delegate = null,
+    ): DelegationEligibility {
+        return $this->container->make(CheckDelegationEligibility::class)($request, $actor, $delegate);
+    }
+
+    public function canDelegate(ApprovalRequest $request, Model $actor, ?Model $delegate = null): bool
+    {
+        return $this->delegationEligibility($request, $actor, $delegate)->eligible;
     }
 
     /**

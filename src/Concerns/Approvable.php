@@ -4,17 +4,24 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Concerns;
 
+use ByRcsc\LaravelApproval\Data\CancellationEligibility;
+use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\TimelineEntry;
 use ByRcsc\LaravelApproval\Enums\ApprovalMode;
+use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalGuardException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Support\ApprovalGuard;
 use ByRcsc\LaravelApproval\Support\Attributes;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Support\Collection;
 
 /**
  * Makes a model something that can be put through a workflow.
@@ -129,6 +136,51 @@ trait Approvable
         return $request === null ? null : Approval::eligibility($request, $user);
     }
 
+    public function cancellationEligibility(Model $user): ?CancellationEligibility
+    {
+        $request = $this->pendingApprovalRequest();
+
+        return $request === null ? null : Approval::cancellationEligibility($request, $user);
+    }
+
+    public function canCancelApproval(Model $user): bool
+    {
+        return $this->cancellationEligibility($user)?->eligible === true;
+    }
+
+    public function delegationEligibility(Model $user, ?Model $delegate = null): ?DelegationEligibility
+    {
+        $request = $this->pendingApprovalRequest();
+
+        return $request === null ? null : Approval::delegationEligibility($request, $user, $delegate);
+    }
+
+    public function canDelegateApproval(Model $user, ?Model $delegate = null): bool
+    {
+        return $this->delegationEligibility($user, $delegate)?->eligible === true;
+    }
+
+    public function currentApprovalStep(): ?ApprovalRequestStep
+    {
+        return $this->pendingApprovalRequest()?->currentStep();
+    }
+
+    /**
+     * @return Collection<int, Model>
+     */
+    public function pendingApprovalApprovers(): Collection
+    {
+        return $this->pendingApprovalRequest()?->pendingApprovers() ?? collect();
+    }
+
+    /**
+     * @return Collection<int, TimelineEntry>
+     */
+    public function approvalTimeline(): Collection
+    {
+        return $this->latestApprovalRequest()->first()?->timeline() ?? collect();
+    }
+
     /**
      * The edit waiting to be applied, if there is one. Empty both when nothing
      * is pending and when what is pending is the record itself rather than a
@@ -202,6 +254,69 @@ trait Approvable
         return $mode instanceof ApprovalMode
             ? $mode
             : ApprovalMode::tryFrom(is_string($mode) ? $mode : '') ?? ApprovalMode::Explicit;
+    }
+
+
+
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopePendingApproval(Builder $query): void
+    {
+        $query->whereHas(
+            'approvalRequests',
+            fn (Builder $request) => $request->where('state', RequestState::Pending->value),
+        );
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeApprovalRejected(Builder $query): void
+    {
+        $query->whereHas(
+            'approvalRequests',
+            fn (Builder $request) => $request->where('state', RequestState::Rejected->value),
+        );
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeApprovalReturned(Builder $query): void
+    {
+        $query->whereHas(
+            'approvalRequests',
+            fn (Builder $request) => $request->where('state', RequestState::Returned->value),
+        );
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeWithoutPendingApproval(Builder $query): void
+    {
+        $query->whereDoesntHave(
+            'approvalRequests',
+            fn (Builder $request) => $request->where('state', RequestState::Pending->value),
+        );
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeAwaitingApprovalBy(Builder $query, Model $user): void
+    {
+        $model = $query->getModel();
+
+        $query->whereIn(
+            $model->qualifyColumn($model->getKeyName()),
+            ApprovalRequest::query()
+                ->awaitingUser($user)
+                ->where('approvable_type', $model->getMorphClass())
+                ->select('approvable_id'),
+        );
     }
 
     /**

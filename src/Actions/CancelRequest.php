@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Enums\ActionType;
+use ByRcsc\LaravelApproval\Enums\CancellationIneligibility;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Events\ApprovalCancelled;
@@ -30,7 +31,10 @@ use Illuminate\Support\Facades\Event;
  */
 final class CancelRequest
 {
-    public function __construct(private readonly RecordAction $recordAction) {}
+    public function __construct(
+        private readonly RecordAction $recordAction,
+        private readonly CheckCancellationEligibility $checkEligibility,
+    ) {}
 
     public function __invoke(
         ApprovalRequest $request,
@@ -48,8 +52,12 @@ final class CancelRequest
                 throw AlreadyDecidedException::requestIsClosed($request, $state);
             }
 
-            if ($actor !== null && ! $force && ! $this->isSubmitter($request, $actor)) {
-                throw UnauthorizedApproverException::notTheSubmitter($actor, $request);
+            if ($actor !== null && ! $force) {
+                $eligibility = ($this->checkEligibility)($request, $actor);
+
+                if ($eligibility->reason === CancellationIneligibility::NotSubmitter) {
+                    throw UnauthorizedApproverException::notTheSubmitter($actor, $request);
+                }
             }
 
             $request->steps()
@@ -72,13 +80,5 @@ final class CancelRequest
 
             return $request;
         });
-    }
-
-    private function isSubmitter(ApprovalRequest $request, Model $actor): bool
-    {
-        $key = $actor->getKey();
-
-        return Attributes::nullableString($request, 'submitter_type') === $actor->getMorphClass()
-            && Attributes::nullableString($request, 'submitter_id') === (is_scalar($key) ? (string) $key : '');
     }
 }

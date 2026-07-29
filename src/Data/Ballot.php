@@ -36,11 +36,17 @@ final readonly class Ballot
     public static function for(ApprovalRequestStep $step): self
     {
         /** @var Collection<int, ApprovalRequestStepApprover> $slots */
-        $slots = $step->approverSlots()->orderBy('id')->get();
+        $slots = $step->relationLoaded('approverSlots')
+            ? $step->approverSlots->sortBy('id')->values()
+            : $step->approverSlots()->orderBy('id')->get();
 
         $voters = [];
 
-        foreach ($step->actions()->where('action', ActionType::Approved->value)->get() as $action) {
+        $actions = $step->relationLoaded('actions')
+            ? $step->actions->where('action', ActionType::Approved)
+            : $step->actions()->where('action', ActionType::Approved->value)->get();
+
+        foreach ($actions as $action) {
             $type = Attributes::nullableString($action, 'actor_type');
             $id = $action->getAttributeValue('actor_id');
 
@@ -111,9 +117,12 @@ final readonly class Ballot
         $holders = [];
 
         foreach ($this->slots as $slot) {
-            $holder = $slot->getAttributeValue('delegated_to_id') === null
-                ? $slot->approver
-                : $slot->delegatedTo;
+            $relation = $slot->getAttributeValue('delegated_to_id') === null
+                ? 'approver'
+                : 'delegatedTo';
+            $holder = $slot->relationLoaded($relation)
+                ? $slot->getRelation($relation)
+                : $slot->{$relation};
 
             if ($holder instanceof Model) {
                 $holders[] = $holder;
