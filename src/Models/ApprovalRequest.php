@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
-use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Data\TimelineEntry;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalRequestFactory;
 use ByRcsc\LaravelApproval\Enums\ActionType;
@@ -165,12 +165,32 @@ final class ApprovalRequest extends Model
     }
 
     /**
+     * Progress for the stage identified as current on this request.
+     */
+    public function stageProgress(): ?StageProgress
+    {
+        $sequence = Attributes::nullableInt($this, 'current_level_sequence');
+
+        if ($sequence === null) {
+            return null;
+        }
+
+        $stage = $this->relationLoaded('steps')
+            ? $this->steps->first(
+                fn (ApprovalRequestStep $candidate): bool => Attributes::int($candidate, 'sequence') === $sequence,
+            )
+            : $this->steps()->where('sequence', $sequence)->first();
+
+        return $stage instanceof ApprovalRequestStep ? StageProgress::for($stage) : null;
+    }
+
+    /**
      * @return Collection<int, Model>
      */
     public function pendingApprovers(): Collection
     {
         $step = $this->currentStep();
-        $holders = $step === null ? [] : Ballot::for($step)->holders();
+        $holders = $step === null ? [] : StageProgress::for($step)->assignmentHolders();
 
         return self::models($holders);
     }
@@ -195,7 +215,7 @@ final class ApprovalRequest extends Model
             return new TimelineEntry(
                 $step,
                 $state,
-                collect(Ballot::for($step)->holders()),
+                collect(StageProgress::for($step)->assignmentHolders()),
                 $step->actions,
             );
         })->values();
