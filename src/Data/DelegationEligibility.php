@@ -13,24 +13,24 @@ final readonly class DelegationEligibility
     private function __construct(
         public bool $eligible,
         public ?DelegationIneligibility $reason,
-        public ?ApprovalRequestStep $step,
-        public ?Ballot $ballot,
-        public ?ApprovalRequestStepApprover $seat,
+        public ?ApprovalRequestStep $stage,
+        public ?StageProgress $stageProgress,
+        public ?ApprovalRequestStepApprover $assignment,
     ) {}
 
     public static function granted(
-        ApprovalRequestStep $step,
-        Ballot $ballot,
-        ApprovalRequestStepApprover $seat,
+        ApprovalRequestStep $stage,
+        StageProgress $stageProgress,
+        ApprovalRequestStepApprover $assignment,
     ): self {
-        return new self(true, null, $step, $ballot, $seat);
+        return new self(true, null, $stage, $stageProgress, $assignment);
     }
 
     public static function denied(
         DelegationIneligibility $reason,
-        ?ApprovalRequestStep $step = null,
-        ?Ballot $ballot = null,
+        ?ApprovalRequestStep $stage = null,
+        ?StageProgress $stageProgress = null,
     ): self {
-        return new self(false, $reason, $step, $ballot, null);
+        return new self(false, $reason, $stage, $stageProgress, null);
     }
 }

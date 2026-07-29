@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
-use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Enums\DelegationIneligibility;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -32,39 +32,47 @@ final class CheckDelegationEligibility
         $step = $request->currentStep();
 
         if ($step === null) {
-            return DelegationEligibility::denied(DelegationIneligibility::NoActiveStep);
+            return DelegationEligibility::denied(DelegationIneligibility::NoActiveStage);
         }
 
-        $ballot = Ballot::for($step);
-        $seat = $ballot->seatFor($actor);
+        $progress = StageProgress::for($step);
+        $assignment = $progress->assignmentFor($actor);
 
-        if ($seat === null) {
+        if ($assignment === null) {
             return DelegationEligibility::denied(
-                $ballot->hasDelegatedSeat($actor)
-                    ? DelegationIneligibility::SeatDelegated
+                $progress->hasDelegatedAssignment($actor)
+                    ? DelegationIneligibility::AssignmentDelegated
                     : DelegationIneligibility::NotAnApprover,
                 $step,
-                $ballot,
+                $progress,
             );
         }
 
-        if ($ballot->hasVoted($seat)) {
-            return DelegationEligibility::denied(DelegationIneligibility::AlreadyVoted, $step, $ballot);
+        if ($progress->hasDecision($assignment)) {
+            return DelegationEligibility::denied(
+                DelegationIneligibility::DecisionAlreadyRecorded,
+                $step,
+                $progress,
+            );
         }
 
         if (! $actor->exists) {
-            return DelegationEligibility::denied(DelegationIneligibility::ApproverMissing, $step, $ballot);
+            return DelegationEligibility::denied(DelegationIneligibility::ApproverMissing, $step, $progress);
         }
 
-        if ($delegate !== null && $ballot->seatFor($delegate) !== null) {
-            return DelegationEligibility::denied(DelegationIneligibility::DelegateAlreadySeated, $step, $ballot);
+        if ($delegate !== null && $progress->assignmentFor($delegate) !== null) {
+            return DelegationEligibility::denied(
+                DelegationIneligibility::DelegateAlreadyAssigned,
+                $step,
+                $progress,
+            );
         }
 
         if ($delegate !== null && ! $delegate->exists) {
-            return DelegationEligibility::denied(DelegationIneligibility::DelegateMissing, $step, $ballot);
+            return DelegationEligibility::denied(DelegationIneligibility::DelegateMissing, $step, $progress);
         }
 
-        return DelegationEligibility::granted($step, $ballot, $seat);
+        return DelegationEligibility::granted($step, $progress, $assignment);
     }
 
     private function same(Model $left, Model $right): bool

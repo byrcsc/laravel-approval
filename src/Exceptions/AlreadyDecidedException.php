@@ -41,26 +41,26 @@ final class AlreadyDecidedException extends ApprovalException
         ));
     }
 
-    public static function seatHasVoted(ApprovalRequest $request): self
+    public static function assignmentHasDecision(ApprovalRequest $request): self
     {
         return new self(sprintf(
-            'That seat on approval request %s has already been used to approve. Moving it would put somebody behind a decision they never made.',
+            'That assignment on approval request %s already has a decision and cannot be moved.',
             self::ulid($request),
         ));
     }
 
-    public static function seatIsNotOnRequest(ApprovalRequest $request): self
+    public static function assignmentIsNotOnRequest(ApprovalRequest $request): self
     {
         return new self(sprintf(
-            'That approver slot does not belong to approval request %s.',
+            'That approval assignment does not belong to approval request %s.',
             self::ulid($request),
         ));
     }
 
-    public static function stepIsClosed(ApprovalRequest $request): self
+    public static function stageIsClosed(ApprovalRequest $request): self
     {
         return new self(sprintf(
-            'That approver slot cannot be moved because its level has already been decided on approval request %s.',
+            'That approval assignment cannot be moved because its stage is complete on approval request %s.',
             self::ulid($request),
         ));
     }

@@ -7,12 +7,7 @@ namespace ByRcsc\LaravelApproval\Exceptions;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * A handover that would break the level it happens on.
- *
- * Both cases here are really the same case: a quorum counts seats, so anything
- * that quietly turns two seats into one holder turns a two-of-three into a
- * level nobody can carry. Better to refuse the handover than to strand the
- * request.
+ * A handover that would make a stage's approval requirement unreachable.
  */
 final class DelegationException extends ApprovalException
 {
@@ -24,23 +19,23 @@ final class DelegationException extends ApprovalException
     public static function doesNotExist(Model $model): self
     {
         return new self(sprintf(
-            'The [%s] receiving this seat no longer exists. A seat can only be handed to somebody who is still there to use it.',
+            'The [%s] receiving this assignment no longer exists.',
             $model::class,
         ));
     }
 
-    public static function alreadySeated(Model $delegate): self
+    public static function alreadyAssigned(Model $delegate): self
     {
         return new self(sprintf(
-            '[%s] already holds a seat on this level. Delegating a second one to them would leave the level a seat short of its quorum forever.',
+            '[%s] already has an assignment on this stage.',
             $delegate::class,
         ));
     }
 
-    public static function seatIsTaken(Model $delegate): self
+    public static function assignmentIsDelegated(Model $delegate): self
     {
         return new self(sprintf(
-            'This seat is already delegated. Reassign it instead, or have [%s] hand it back first.',
+            'This assignment is already delegated. Reassign it instead, or have [%s] delegate it again.',
             $delegate::class,
         ));
     }

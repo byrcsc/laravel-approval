@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
-use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
@@ -53,7 +52,7 @@ final class DelegateApproval
             $request->refresh();
 
             $eligibility = ($this->checkEligibility)($request, $approver, $delegate);
-            [$step, $ballot, $seat] = $this->authorizedContext($request, $approver, $delegate, $eligibility);
+            [$step, $seat] = $this->authorizedContext($request, $approver, $delegate, $eligibility);
 
             $health = StepHealth::inspect($step);
 
@@ -81,7 +80,7 @@ final class DelegateApproval
     }
 
     /**
-     * @return array{ApprovalRequestStep, Ballot, ApprovalRequestStepApprover}
+     * @return array{ApprovalRequestStep, ApprovalRequestStepApprover}
      */
     private function authorizedContext(
         ApprovalRequest $request,
@@ -90,11 +89,11 @@ final class DelegateApproval
         DelegationEligibility $eligibility,
     ): array {
         if ($eligibility->eligible) {
-            assert($eligibility->step !== null);
-            assert($eligibility->ballot !== null);
-            assert($eligibility->seat !== null);
+            assert($eligibility->stage !== null);
+            assert($eligibility->stageProgress !== null);
+            assert($eligibility->assignment !== null);
 
-            return [$eligibility->step, $eligibility->ballot, $eligibility->seat];
+            return [$eligibility->stage, $eligibility->assignment];
         }
 
         throw match ($eligibility->reason) {
@@ -102,12 +101,15 @@ final class DelegateApproval
                 $request,
                 Attributes::enum($request, 'state', RequestState::class) ?? RequestState::Pending,
             ),
-            DelegationIneligibility::NoActiveStep => AlreadyDecidedException::noActiveStep($request),
-            DelegationIneligibility::SeatDelegated => DelegationException::seatIsTaken($approver),
-            DelegationIneligibility::AlreadyVoted => AlreadyDecidedException::actorHasVoted($approver, $request),
+            DelegationIneligibility::NoActiveStage => AlreadyDecidedException::noActiveStage($request),
+            DelegationIneligibility::AssignmentDelegated => DelegationException::assignmentIsDelegated($approver),
+            DelegationIneligibility::DecisionAlreadyRecorded => AlreadyDecidedException::decisionAlreadyRecorded(
+                $approver,
+                $request,
+            ),
             DelegationIneligibility::ApproverMissing => DelegationException::doesNotExist($approver),
             DelegationIneligibility::CannotDelegateToSelf => DelegationException::toSelf($approver),
-            DelegationIneligibility::DelegateAlreadySeated => DelegationException::alreadySeated($delegate),
+            DelegationIneligibility::DelegateAlreadyAssigned => DelegationException::alreadyAssigned($delegate),
             DelegationIneligibility::DelegateMissing => DelegationException::doesNotExist($delegate),
             default => UnauthorizedApproverException::notAnApprover($approver, $request),
         };

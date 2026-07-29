@@ -177,7 +177,7 @@ it('still refuses a delegation that would strand the escalated level', function 
     // Handing the seat to the person escalation just seated would leave one
     // holder on two seats.
     expect(fn () => Approval::delegate($request, $original, $duty))
-        ->toThrow(DelegationException::class, 'already holds a seat');
+        ->toThrow(DelegationException::class, 'already has an assignment');
 });
 
 it('lets an escalated seat be delegated onward like any other', function (): void {
