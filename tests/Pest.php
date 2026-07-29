@@ -12,7 +12,9 @@ use ByRcsc\LaravelApproval\Tests\Stubs\Invoice;
 use ByRcsc\LaravelApproval\Tests\Stubs\InvoiceStatus;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
 use ByRcsc\LaravelApproval\Tests\Stubs\PurchaseOrder;
+use ByRcsc\LaravelApproval\Tests\Stubs\ScriptedCondition;
 use ByRcsc\LaravelApproval\Tests\Stubs\User;
+use ByRcsc\LaravelApproval\Tests\Stubs\WitnessResolver;
 use ByRcsc\LaravelApproval\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
 
@@ -24,6 +26,9 @@ uses()->beforeEach(function (): void {
     HeadOfDepartmentResolver::$heads = [];
     PurchaseOrder::$actingSubmitter = null;
     PurchaseOrder::$workflowSlug = 'purchase-order';
+    ScriptedCondition::reset();
+    WitnessResolver::$sawAmount = null;
+    WitnessResolver::$approvers = [];
 })->in(__DIR__);
 
 /**
