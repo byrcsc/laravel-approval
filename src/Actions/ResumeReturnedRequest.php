@@ -101,7 +101,10 @@ final class ResumeReturnedRequest
         }
 
         if (is_string($given) && $given !== '') {
-            return ApprovalWorkflow::query()->where('slug', $given)->firstOrFail();
+            /** @var ApprovalWorkflow|null $workflow */
+            $workflow = ApprovalWorkflow::query()->where('slug', $given)->first();
+
+            return $workflow ?? throw WorkflowNotFoundException::forSlug($given);
         }
 
         return $request->workflow ?? throw WorkflowNotFoundException::forRequest($request);
