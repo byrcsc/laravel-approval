@@ -116,7 +116,7 @@ it('still refuses a seat handed to a record deleted out from under the caller', 
     User::query()->whereKey($successor->getKey())->delete();
 
     expect(fn () => Approval::reassign($request, $seat, $successor, user('Administrator')))
-        ->toThrow(InvalidWorkflowException::class, 'living seat holders');
+        ->toThrow(InvalidWorkflowException::class, 'available assignments');
 
     expect($seat->refresh()->approver_id)->toBe($approver->getKey());
 });
