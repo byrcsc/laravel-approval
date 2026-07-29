@@ -11,6 +11,9 @@ use ByRcsc\LaravelApproval\Commands\Command;
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
+use ByRcsc\LaravelApproval\Data\TimelineEntry;
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalActionFactory;
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalAttachmentFactory;
 use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalException;
 use ByRcsc\LaravelApproval\Exceptions\AttachmentException;
@@ -135,6 +138,8 @@ arch('only actions write the audit trail')
         ApprovalAction::class,
         ApprovalAttachment::class,
         ApprovalRequest::class,
+        ApprovalActionFactory::class,
+        TimelineEntry::class,
     ]);
 
 // Attachments are evidence under the same chain, with the same single write
@@ -149,6 +154,7 @@ arch('only actions write attachments')
         ApprovalAction::class,
         ApprovalAttachment::class,
         ApprovalRequest::class,
+        ApprovalAttachmentFactory::class,
     ]);
 
 it('keeps evidence creation behind its designated actions', function (): void {

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalActionFactory;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Support\TableNames;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,10 +23,18 @@ use LogicException;
  */
 final class ApprovalAction extends Model
 {
+    /** @use HasFactory<ApprovalActionFactory> */
+    use HasFactory;
+
     /** Rows are written once, so there is nothing an `updated_at` could mean. */
     public const UPDATED_AT = null;
 
     protected $guarded = [];
+
+    protected static function newFactory(): ApprovalActionFactory
+    {
+        return ApprovalActionFactory::new();
+    }
 
     public function getTable(): string
     {

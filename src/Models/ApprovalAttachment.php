@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalAttachmentFactory;
 use ByRcsc\LaravelApproval\Support\TableNames;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -26,10 +28,18 @@ use LogicException;
  */
 final class ApprovalAttachment extends Model
 {
+    /** @use HasFactory<ApprovalAttachmentFactory> */
+    use HasFactory;
+
     /** Rows are written once, so there is nothing an `updated_at` could mean. */
     public const UPDATED_AT = null;
 
     protected $guarded = [];
+
+    protected static function newFactory(): ApprovalAttachmentFactory
+    {
+        return ApprovalAttachmentFactory::new();
+    }
 
     public function getTable(): string
     {

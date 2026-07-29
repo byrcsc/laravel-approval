@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalWorkflowFactory;
 use ByRcsc\LaravelApproval\Support\TableNames;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -15,9 +17,17 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 final class ApprovalWorkflow extends Model
 {
+    /** @use HasFactory<ApprovalWorkflowFactory> */
+    use HasFactory;
+
     use SoftDeletes;
 
     protected $guarded = [];
+
+    protected static function newFactory(): ApprovalWorkflowFactory
+    {
+        return ApprovalWorkflowFactory::new();
+    }
 
     public function getTable(): string
     {

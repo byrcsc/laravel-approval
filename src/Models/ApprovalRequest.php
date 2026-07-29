@@ -8,6 +8,7 @@ use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\TimelineEntry;
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalRequestFactory;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
@@ -16,6 +17,7 @@ use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -34,7 +36,15 @@ use Illuminate\Support\Str;
  */
 final class ApprovalRequest extends Model
 {
+    /** @use HasFactory<ApprovalRequestFactory> */
+    use HasFactory;
+
     protected $guarded = [];
+
+    protected static function newFactory(): ApprovalRequestFactory
+    {
+        return ApprovalRequestFactory::new();
+    }
 
     public function getTable(): string
     {

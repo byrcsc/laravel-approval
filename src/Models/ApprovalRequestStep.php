@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalRequestStepFactory;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Support\TableNames;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -18,7 +20,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 final class ApprovalRequestStep extends Model
 {
+    /** @use HasFactory<ApprovalRequestStepFactory> */
+    use HasFactory;
+
     protected $guarded = [];
+
+    protected static function newFactory(): ApprovalRequestStepFactory
+    {
+        return ApprovalRequestStepFactory::new();
+    }
 
     public function getTable(): string
     {
