@@ -197,13 +197,13 @@ it('lets a host extend the shipped policy rather than fork it', function (): voi
     $approver = user('Approver');
     $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user());
 
-    Gate::policy($request::class, new class extends ApprovalRequestPolicy
+    Gate::policy($request::class, (new class extends ApprovalRequestPolicy
     {
         public function approve($user, $request): bool
         {
             return parent::approve($user, $request) && $user->name === 'Somebody Else';
         }
-    }::class);
+    })::class);
 
     expect($approver->can('approve', $request))->toBeFalse()
         ->and($approver->can('reject', $request))->toBeTrue();
