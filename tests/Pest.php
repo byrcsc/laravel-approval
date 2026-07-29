@@ -18,12 +18,15 @@ use ByRcsc\LaravelApproval\Tests\Stubs\User;
 use ByRcsc\LaravelApproval\Tests\Stubs\WitnessResolver;
 use ByRcsc\LaravelApproval\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 
 uses(TestCase::class)->in(__DIR__);
 
 // The stubs carry state so tests can stand in for an org chart and an
 // authenticated user. Neither should leak into the next test.
 uses()->beforeEach(function (): void {
+    Relation::requireMorphMap(false);
+    Relation::morphMap([], false);
     HeadOfDepartmentResolver::$heads = [];
     PurchaseOrder::$actingSubmitter = null;
     PurchaseOrder::$workflowSlug = 'purchase-order';

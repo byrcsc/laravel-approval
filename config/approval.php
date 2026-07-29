@@ -49,6 +49,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Polymorphic identity key type
+    |--------------------------------------------------------------------------
+    |
+    | Set this before running the package migration when the models that may
+    | submit, approve, delegate, act, reassign, or upload use UUID, ULID, or
+    | other string keys. Valid values: int, uuid, ulid, string.
+    |
+    */
+
+    'user_key_type' => env('APPROVAL_USER_KEY_TYPE', 'int'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Default workflow per model
     |--------------------------------------------------------------------------
     |

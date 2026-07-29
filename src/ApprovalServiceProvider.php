@@ -53,6 +53,7 @@ final class ApprovalServiceProvider extends PackageServiceProvider
 
         $this->validateTableNames(Payload::object($config, 'table_names') ?? []);
         $this->validateUserModel(Payload::string($config, 'user_model'));
+        $this->validateUserKeyType(Payload::string($config, 'user_key_type'));
         $this->validateModelModes(Payload::object($config, 'models') ?? []);
         $this->validateEscalationStrategies(Payload::object($config, 'escalation') ?? []);
 
@@ -138,6 +139,13 @@ final class ApprovalServiceProvider extends PackageServiceProvider
 
         if (class_exists($userModel) && ! is_subclass_of($userModel, Model::class)) {
             throw InvalidConfigurationException::userModelIsNotAModel($userModel);
+        }
+    }
+
+    private function validateUserKeyType(string $type): void
+    {
+        if (! in_array($type, ['int', 'uuid', 'ulid', 'string'], true)) {
+            throw InvalidConfigurationException::invalidUserKeyType($type);
         }
     }
 

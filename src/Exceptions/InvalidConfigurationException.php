@@ -85,6 +85,11 @@ final class InvalidConfigurationException extends ApprovalException
         return new self("The [approval.user_model] config points at [{$model}], which is not an Eloquent model.");
     }
 
+    public static function invalidUserKeyType(string $type): self
+    {
+        return new self("The [approval.user_key_type] config is [{$type}]. Expected one of: int, uuid, ulid, string.");
+    }
+
     public static function invalidModelMode(string $model, mixed $mode): self
     {
         return new self(sprintf(
