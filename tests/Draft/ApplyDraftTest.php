@@ -176,22 +176,14 @@ describe('the stale check', function (): void {
         expect($request->refresh()->state)->toBe(RequestState::Approved);
     });
 
-    it('conflicts when the record is gone entirely', function (): void {
-        Event::fake([DraftConflicted::class]);
-
-        $approver = user();
+    it('cancels the request when the record is gone entirely', function (): void {
         $post = post('Original title');
-        $workflow = workflow([['approvers' => [$approver]]]);
+        $workflow = workflow([['approvers' => [user()]]]);
 
         $request = $post->submitForApproval($workflow, ['title' => 'Revised'], user());
         $post->delete();
 
-        Approval::approve($request, $approver);
-
-        expect($request->refresh()->state)->toBe(RequestState::Conflicted)
-            ->and($request->actions()->where('action', 'conflicted')->sole()->getAttributeValue('metadata'))
-            ->toBe(['reason' => 'missing_record']);
-
-        Event::assertDispatched(DraftConflicted::class, fn (DraftConflicted $e): bool => $e->approvable === null);
+        expect($request->refresh()->state)->toBe(RequestState::Cancelled)
+            ->and($request->actions()->where('action', 'cancelled')->sole()->actor_id)->toBeNull();
     });
 });

@@ -146,11 +146,24 @@ abstract class TestCase extends Orchestra
             $table->timestamps();
         });
 
+        Schema::create('uuid_users', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('ulid_users', function (Blueprint $table) {
+            $table->ulid('id')->primary();
+            $table->string('name');
+            $table->timestamps();
+        });
+
         Schema::create('posts', function (Blueprint $table) {
             $table->id();
             $table->string('title');
             $table->text('body')->nullable();
             $table->boolean('published')->default(false);
+            $table->softDeletes();
             $table->timestamps();
         });
 

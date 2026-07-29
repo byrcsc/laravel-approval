@@ -87,17 +87,14 @@ describe('resolving a conflict', function (): void {
             ->toThrow(DraftConflictException::class, 'is pending, not conflicted');
     });
 
-    it('refuses to reapply onto a record that has gone', function (): void {
-        $approver = user('Approver');
+    it('closes a request whose record has gone', function (): void {
         $post = post('Original title');
-        $workflow = workflow([['approvers' => [$approver]]]);
+        $workflow = workflow([['approvers' => [user('Approver')]]]);
 
         $request = $post->submitForApproval($workflow, ['title' => 'Revised'], user());
         $post->delete();
-        Approval::approve($request, $approver);
 
-        expect(fn () => Approval::resolve($request->refresh(), ConflictResolution::Reapply))
-            ->toThrow(DraftConflictException::class, 'no longer exists');
+        expect($request->refresh()->state)->toBe(RequestState::Cancelled);
     });
 });
 

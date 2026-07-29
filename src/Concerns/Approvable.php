@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 
 /**
@@ -64,6 +65,22 @@ trait Approvable
                 throw ApprovalGuardException::draftedAttributes($model, $request, $guarded);
             }
         });
+
+        static::deleted(function (self $model): void {
+            $usesSoftDeletes = in_array(SoftDeletes::class, class_uses_recursive($model), true);
+            $forceDeleting = $usesSoftDeletes
+                && method_exists($model, 'isForceDeleting')
+                && $model->isForceDeleting();
+
+            if ($usesSoftDeletes && ! $forceDeleting && ! $model->cancelApprovalOnSoftDelete()) {
+                return;
+            }
+
+            Approval::requestsFor($model)
+                ->pending()
+                ->each(fn (ApprovalRequest $request): ApprovalRequest => Approval::cancel($request, force: true));
+        });
+
     }
 
     /**
@@ -256,6 +273,14 @@ trait Approvable
             : ApprovalMode::tryFrom(is_string($mode) ? $mode : '') ?? ApprovalMode::Explicit;
     }
 
+    /**
+     * Soft-deleted records are recoverable by default, so their request stays
+     * recoverable too. Hard deletes and force deletes always close it.
+     */
+    public function cancelApprovalOnSoftDelete(): bool
+    {
+        return false;
+    }
 
 
 
