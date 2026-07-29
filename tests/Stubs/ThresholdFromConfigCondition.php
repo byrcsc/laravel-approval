@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ByRcsc\LaravelApproval\Tests\Stubs;
+
+use ByRcsc\LaravelApproval\Contracts\LevelCondition;
+use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use Illuminate\Contracts\Config\Repository;
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * A condition with a constructor dependency, to prove conditions come out of
+ * the container rather than out of `new`.
+ */
+final class ThresholdFromConfigCondition implements LevelCondition
+{
+    public function __construct(private readonly Repository $config) {}
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    public function passes(LevelSnapshot $level, Model $approvable, Model $submitter, array $config): bool
+    {
+        $amount = $approvable->getAttributeValue('amount');
+        $threshold = $this->config->get('approval-tests.threshold', 0);
+
+        return is_numeric($amount) && is_numeric($threshold) && (float) $amount > (float) $threshold;
+    }
+}

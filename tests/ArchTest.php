@@ -2,7 +2,27 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Actions\AttachFile;
+use ByRcsc\LaravelApproval\Actions\RecordAction;
+use ByRcsc\LaravelApproval\Actions\VerifyActionChain;
+use ByRcsc\LaravelApproval\Actions\VerifyAttachments;
+use ByRcsc\LaravelApproval\ApprovalManager;
+use ByRcsc\LaravelApproval\Commands\Command;
+use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
+use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
+use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
+use ByRcsc\LaravelApproval\Data\TimelineEntry;
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalActionFactory;
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalAttachmentFactory;
+use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalException;
+use ByRcsc\LaravelApproval\Exceptions\AttachmentException;
+use ByRcsc\LaravelApproval\Facades\Approval;
+use ByRcsc\LaravelApproval\Models\ApprovalAction;
+use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
+use ByRcsc\LaravelApproval\Models\ApprovalRequest;
+use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
+use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Database\Eloquent\Model;
 
 arch('no debugging leftovers ship')
@@ -43,8 +63,123 @@ arch('support helpers stay below the models')
     ->expect('ByRcsc\LaravelApproval\Support')
     ->not->toUse('ByRcsc\LaravelApproval\Models');
 
+arch('contracts are interfaces')
+    ->expect('ByRcsc\LaravelApproval\Contracts')
+    ->toBeInterfaces();
+
+arch('actions are final and invokable')
+    ->expect('ByRcsc\LaravelApproval\Actions')
+    ->toBeFinal()
+    ->toBeInvokable()
+    // The audit trail is appended to by every other action, so it is the one
+    // that takes named arguments rather than a single subject.
+    ->ignoring(RecordAction::class);
+
+arch('commands share the package base')
+    ->expect('ByRcsc\LaravelApproval\Commands')
+    ->toExtend(Command::class);
+
+arch('only the base command is extendable')
+    ->expect('ByRcsc\LaravelApproval\Commands')
+    ->toBeFinal()
+    ->ignoring(Command::class);
+
+arch('data objects are final and readonly')
+    ->expect('ByRcsc\LaravelApproval\Data')
+    ->toBeFinal()
+    ->toBeReadonly();
+
+arch('escalation strategies implement the escalation contract')
+    ->expect('ByRcsc\LaravelApproval\Escalation')
+    ->toBeFinal()
+    ->toImplement(EscalationStrategy::class);
+
+arch('notifications share the package base')
+    ->expect('ByRcsc\LaravelApproval\Notifications')
+    ->toExtend(ApprovalNotification::class);
+
+arch('only the base notification is extendable')
+    ->expect('ByRcsc\LaravelApproval\Notifications')
+    ->toBeFinal()
+    ->ignoring(ApprovalNotification::class);
+
+// The one class in the package meant to be subclassed: a host adding
+// organizational rules on top of the engine's should extend it, not fork it.
+arch('the shipped policy is extendable')
+    ->expect('ByRcsc\LaravelApproval\Policies')
+    ->not->toBeFinal();
+
+arch('listeners are final')
+    ->expect('ByRcsc\LaravelApproval\Listeners')
+    ->toBeFinal();
+
+arch('resolvers implement the resolver contract')
+    ->expect('ByRcsc\LaravelApproval\Resolvers')
+    ->toBeFinal()
+    ->toImplement(ApproverResolver::class);
+
+arch('events carry a request and nothing else')
+    ->expect('ByRcsc\LaravelApproval\Events')
+    ->toExtend(ApprovalEvent::class)
+    ->ignoring(ApprovalEvent::class);
+
+// Audit entries can only be appended through an action, so stateful model code
+// cannot quietly create a second write path. This is what makes the hash chain
+// an invariant rather than a convention: RecordAction is the only maintainer,
+// and the exact consumers below cannot create entries themselves. A source-level
+// assertion later in this file separately pins RecordAction as the sole creator.
+arch('only actions write the audit trail')
+    ->expect(ApprovalAction::class)
+    ->toOnlyBeUsedIn([
+        RecordAction::class,
+        VerifyActionChain::class,
+        VerifyAttachments::class,
+        AttachmentEvidence::class,
+        AttachmentException::class,
+        ApprovalAction::class,
+        ApprovalAttachment::class,
+        ApprovalRequest::class,
+        ApprovalActionFactory::class,
+        TimelineEntry::class,
+    ]);
+
+// Attachments are evidence under the same chain, with the same single write
+// path through AttachFile.
+arch('only actions write attachments')
+    ->expect(ApprovalAttachment::class)
+    ->toOnlyBeUsedIn([
+        AttachFile::class,
+        VerifyAttachments::class,
+        ApprovalManager::class,
+        Approval::class,
+        ApprovalAction::class,
+        ApprovalAttachment::class,
+        ApprovalRequest::class,
+        ApprovalAttachmentFactory::class,
+        ApprovalFake::class,
+    ]);
+
+it('keeps evidence creation behind its designated actions', function (): void {
+    $files = glob(__DIR__.'/../src/Actions/*.php');
+
+    $writers = function (string $creation) use ($files): array {
+        return collect($files === false ? [] : $files)
+            ->filter(fn (string $file): bool => str_contains(
+                (string) file_get_contents($file),
+                $creation,
+            ))
+            ->map(fn (string $file): string => basename($file))
+            ->sort()
+            ->values()
+            ->all();
+    };
+
+    expect($writers('ApprovalAction::create('))->toBe(['RecordAction.php'])
+        ->and($writers('ApprovalAttachment::create('))->toBe(['AttachFile.php']);
+});
+
 // Models describe the schema. Transactions and dispatching belong to the
-// actions that arrive in later phases, and this keeps it that way.
+// actions, and this keeps it that way.
 arch('models stay out of the transaction business')
     ->expect('ByRcsc\LaravelApproval\Models')
     ->not->toUse([

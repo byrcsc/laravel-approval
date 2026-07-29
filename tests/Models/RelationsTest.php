@@ -119,12 +119,13 @@ it('hangs the audit trail off both the request and the step', function () {
     $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
     $actor = user('Auditor');
 
-    $request->actions()->create(['action' => 'submitted']);
+    $request->actions()->create(['action' => 'submitted', 'hash' => str_repeat('0', 64)]);
     $request->actions()->create([
         'action' => 'approved',
         'step_id' => $step->getKey(),
         'actor_type' => $actor->getMorphClass(),
         'actor_id' => $actor->getKey(),
+        'hash' => str_repeat('0', 64),
     ]);
 
     expect($request->actions()->count())->toBe(2)
@@ -135,7 +136,7 @@ it('hangs the audit trail off both the request and the step', function () {
 it('leaves the actor empty for actions nobody took', function () {
     $request = approvalRequest();
 
-    $action = $request->actions()->create(['action' => 'applied']);
+    $action = $request->actions()->create(['action' => 'applied', 'hash' => str_repeat('0', 64)]);
 
     expect($action->actor)->toBeNull()
         ->and($action->request?->getKey())->toBe($request->getKey())

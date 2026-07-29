@@ -2,10 +2,11 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /*
- * The whole approval schema, in one migration - the seven tables reference each
+ * The whole approval schema, in one migration - the eight tables reference each
  * other, so a partial install is not a useful state to be in.
  *
  * Two things to change before you migrate:
@@ -13,11 +14,11 @@ use Illuminate\Support\Facades\Schema;
  *  - Table names. Set them in `config/approval.php`, not here; the models read
  *    the same config, so renaming in one place is all it takes.
  *
- *  - The key type of the polymorphic columns, which assume the models you point
- *    at use auto-incrementing integer keys. If yours use ULIDs or UUIDs, swap
- *    the matching `morphs()` / `nullableMorphs()` call for `ulidMorphs()` /
- *    `uuidMorphs()`. Approvers, submitters, actors, and the approvable record
- *    are independent, so mixing key types is fine.
+ *  - The key type of the polymorphic identity columns. Set
+ *    `approval.user_key_type` to int, uuid, ulid, or string before migrating.
+ *    The approvable columns on requests are independent and written by hand
+ *    (see the note there), so change `approvable_id` directly when approvable
+ *    models themselves do not use integers.
  *
  * `state`, `action`, and `source` are plain strings rather than database enums,
  * so adding a case is a package upgrade rather than an ALTER TABLE.
@@ -31,6 +32,12 @@ return new class extends Migration
         Schema::create($tables['workflows'], function (Blueprint $table) {
             $table->id();
             $table->string('name');
+
+            // One global namespace, deliberately. The package inherits
+            // multi-tenancy rather than managing it: with a database or schema
+            // per tenant this is already per-tenant, and a single-database
+            // multi-tenant host should carry the tenant in the slug
+            // ("acme:purchase-order") or scope workflow lookups itself.
             $table->string('slug')->unique();
             $table->text('description')->nullable();
             $table->boolean('active')->default(true);
@@ -54,6 +61,9 @@ return new class extends Migration
             $table->unsignedInteger('sla_minutes')->nullable();
             $table->string('escalation_strategy')->nullable();
             $table->json('escalation_config')->nullable();
+            $table->unsignedInteger('remind_every_minutes')->nullable();
+            $table->string('condition')->nullable();
+            $table->json('condition_config')->nullable();
             $table->timestamps();
 
             // Levels are ordered, and two levels cannot share a position.
@@ -65,8 +75,9 @@ return new class extends Migration
             $table->foreignId('level_id')->index()->constrained($tables['levels'])->cascadeOnDelete();
 
             // Exactly one of these is set. The engine enforces it, since no
-            // portable database constraint expresses it.
-            $table->nullableMorphs('approver');
+            // portable database constraint expresses it. The index is named
+            // by hand: the generated name runs past MySQL's 64-character cap.
+            $this->identityMorphs($table, 'approver', true, $tables['level_approvers'].'_approver_idx');
             $table->string('resolver')->nullable();
             $table->json('resolver_config')->nullable();
 
@@ -80,7 +91,10 @@ return new class extends Migration
             $table->ulid('ulid')->unique();
 
             // Written out rather than `morphs()`, whose (type, id) index would
-            // be a redundant prefix of the composite index below.
+            // be a redundant prefix of the composite index below. This is the
+            // one polymorphic pair with no `morphs()` call to swap for UUID
+            // models - change this column's type instead (`uuid`, `ulid`, or
+            // `string`), and leave the composite index as it is.
             $table->string('approvable_type');
             $table->unsignedBigInteger('approvable_id');
 
@@ -97,14 +111,22 @@ return new class extends Migration
             $table->json('new_attributes')->nullable();
             $table->json('original_attributes')->nullable();
 
-            $table->morphs('submitter');
+            $this->identityMorphs($table, 'submitter');
 
             // Set on the replacement when a rejected request is resubmitted;
-            // the only link between the two.
-            $table->foreignId('resubmitted_from_id')->nullable()->constrained($tables['requests'])->nullOnDelete();
+            // the only link between the two. Indexed explicitly: MySQL indexes
+            // a foreign key on its own, Postgres does not.
+            $table->foreignId('resubmitted_from_id')->nullable()->index()->constrained($tables['requests'])->nullOnDelete();
 
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('completed_at')->nullable();
+
+            // The trusted end of this request's hash chain. RecordAction locks
+            // this row before every append and advances the head atomically, so
+            // concurrent writers cannot fork and removing the final action is
+            // as visible as removing one from the middle.
+            $table->string('audit_head_hash', 64)->nullable();
+
             $table->timestamps();
 
             // "Is there an open request for this record?"
@@ -123,6 +145,10 @@ return new class extends Migration
             $table->unsignedInteger('sla_minutes')->nullable();
             $table->string('escalation_strategy')->nullable();
             $table->json('escalation_config')->nullable();
+            $table->unsignedInteger('remind_every_minutes')->nullable();
+            $table->string('condition')->nullable();
+            $table->json('condition_config')->nullable();
+            $table->boolean('condition_result')->default(true);
 
             // Computed when the step becomes active: the clock only starts
             // once the level is somebody's turn.
@@ -131,6 +157,8 @@ return new class extends Migration
             // Checked before escalating, so a command on a one-minute schedule
             // still escalates each step exactly once.
             $table->timestamp('escalated_at')->nullable();
+            $table->timestamp('last_reminded_at')->nullable();
+            $table->timestamp('stranded_at')->nullable();
 
             $table->string('state')->default('queued');
             $table->timestamps();
@@ -145,11 +173,12 @@ return new class extends Migration
 
             // Materialized at submit time: concrete approvers copied across,
             // resolver-backed ones run and expanded.
-            $table->morphs('approver');
+            $this->identityMorphs($table, 'approver');
 
             // Who may act on the slot instead. The original approver stays on
-            // the row: who was asked is part of the record.
-            $table->nullableMorphs('delegated_to');
+            // the row: who was asked is part of the record. The index is named
+            // by hand: the generated name runs past MySQL's 64-character cap.
+            $this->identityMorphs($table, 'delegated_to', true, $tables['step_approvers'].'_delegated_to_idx');
 
             $table->string('source')->default('assigned');
             $table->timestamps();
@@ -157,17 +186,77 @@ return new class extends Migration
 
         Schema::create($tables['actions'], function (Blueprint $table) use ($tables) {
             $table->id();
-            $table->foreignId('request_id')->index()->constrained($tables['requests'])->cascadeOnDelete();
-            $table->foreignId('step_id')->nullable()->constrained($tables['steps'])->cascadeOnDelete();
+
+            // Restricted, not cascaded: the trail outlives everything, and a
+            // request cannot be hard-deleted while its history exists. Erasing
+            // history is a separate, deliberate act against this table - which
+            // the model refuses, so it takes a query-builder or raw delete,
+            // done on purpose.
+            $table->foreignId('request_id')->index()->constrained($tables['requests'])->restrictOnDelete();
+
+            // Nulled rather than cascaded for the same reason: losing a step
+            // must not erase what people did on it. A nulled reference also
+            // breaks that line's hash, so the loss is visible to `approval:verify`.
+            // Indexed explicitly: MySQL indexes a foreign key on its own,
+            // Postgres does not.
+            $table->foreignId('step_id')->nullable()->index()->constrained($tables['steps'])->nullOnDelete();
 
             // Null for what the system did on nobody's behalf.
-            $table->nullableMorphs('actor');
+            $this->identityMorphs($table, 'actor', true);
+
+            // Who the actor was, in words, captured when the line is written
+            // and never refreshed - so the trail still names them after the
+            // account is renamed or deleted.
+            $table->string('actor_label')->nullable();
 
             $table->string('action');
             $table->text('comment')->nullable();
             $table->json('metadata')->nullable();
 
+            // The tamper-evidence chain, per request: each line hashes its own
+            // content plus the previous line's hash, and `approval:verify`
+            // walks it. `RecordAction` is the only writer and maintains both.
+            $table->string('hash', 64);
+            $table->string('previous_hash', 64)->nullable();
+
             // Append-only, so there is no `updated_at`. The model enforces it.
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create($tables['attachments'], function (Blueprint $table) use ($tables) {
+            $table->id();
+
+            // Restricted like the audit trail: evidence does not vanish
+            // because the thing it supported was deleted.
+            $table->foreignId('request_id')->index()->constrained($tables['requests'])->restrictOnDelete();
+
+            // The decision this file supports - a signature image on an
+            // approval, say. Null for a document that belongs to the request
+            // as a whole. Restricted: an action with evidence attached cannot
+            // be deleted out from under it.
+            $table->foreignId('action_id')->nullable()->index()->constrained($tables['actions'])->restrictOnDelete();
+
+            $this->identityMorphs($table, 'uploader', true, $tables['attachments'].'_uploader_idx');
+            $table->string('uploader_label')->nullable();
+
+            // A reference into a host-owned filesystem disk, never bytes. The
+            // package records what was attached; storing and serving files is
+            // the host's business.
+            $table->string('disk');
+            $table->string('path');
+            $table->string('name')->nullable();
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('size')->nullable();
+
+            // A digest of the file's bytes, supplied by the host at attach
+            // time. It is written into the audit line that records the
+            // attachment, which puts the file's content - not just its name -
+            // under the hash chain.
+            $table->string('checksum', 64);
+
+            $table->json('metadata')->nullable();
+
+            // Append-only, like the trail it is evidence for.
             $table->timestamp('created_at')->nullable();
         });
     }
@@ -178,7 +267,7 @@ return new class extends Migration
 
         // Reverse creation order, so nothing is dropped while another table
         // still points at it.
-        foreach (['actions', 'step_approvers', 'steps', 'requests', 'level_approvers', 'levels', 'workflows'] as $key) {
+        foreach (['attachments', 'actions', 'step_approvers', 'steps', 'requests', 'level_approvers', 'levels', 'workflows'] as $key) {
             Schema::dropIfExists($tables[$key]);
         }
     }
@@ -196,6 +285,7 @@ return new class extends Migration
             'steps' => 'approval_request_steps',
             'step_approvers' => 'approval_request_step_approvers',
             'actions' => 'approval_actions',
+            'attachments' => 'approval_attachments',
         ];
 
         $configured = config('approval.table_names');
@@ -209,5 +299,36 @@ return new class extends Migration
         }
 
         return $tables;
+    }
+
+    private function identityMorphs(
+        Blueprint $table,
+        string $name,
+        bool $nullable = false,
+        ?string $indexName = null,
+    ): void {
+        $type = $table->string($name.'_type');
+        $keyType = config('approval.user_key_type', 'int');
+        $id = match ($keyType) {
+            'uuid' => $table->uuid($name.'_id'),
+            'ulid' => $table->ulid($name.'_id'),
+            'string' => $table->string($name.'_id'),
+            default => $table->unsignedBigInteger($name.'_id'),
+        };
+
+        if (DB::getDriverName() === 'mysql') {
+            $type->collation('utf8mb4_bin');
+
+            if ($keyType !== 'int') {
+                $id->collation('utf8mb4_bin');
+            }
+        }
+
+        if ($nullable) {
+            $type->nullable();
+            $id->nullable();
+        }
+
+        $table->index([$name.'_type', $name.'_id'], $indexName);
     }
 };

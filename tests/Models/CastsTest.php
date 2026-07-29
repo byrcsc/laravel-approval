@@ -30,6 +30,9 @@ it('round-trips the level escalation settings', function () {
         'sla_minutes' => 120,
         'escalation_strategy' => EscalationAction::Escalate,
         'escalation_config' => ['resolver' => 'App\\Approvals\\HeadOfFinance'],
+        'remind_every_minutes' => 30,
+        'condition' => 'App\\Approvals\\LargeAmount',
+        'condition_config' => ['amount' => 500_000],
     ]]);
 
     $level = $workflow->levels()->first();
@@ -37,7 +40,9 @@ it('round-trips the level escalation settings', function () {
 
     expect($level?->escalation_strategy)->toBe(EscalationAction::Escalate)
         ->and($level?->sla_minutes)->toBe(120)
-        ->and($level?->escalation_config)->toBe(['resolver' => 'App\\Approvals\\HeadOfFinance']);
+        ->and($level?->escalation_config)->toBe(['resolver' => 'App\\Approvals\\HeadOfFinance'])
+        ->and($level?->remind_every_minutes)->toBe(30)
+        ->and($level?->condition_config)->toBe(['amount' => 500_000]);
 });
 
 it('round-trips a request state, draft, and timestamps', function () {
@@ -134,17 +139,18 @@ it('round-trips an action type and its metadata', function () {
         'action' => ActionType::Rejected,
         'comment' => 'The figures do not add up.',
         'metadata' => ['quorum' => 2, 'votes' => 1],
+        'hash' => str_repeat('0', 64),
     ])->fresh();
 
     expect($action?->action)->toBe(ActionType::Rejected)
         ->and($action?->comment)->toBe('The figures do not add up.')
-        ->and($action?->metadata)->toBe(['quorum' => 2, 'votes' => 1]);
+        ->and(canonical($action?->metadata))->toBe(canonical(['quorum' => 2, 'votes' => 1]));
 });
 
 it('stamps an action with when it happened and nothing else', function () {
     $request = approvalRequest();
 
-    $action = $request->actions()->create(['action' => ActionType::Submitted]);
+    $action = $request->actions()->create(['action' => ActionType::Submitted, 'hash' => str_repeat('0', 64)]);
 
     expect($action->created_at)->toBeInstanceOf(Carbon::class)
         ->and($action->getAttributes())->not->toHaveKey('updated_at');
@@ -169,6 +175,7 @@ it('refuses to let the audit trail be rewritten', function () {
     $action = approvalRequest()->actions()->create([
         'action' => ActionType::Approved,
         'comment' => 'Looks right to me.',
+        'hash' => str_repeat('0', 64),
     ]);
 
     expect(fn () => $action->update(['comment' => 'Actually, no.']))
@@ -178,7 +185,7 @@ it('refuses to let the audit trail be rewritten', function () {
 });
 
 it('refuses to let the audit trail be erased', function () {
-    $action = approvalRequest()->actions()->create(['action' => ActionType::Approved]);
+    $action = approvalRequest()->actions()->create(['action' => ActionType::Approved, 'hash' => str_repeat('0', 64)]);
 
     expect(fn () => $action->delete())
         ->toThrow(LogicException::class, 'immutable audit trail');

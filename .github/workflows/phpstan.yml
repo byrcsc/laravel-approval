@@ -11,6 +11,7 @@ on:
       - 'composer.json'
       - '.github/workflows/phpstan.yml'
   pull_request:
+    branches: [main]
     paths:
       - '**.php'
       - 'phpstan.neon.dist'

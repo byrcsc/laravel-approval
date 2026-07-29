@@ -1,0 +1,49 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ByRcsc\LaravelApproval\Notifications;
+
+use ByRcsc\LaravelApproval\Events\ApprovalEvent;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Messages\MailMessage;
+
+/**
+ * "Your request cleared every level."
+ *
+ * Goes to the submitter, who is the person waiting on the answer. Fires on
+ * `ApprovalCompleted`, which is before the draft is applied - so a request that
+ * goes on to conflict will have told the submitter it was approved. That is
+ * true: it was. Map `DraftConflicted` as well if the distinction matters to
+ * your users.
+ */
+final class ApprovalApprovedNotification extends ApprovalNotification
+{
+    /**
+     * @return iterable<int, Model>
+     */
+    public static function recipients(ApprovalEvent $event): iterable
+    {
+        return self::submitterOf($event);
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        return (new MailMessage)
+            ->subject('Approved: '.$this->subject())
+            ->line($this->subject().' has been approved.')
+            ->line('Reference: '.$this->requestUlid().'.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(object $notifiable): array
+    {
+        return [
+            'request' => $this->requestUlid(),
+            'state' => 'approved',
+            'subject' => $this->subject(),
+        ];
+    }
+}

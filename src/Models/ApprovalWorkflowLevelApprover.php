@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalWorkflowLevelApproverFactory;
 use ByRcsc\LaravelApproval\Support\TableNames;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -16,7 +18,15 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  */
 final class ApprovalWorkflowLevelApprover extends Model
 {
+    /** @use HasFactory<ApprovalWorkflowLevelApproverFactory> */
+    use HasFactory;
+
     protected $guarded = [];
+
+    protected static function newFactory(): ApprovalWorkflowLevelApproverFactory
+    {
+        return ApprovalWorkflowLevelApproverFactory::new();
+    }
 
     public function getTable(): string
     {

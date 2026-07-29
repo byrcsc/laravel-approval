@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\Database\Factories\ApprovalWorkflowLevelFactory;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Support\TableNames;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,7 +18,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 final class ApprovalWorkflowLevel extends Model
 {
+    /** @use HasFactory<ApprovalWorkflowLevelFactory> */
+    use HasFactory;
+
     protected $guarded = [];
+
+    protected static function newFactory(): ApprovalWorkflowLevelFactory
+    {
+        return ApprovalWorkflowLevelFactory::new();
+    }
 
     public function getTable(): string
     {
@@ -50,6 +60,8 @@ final class ApprovalWorkflowLevel extends Model
             'sla_minutes' => 'integer',
             'escalation_strategy' => EscalationAction::class,
             'escalation_config' => 'array',
+            'remind_every_minutes' => 'integer',
+            'condition_config' => 'array',
         ];
     }
 }

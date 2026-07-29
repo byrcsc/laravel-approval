@@ -12,6 +12,7 @@ on:
       - 'phpunit.xml.dist'
       - 'composer.json'
   pull_request:
+    branches: [main]
     paths:
       - '**.php'
       - '**.php.stub'
@@ -98,3 +99,78 @@ jobs:
 
       - name: Execute tests
         run: vendor/bin/pest --ci
+
+  # The engines SQLite stands in for during development. Version compatibility
+  # is the matrix above's job; this one exists for what SQLite will not tell
+  # the truth about - lockForUpdate(), cascade behavior, identifier length
+  # caps, and JSON column round-trips.
+  test-databases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [mysql, pgsql]
+        include:
+          - database: mysql
+            port: 3306
+            username: root
+            password: secret
+          - database: pgsql
+            port: 5432
+            username: postgres
+            password: postgres
+
+    name: P8.4 - L13 - ${{ matrix.database }}
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: approval_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      pgsql:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: approval_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, fileinfo, pdo_mysql, pdo_pgsql
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:13.*" "orchestra/testbench:11.*" --no-interaction --no-update
+          composer update --prefer-stable --prefer-dist --no-interaction
+
+      - name: Execute tests
+        run: vendor/bin/pest --ci
+        env:
+          DB_DRIVER: ${{ matrix.database }}
+          DB_HOST: 127.0.0.1
+          DB_PORT: ${{ matrix.port }}
+          DB_DATABASE: approval_test
+          DB_USERNAME: ${{ matrix.username }}
+          DB_PASSWORD: ${{ matrix.password }}

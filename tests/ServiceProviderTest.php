@@ -66,3 +66,10 @@ it('accepts any Eloquent model as the user model', function () {
 
     expect(config('approval.user_model'))->toBe(Post::class);
 });
+
+it('refuses an unknown per-model approval mode at boot', function () {
+    $this->bootConfig = ['approval.models' => [Post::class => ['mode' => 'strict-ish']]];
+
+    expect(fn () => $this->refreshApplication())
+        ->toThrow(InvalidConfigurationException::class, 'Expected one of: explicit, guard');
+});

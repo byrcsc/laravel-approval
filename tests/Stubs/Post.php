@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Tests\Stubs;
 
+use ByRcsc\LaravelApproval\Concerns\Approvable;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Stands in for the host app's approvable record. Plain for now; the
- * `Approvable` trait arrives with the submit path and lands here.
+ * Stands in for the host app's approvable record, taking the trait exactly as
+ * it ships: no workflow declared, no attribute allow-list, no submitter.
+ * {@see PurchaseOrder} is the same idea with all three seams overridden.
  */
 class Post extends Model
 {
+    use Approvable;
+
     protected $table = 'posts';
 
     protected $guarded = [];

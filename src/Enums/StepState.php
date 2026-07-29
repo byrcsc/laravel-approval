@@ -15,5 +15,6 @@ enum StepState: string
     case Active = 'active';
     case Approved = 'approved';
     case Rejected = 'rejected';
+    case Returned = 'returned';
     case Skipped = 'skipped';
 }
