@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Actions\ScanActiveStepHealth;
 use ByRcsc\LaravelApproval\Data\ApprovalInteraction;
+use ByRcsc\LaravelApproval\Data\DecisionContext;
+use ByRcsc\LaravelApproval\Data\DelegationEligibility;
+use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
 use ByRcsc\LaravelApproval\Enums\CancellationIneligibility;
 use ByRcsc\LaravelApproval\Enums\DelegationIneligibility;
 use ByRcsc\LaravelApproval\Enums\RequestState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Enums\TimelineState;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
@@ -38,6 +43,35 @@ it('exposes cancellation and delegation eligibility through every public surface
         ->and(Approval::delegationEligibility($request, $approver)->eligible)->toBeTrue()
         ->and($request->canBeDelegatedBy($approver))->toBeTrue()
         ->and($request->delegationEligibility($submitter)->reason)->toBe(DelegationIneligibility::NotAnApprover);
+});
+
+it('keeps stage progress public names in the approval domain', function (): void {
+    $classes = [
+        StageProgress::class,
+        Eligibility::class,
+        DelegationEligibility::class,
+        DecisionContext::class,
+        StageStatus::class,
+    ];
+
+    $publicNames = collect($classes)->flatMap(function (string $class): array {
+        $reflection = new ReflectionClass($class);
+
+        return [
+            $reflection->getShortName(),
+            ...array_map(
+                fn (ReflectionMethod $method): string => $method->getName(),
+                $reflection->getMethods(ReflectionMethod::IS_PUBLIC),
+            ),
+            ...array_map(
+                fn (ReflectionProperty $property): string => $property->getName(),
+                $reflection->getProperties(ReflectionProperty::IS_PUBLIC),
+            ),
+        ];
+    })->implode(' ');
+
+    expect(class_exists('ByRcsc\\LaravelApproval\\Data\\Ballot'))->toBeFalse()
+        ->and($publicNames)->not->toMatch('/ballot|vote|quorum|seat|slot|carried/i');
 });
 
 it('queries approvables by state and current approver without duplicates', function (): void {
