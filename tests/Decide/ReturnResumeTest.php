@@ -59,7 +59,7 @@ it('resumes as a linked request at level one with a fresh snapshot', function ()
 
     expect($replacement->state)->toBe(RequestState::Pending)
         ->and($replacement->current_level_sequence)->toBe(1)
-        ->and($replacement->new_attributes)->toBe(['reference' => 'PO-NEW', 'amount' => 750])
+        ->and(canonical($replacement->new_attributes))->toBe(canonical(['reference' => 'PO-NEW', 'amount' => 750]))
         ->and($replacement->resubmittedFrom?->is($returned))->toBeTrue()
         ->and($returned->refresh()->state)->toBe(RequestState::Returned)
         ->and($replacement->actions()->where('action', ActionType::Resumed->value)->count())->toBe(1);

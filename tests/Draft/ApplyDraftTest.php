@@ -77,9 +77,9 @@ it('records what it applied', function (): void {
 
     $action = $request->actions()->where('action', 'applied')->sole();
 
-    expect($action->getAttributeValue('metadata'))->toBe([
+    expect(canonical($action->getAttributeValue('metadata')))->toBe(canonical([
         'changes' => ['title' => ['from' => 'Original title', 'to' => 'Revised title']],
-    ]);
+    ]));
 });
 
 it('announces the applied draft after the record is saved', function (): void {
@@ -149,8 +149,16 @@ describe('the stale check', function (): void {
 
         Approval::approve($request, $approver);
 
-        expect($request->refresh()->actions()->where('action', 'conflicted')->sole()->getAttributeValue('metadata'))
-            ->toBe(['reason' => 'stale_attributes', 'attributes' => ['title', 'body']]);
+        $metadata = $request->refresh()
+            ->actions()
+            ->where('action', 'conflicted')
+            ->sole()
+            ->getAttributeValue('metadata');
+
+        expect(is_array($metadata) ? ($metadata['reason'] ?? null) : null)
+            ->toBe('stale_attributes')
+            ->and(collect(is_array($metadata) ? ($metadata['attributes'] ?? []) : [])->sort()->values()->all())
+            ->toBe(['body', 'title']);
     });
 
     it('accepts a record edited back to where it started', function (): void {

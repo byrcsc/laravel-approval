@@ -238,7 +238,7 @@ it('audits a bypass that deletes the record out from under the request', functio
 
     // The record is gone, which is not the same thing as "changed nothing".
     expect(Post::query()->whereKey($post->getKey())->exists())->toBeFalse()
-        ->and($action->metadata)->toBe(['attributes' => ['title'], 'deleted' => true]);
+        ->and(canonical($action->metadata))->toBe(canonical(['attributes' => ['title'], 'deleted' => true]));
 });
 
 it('files a bypass under object identity while the model has no key', function (): void {

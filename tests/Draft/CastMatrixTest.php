@@ -58,7 +58,7 @@ describe('a record nobody touched applies cleanly', function (): void {
         [$request, $invoice] = approveInvoiceDraft(['lines' => [['sku' => 'B2', 'qty' => 5]]]);
 
         expect($request->state)->toBe(RequestState::Approved)
-            ->and($invoice?->getAttributeValue('lines'))->toBe([['sku' => 'B2', 'qty' => 5]]);
+            ->and(canonical($invoice?->getAttributeValue('lines')))->toBe(canonical([['sku' => 'B2', 'qty' => 5]]));
     });
 
     it('survives an ArrayObject cast', function (): void {

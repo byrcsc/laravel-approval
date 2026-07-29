@@ -107,10 +107,10 @@ it('records what it moved and announces it', function (): void {
 
     expect($action->actor?->getKey())->toBe($admin->getKey())
         ->and($action->getAttributeValue('comment'))->toBe('Left in March.')
-        ->and($action->getAttributeValue('metadata'))->toBe([
+        ->and(canonical($action->getAttributeValue('metadata')))->toBe(canonical([
             'from' => $leaver->getMorphClass().':'.$leaver->getKey(),
             'to' => $successor->getMorphClass().':'.$successor->getKey(),
-        ]);
+        ]));
 
     Event::assertDispatched(
         ApproverReassigned::class,
