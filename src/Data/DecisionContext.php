@@ -8,14 +8,13 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
 
 /**
- * What the engine established before letting somebody decide: which level is
- * open, where the vote stands, and which seat the actor is speaking from.
+ * The stage and assignment established before a decision is recorded.
  */
 final readonly class DecisionContext
 {
     public function __construct(
-        public ApprovalRequestStep $step,
-        public Ballot $ballot,
-        public ApprovalRequestStepApprover $seat,
+        public ApprovalRequestStep $stage,
+        public StageProgress $stageProgress,
+        public ApprovalRequestStepApprover $assignment,
     ) {}
 }

@@ -43,9 +43,9 @@ final class AuthorizeDecision
     {
         return match ($reason) {
             Ineligibility::RequestClosed => AlreadyDecidedException::requestIsClosed($request, $this->state($request)),
-            Ineligibility::NoActiveStep => AlreadyDecidedException::noActiveStep($request),
-            Ineligibility::SeatDelegated => UnauthorizedApproverException::slotIsDelegated($actor, $request),
-            Ineligibility::AlreadyVoted => AlreadyDecidedException::actorHasVoted($actor, $request),
+            Ineligibility::NoActiveStage => AlreadyDecidedException::noActiveStage($request),
+            Ineligibility::AssignmentDelegated => UnauthorizedApproverException::assignmentWasDelegated($actor, $request),
+            Ineligibility::DecisionAlreadyRecorded => AlreadyDecidedException::decisionAlreadyRecorded($actor, $request),
             Ineligibility::SelfApproval => SelfApprovalException::forSubmitter($actor, $request),
             default => UnauthorizedApproverException::notAnApprover($actor, $request),
         };

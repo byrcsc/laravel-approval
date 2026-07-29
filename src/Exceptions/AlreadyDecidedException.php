@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * The decision has already been made - by this actor, or by the request as a
- * whole. Two approvers clicking at the same moment is the ordinary case; the
- * loser of that race lands here rather than double-counting toward a quorum.
+ * whole. Concurrent decisions are serialized so each assignment is counted
+ * at most once.
  */
 final class AlreadyDecidedException extends ApprovalException
 {
@@ -24,15 +24,15 @@ final class AlreadyDecidedException extends ApprovalException
         ));
     }
 
-    public static function noActiveStep(ApprovalRequest $request): self
+    public static function noActiveStage(ApprovalRequest $request): self
     {
         return new self(sprintf(
-            'Approval request %s has no active level, so there is nothing to decide.',
+            'Approval request %s has no active stage, so there is nothing to decide.',
             self::ulid($request),
         ));
     }
 
-    public static function actorHasVoted(Model $actor, ApprovalRequest $request): self
+    public static function decisionAlreadyRecorded(Model $actor, ApprovalRequest $request): self
     {
         return new self(sprintf(
             '[%s] has already approved the active level of approval request %s.',

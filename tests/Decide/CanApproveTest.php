@@ -19,7 +19,7 @@ it('grants the approver whose turn it is', function (): void {
         ->and(Approval::canApprove($request, $approver))->toBeTrue();
 });
 
-it('carries the step and ballot a caller is about to render', function (): void {
+it('includes the stage progress and assignment a caller is about to render', function (): void {
     $one = user('One');
     $request = post()->submitForApproval(
         workflow([['required_approvals' => 2, 'approvers' => [$one, user('Two')]]]),
@@ -29,10 +29,10 @@ it('carries the step and ballot a caller is about to render', function (): void 
 
     $eligibility = Approval::eligibility($request, $one);
 
-    expect($eligibility->step?->getAttributeValue('sequence'))->toBe(1)
-        ->and($eligibility->ballot?->quorum())->toBe(2)
-        ->and($eligibility->ballot?->votes())->toBe(0)
-        ->and($eligibility->seat)->not->toBeNull();
+    expect($eligibility->stage?->getAttributeValue('sequence'))->toBe(1)
+        ->and($eligibility->stageProgress?->approvalsRequired)->toBe(2)
+        ->and($eligibility->stageProgress?->approvalsReceived)->toBe(0)
+        ->and($eligibility->assignment)->not->toBeNull();
 });
 
 it('names the reason somebody holds no seat', function (): void {
@@ -60,7 +60,7 @@ it('tells a delegator their seat is no longer theirs', function (): void {
 
     Approval::delegate($request, $approver, $delegate);
 
-    expect(Approval::eligibility($request, $approver)->reason)->toBe(Ineligibility::SeatDelegated)
+    expect(Approval::eligibility($request, $approver)->reason)->toBe(Ineligibility::AssignmentDelegated)
         ->and(Approval::canApprove($request, $delegate))->toBeTrue();
 });
 
@@ -74,7 +74,8 @@ it('tells an approver they have already voted', function (): void {
 
     Approval::approve($request, $one);
 
-    expect(Approval::eligibility($request->refresh(), $one)->reason)->toBe(Ineligibility::AlreadyVoted);
+    expect(Approval::eligibility($request->refresh(), $one)->reason)
+        ->toBe(Ineligibility::DecisionAlreadyRecorded);
 });
 
 it('tells a submitter that self-approval is the objection', function (): void {
@@ -97,7 +98,7 @@ it('reports a closed request as closed rather than as a seat problem', function 
     $eligibility = Approval::eligibility($request->refresh(), $approver);
 
     expect($eligibility->reason)->toBe(Ineligibility::RequestClosed)
-        ->and($eligibility->step)->toBeNull();
+        ->and($eligibility->stage)->toBeNull();
 });
 
 it('reports a conflicted request as closed, since no level is waiting', function (): void {

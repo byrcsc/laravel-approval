@@ -9,8 +9,7 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * One vote landed. The level may or may not be carried by it - listen for
- * {@see LevelCompleted} if that is the question.
+ * One approval decision was recorded for a stage.
  */
 final class StepApproved extends ApprovalEvent
 {
@@ -18,8 +17,8 @@ final class StepApproved extends ApprovalEvent
         ApprovalRequest $request,
         public readonly ApprovalRequestStep $step,
         public readonly Model $actor,
-        public readonly int $votes,
-        public readonly int $quorum,
+        public readonly int $approvalsReceived,
+        public readonly int $approvalsRequired,
     ) {
         parent::__construct($request);
     }

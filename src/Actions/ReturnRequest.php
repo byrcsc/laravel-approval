@@ -41,15 +41,15 @@ final class ReturnRequest
                 request: $request,
                 action: ActionType::Returned,
                 actor: $decision->actor,
-                step: $context->step,
+                step: $context->stage,
                 comment: $comment,
                 metadata: $decision->metadata,
             );
 
-            $context->step->forceFill(['state' => StepState::Returned])->save();
+            $context->stage->forceFill(['state' => StepState::Returned])->save();
 
             $request->steps()
-                ->whereKeyNot($context->step->getKey())
+                ->whereKeyNot($context->stage->getKey())
                 ->whereIn('state', [StepState::Queued->value, StepState::Active->value])
                 ->update(['state' => StepState::Skipped->value]);
 
@@ -58,7 +58,7 @@ final class ReturnRequest
                 'completed_at' => Date::now(),
             ])->save();
 
-            Event::dispatch(new ApprovalReturned($request, $context->step, $decision->actor, $comment));
+            Event::dispatch(new ApprovalReturned($request, $context->stage, $decision->actor, $comment));
 
             return $request;
         });
