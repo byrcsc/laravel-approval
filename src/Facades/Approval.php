@@ -17,12 +17,14 @@ use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
+use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
 
 /**
  * @method static ApprovalWorkflow|null findWorkflow(string $slug)
+ * @method static ApprovalFake fake()
  * @method static ApprovalWorkflow workflow(string $slug)
  * @method static WorkflowSyncResult syncDefinitions(iterable<int|string, mixed> $definitions, bool $dryRun = false)
  * @method static ApprovalWorkflow workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null)

@@ -35,10 +35,12 @@ use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Exceptions\MissingSubmitterException;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
+use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
+use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -53,9 +55,18 @@ use Illuminate\Support\Facades\Auth;
  * deciding things is the moment it starts becoming the god service the design
  * set out to avoid.
  */
-final class ApprovalManager
+class ApprovalManager
 {
-    public function __construct(private readonly Container $container) {}
+    public function __construct(protected readonly Container $container) {}
+
+    public function fake(): ApprovalFake
+    {
+        $fake = new ApprovalFake($this->container, $this);
+        $this->container->instance(self::class, $fake);
+        Approval::swap($fake);
+
+        return $fake;
+    }
 
     public function findWorkflow(string $slug): ?ApprovalWorkflow
     {

@@ -22,6 +22,7 @@ use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
+use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Database\Eloquent\Model;
 
 arch('no debugging leftovers ship')
@@ -155,6 +156,7 @@ arch('only actions write attachments')
         ApprovalAttachment::class,
         ApprovalRequest::class,
         ApprovalAttachmentFactory::class,
+        ApprovalFake::class,
     ]);
 
 it('keeps evidence creation behind its designated actions', function (): void {
