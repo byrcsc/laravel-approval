@@ -6,7 +6,7 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/byrcsc/laravel-approval.svg?style=flat-square)](https://packagist.org/packages/byrcsc/laravel-approval)
 
 Multi-level approval workflows for Eloquent models: database-backed
-definitions, quorum-based decisions, protected attribute drafts, and verifiable
+definitions, threshold-based decisions, protected attribute drafts, and verifiable
 audit trails.
 
 Built for Laravel applications that need review before records or changes take
@@ -126,7 +126,7 @@ not written to the model until the last required approval; use
 
 ### Reading the active request
 
-Once submitted, fetch the actual approvers holding seats on the active level:
+Once submitted, fetch the actual approvers assigned to the active stage:
 
 ```php
 $request = Approval::pendingFor($order);
@@ -139,9 +139,9 @@ $currentStep = $order->currentApprovalStep();
 $pendingApprovers = $order->pendingApprovalApprovers();
 ```
 
-`pendingApprovers()` returns the concrete, snapshotted holders of the current
-level's seats and accounts for delegation. Eligibility determines whether a
-holder may still act. For every level and its progress, use
+`pendingApprovers()` returns the concrete, snapshotted assignment holders for
+the current stage and accounts for delegation. Eligibility determines whether
+a holder may still act. For every stage and its progress, use
 `$request->timeline()`.
 
 Build an approver inbox with the package query:
@@ -163,8 +163,16 @@ if ($eligibility->eligible) {
 }
 
 $eligibility->reason;          // null, or an Ineligibility enum
-$eligibility->ballot?->votes();
-$eligibility->ballot?->quorum();
+$progress = $request->stageProgress();
+
+$progress?->assignedApprovers;
+$progress?->decisionsRecorded;
+$progress?->approvalsReceived;
+$progress?->approvalsRequired;
+$progress?->remainingApprovals;
+$progress?->rejectionsReceived;
+$progress?->status;
+$progress?->isSatisfied();
 ```
 
 Use `$user->can('approve', $request)` when authorizing through Laravel's shipped
@@ -173,8 +181,8 @@ rules.
 
 ## What is included
 
-- Sequential, database-driven workflows with ordered levels and `1-of-N`,
-  `N-of-M`, or unanimous quorums.
+- Sequential, database-driven workflows with ordered stages and `1-of-N`,
+  `N-of-M`, or unanimous approval requirements.
 - Concrete approvers and container-resolved approver classes for roles,
   managers, teams, and organization-specific rules.
 - Snapshotted workflows, conditional levels, and version-controlled workflow
@@ -194,7 +202,8 @@ rules.
 
 ## Important behavior
 
-- Submission snapshots the workflow, levels, conditions, and approver seats.
+- Submission snapshots the workflow, stages, conditions, and approval
+  assignments.
   Later workflow or organization changes never silently rewrite in-flight work.
 - Approval levels are sequential, and only one request may be in flight for a
   model at a time.

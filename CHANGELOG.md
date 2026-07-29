@@ -62,5 +62,8 @@ pre-release testing and compatibility review.
 
 ### Changed
 
+- Replaced the public ballot terminology with request stage progress, including
+  assignment, decision, approval, rejection, remaining-approval, satisfaction,
+  and stage-status reporting.
 - The package remains explicitly pre-1.0. Its public API will receive another
   compatibility pass before a stable `1.0.0` tag.
