@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
+use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
@@ -34,6 +35,7 @@ it('gives every model a table that exists', function (string $model) {
     ApprovalRequestStep::class,
     ApprovalRequestStepApprover::class,
     ApprovalAction::class,
+    ApprovalAttachment::class,
 ]);
 
 it('describes a workflow and its levels', function () {
@@ -58,7 +60,7 @@ it('describes a request, its steps, and its approver slots', function () {
         'id', 'ulid', 'approvable_type', 'approvable_id', 'workflow_id', 'state',
         'current_level_sequence', 'new_attributes', 'original_attributes',
         'submitter_type', 'submitter_id', 'resubmitted_from_id',
-        'submitted_at', 'completed_at',
+        'submitted_at', 'completed_at', 'audit_head_hash',
     ]))->toBeTrue();
 
     expect(Schema::hasColumns('approval_request_steps', [
@@ -121,15 +123,24 @@ it('keeps a request when the workflow that produced it is deleted', function () 
         ->and($request->fresh()?->getAttribute('workflow_id'))->toBeNull();
 });
 
-it('takes the steps and audit trail of a request down with it', function () {
+it('refuses to take the audit trail down with a request', function () {
     $request = approvalRequest();
     $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
     $step->approverSlots()->create([
         'approver_type' => (new User)->getMorphClass(),
         'approver_id' => user()->getKey(),
     ]);
-    $request->actions()->create(['action' => 'submitted']);
+    $request->actions()->create(['action' => 'submitted', 'hash' => str_repeat('0', 64)]);
 
+    // The trail outlives everything: a request with history cannot be
+    // hard-deleted, so erasing it takes two deliberate acts, not one cascade.
+    expect(fn () => $request->delete())->toThrow(QueryException::class)
+        ->and(ApprovalAction::query()->count())->toBe(1);
+
+    // Erasing history is done against the trail itself, on purpose, with a
+    // query - the model refuses. Only then may the request go, taking its
+    // steps and seats with it.
+    ApprovalAction::query()->where('request_id', $request->getKey())->delete();
     $request->delete();
 
     expect(ApprovalRequestStep::query()->count())->toBe(0)
@@ -146,6 +157,7 @@ it('creates its tables under whatever names the config gives them', function () 
         'steps' => 'sign_off_request_steps',
         'step_approvers' => 'sign_off_request_step_approvers',
         'actions' => 'sign_off_actions',
+        'attachments' => 'sign_off_attachments',
     ];
 
     config()->set('approval.table_names', $renamed);

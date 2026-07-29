@@ -48,12 +48,15 @@ final class SubmitForApproval
 
     /**
      * @param  array<string, mixed>|null  $newAttributes  null gates the record itself rather than an edit to it
+     * @param  array<string, mixed>  $metadata
      */
     public function __invoke(
         Model $approvable,
         ApprovalWorkflow $workflow,
         ?array $newAttributes,
         Model $submitter,
+        ?string $comment = null,
+        array $metadata = [],
     ): ApprovalRequest {
         if (! $approvable->exists) {
             throw InvalidDraftException::unsavedApprovable($approvable);
@@ -64,7 +67,7 @@ final class SubmitForApproval
         $draft = $this->draft($approvable, $newAttributes);
         $plan = $this->plan($workflow, $approvable, $submitter, $draft['new']);
 
-        return DB::transaction(function () use ($approvable, $workflow, $submitter, $plan, $draft): ApprovalRequest {
+        return DB::transaction(function () use ($approvable, $workflow, $submitter, $plan, $draft, $comment, $metadata): ApprovalRequest {
             $this->lockApprovable($approvable);
             $this->guardAgainstOpenRequest($approvable);
 
@@ -86,11 +89,14 @@ final class SubmitForApproval
                 $plan,
             );
 
+            // The engine's key wins over the caller's: which workflow ran is
+            // the trail's fact to record, not the submitter's to claim.
             ($this->recordAction)(
                 request: $request,
                 action: ActionType::Submitted,
                 actor: $submitter,
-                metadata: ['workflow' => Attributes::string($workflow, 'slug')],
+                comment: $comment,
+                metadata: array_merge($metadata, ['workflow' => Attributes::string($workflow, 'slug')]),
             );
 
             foreach ($steps as $step) {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval;
 
 use ByRcsc\LaravelApproval\Actions\ApproveStep;
+use ByRcsc\LaravelApproval\Actions\AttachFile;
 use ByRcsc\LaravelApproval\Actions\BypassApprovalGuard;
 use ByRcsc\LaravelApproval\Actions\CancelRequest;
 use ByRcsc\LaravelApproval\Actions\CheckEligibility;
@@ -18,12 +19,15 @@ use ByRcsc\LaravelApproval\Actions\ResumeReturnedRequest;
 use ByRcsc\LaravelApproval\Actions\ResyncRequestApprovers;
 use ByRcsc\LaravelApproval\Actions\ReturnRequest;
 use ByRcsc\LaravelApproval\Actions\SubmitForApproval;
+use ByRcsc\LaravelApproval\Actions\VerifyAuditTrail;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
+use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Exceptions\MissingSubmitterException;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
+use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
@@ -71,12 +75,15 @@ final class ApprovalManager
 
     /**
      * @param  array<string, mixed>|null  $newAttributes  null gates the record itself rather than an edit to it
+     * @param  array<string, mixed>  $metadata
      */
     public function submit(
         Model $approvable,
         ApprovalWorkflow|string|null $workflow = null,
         ?array $newAttributes = null,
         ?Model $submitter = null,
+        ?string $comment = null,
+        array $metadata = [],
     ): ApprovalRequest {
         /** @var SubmitForApproval $submit */
         $submit = $this->container->make(SubmitForApproval::class);
@@ -86,6 +93,8 @@ final class ApprovalManager
             $this->workflowFor($approvable, $workflow),
             $newAttributes,
             $submitter ?? $this->submitterFor($approvable),
+            $comment,
+            $metadata,
         );
     }
 
@@ -278,6 +287,29 @@ final class ApprovalManager
         $resume = $this->container->make(ResumeReturnedRequest::class);
 
         return $resume($request, $changes, $workflow);
+    }
+
+    public function attach(AttachmentEvidence $evidence): ApprovalAttachment
+    {
+        /** @var AttachFile $attach */
+        $attach = $this->container->make(AttachFile::class);
+
+        return $attach($evidence);
+    }
+
+    /**
+     * Walk the audit trail's hash chains. The `approval:verify` command is
+     * the usual caller; this is here for hosts wiring it into their own
+     * monitoring.
+     *
+     * @return list<array{request: string, subject: string, problem: string}>
+     */
+    public function verifyTrail(?ApprovalRequest $only = null): array
+    {
+        /** @var VerifyAuditTrail $verify */
+        $verify = $this->container->make(VerifyAuditTrail::class);
+
+        return $verify($only);
     }
 
     /**

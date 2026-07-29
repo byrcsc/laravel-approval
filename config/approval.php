@@ -31,6 +31,7 @@ return [
         'steps' => 'approval_request_steps',
         'step_approvers' => 'approval_request_step_approvers',
         'actions' => 'approval_actions',
+        'attachments' => 'approval_attachments',
     ],
 
     /*

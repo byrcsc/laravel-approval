@@ -86,6 +86,15 @@ final class ApprovalRequest extends Model
     }
 
     /**
+     * @return HasMany<ApprovalAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ApprovalAttachment::class, 'request_id')
+            ->orderBy('id');
+    }
+
+    /**
      * @return BelongsTo<self, $this>
      */
     public function resubmittedFrom(): BelongsTo

@@ -2,12 +2,22 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Actions\AttachFile;
 use ByRcsc\LaravelApproval\Actions\RecordAction;
+use ByRcsc\LaravelApproval\Actions\VerifyActionChain;
+use ByRcsc\LaravelApproval\Actions\VerifyAttachments;
+use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Commands\Command;
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
+use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalException;
+use ByRcsc\LaravelApproval\Exceptions\AttachmentException;
+use ByRcsc\LaravelApproval\Facades\Approval;
+use ByRcsc\LaravelApproval\Models\ApprovalAction;
+use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
+use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
 use Illuminate\Database\Eloquent\Model;
 
@@ -110,13 +120,55 @@ arch('events carry a request and nothing else')
     ->ignoring(ApprovalEvent::class);
 
 // Audit entries can only be appended through an action, so stateful model code
-// cannot quietly create a second write path.
+// cannot quietly create a second write path. This is what makes the hash chain
+// an invariant rather than a convention: RecordAction is the only maintainer,
+// and the exact consumers below cannot create entries themselves. A source-level
+// assertion later in this file separately pins RecordAction as the sole creator.
 arch('only actions write the audit trail')
-    ->expect('ByRcsc\LaravelApproval\Models\ApprovalAction')
+    ->expect(ApprovalAction::class)
     ->toOnlyBeUsedIn([
-        'ByRcsc\LaravelApproval\Actions',
-        'ByRcsc\LaravelApproval\Models',
+        RecordAction::class,
+        VerifyActionChain::class,
+        VerifyAttachments::class,
+        AttachmentEvidence::class,
+        AttachmentException::class,
+        ApprovalAction::class,
+        ApprovalAttachment::class,
+        ApprovalRequest::class,
     ]);
+
+// Attachments are evidence under the same chain, with the same single write
+// path through AttachFile.
+arch('only actions write attachments')
+    ->expect(ApprovalAttachment::class)
+    ->toOnlyBeUsedIn([
+        AttachFile::class,
+        VerifyAttachments::class,
+        ApprovalManager::class,
+        Approval::class,
+        ApprovalAction::class,
+        ApprovalAttachment::class,
+        ApprovalRequest::class,
+    ]);
+
+it('keeps evidence creation behind its designated actions', function (): void {
+    $files = glob(__DIR__.'/../src/Actions/*.php');
+
+    $writers = function (string $creation) use ($files): array {
+        return collect($files === false ? [] : $files)
+            ->filter(fn (string $file): bool => str_contains(
+                (string) file_get_contents($file),
+                $creation,
+            ))
+            ->map(fn (string $file): string => basename($file))
+            ->sort()
+            ->values()
+            ->all();
+    };
+
+    expect($writers('ApprovalAction::create('))->toBe(['RecordAction.php'])
+        ->and($writers('ApprovalAttachment::create('))->toBe(['AttachFile.php']);
+});
 
 // Models describe the schema. Transactions and dispatching belong to the
 // actions, and this keeps it that way.

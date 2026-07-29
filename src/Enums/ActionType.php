@@ -27,4 +27,5 @@ enum ActionType: string
     case Resumed = 'resumed';
     case LevelSkipped = 'level_skipped';
     case Reminded = 'reminded';
+    case AttachmentAdded = 'attachment_added';
 }

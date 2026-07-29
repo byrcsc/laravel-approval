@@ -80,13 +80,16 @@ trait Approvable
 
     /**
      * @param  array<string, mixed>|null  $newAttributes  null gates this record itself rather than an edit to it
+     * @param  array<string, mixed>  $metadata
      */
     public function submitForApproval(
         ApprovalWorkflow|string|null $workflow = null,
         ?array $newAttributes = null,
         ?Model $submitter = null,
+        ?string $comment = null,
+        array $metadata = [],
     ): ApprovalRequest {
-        return Approval::submit($this, $workflow, $newAttributes, $submitter);
+        return Approval::submit($this, $workflow, $newAttributes, $submitter, $comment, $metadata);
     }
 
     /**

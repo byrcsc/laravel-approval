@@ -1,0 +1,99 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ByRcsc\LaravelApproval\Models;
+
+use ByRcsc\LaravelApproval\Support\TableNames;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use LogicException;
+
+/**
+ * A reference to a file somebody put in evidence: supporting documents on the
+ * request, or a signature on the decision its `action_id` points at.
+ *
+ * References only - `disk` and `path` name a location on a host-owned
+ * filesystem disk, and the bytes never pass through this package. The
+ * `checksum` the host supplies at attach time is written into the audit line
+ * recording the attachment, which is what makes the file's content part of
+ * the tamper-evident chain rather than a name that could point anywhere.
+ *
+ * Append-only, like the trail it is evidence for. A file attached in error is
+ * answered the way it is on paper - with another line saying so - not by
+ * making history mutable.
+ */
+final class ApprovalAttachment extends Model
+{
+    /** Rows are written once, so there is nothing an `updated_at` could mean. */
+    public const UPDATED_AT = null;
+
+    protected $guarded = [];
+
+    public function getTable(): string
+    {
+        return TableNames::for('attachments');
+    }
+
+    protected static function booted(): void
+    {
+        self::updating(function (self $attachment): void {
+            throw new LogicException(
+                "Approval attachments are evidence and cannot be updated. Attach a corrected file instead. [{$attachment->describe()}]"
+            );
+        });
+
+        self::deleting(function (self $attachment): void {
+            throw new LogicException(
+                "Approval attachments are evidence and cannot be deleted. [{$attachment->describe()}]"
+            );
+        });
+    }
+
+    private function describe(): string
+    {
+        $key = $this->getKey();
+
+        return $this->getTable().'#'.(is_scalar($key) ? (string) $key : 'unsaved');
+    }
+
+    /**
+     * @return BelongsTo<ApprovalRequest, $this>
+     */
+    public function request(): BelongsTo
+    {
+        return $this->belongsTo(ApprovalRequest::class, 'request_id');
+    }
+
+    /**
+     * The decision this file supports, or null for a document that belongs to
+     * the request as a whole.
+     *
+     * @return BelongsTo<ApprovalAction, $this>
+     */
+    public function action(): BelongsTo
+    {
+        return $this->belongsTo(ApprovalAction::class, 'action_id');
+    }
+
+    /**
+     * @return MorphTo<Model, $this>
+     */
+    public function uploader(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'size' => 'integer',
+            'metadata' => 'array',
+            'created_at' => 'datetime',
+        ];
+    }
+}

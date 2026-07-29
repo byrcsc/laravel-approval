@@ -7,6 +7,7 @@ use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
+use ByRcsc\LaravelApproval\Support\CanonicalJson;
 use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use ByRcsc\LaravelApproval\Tests\Stubs\Invoice;
 use ByRcsc\LaravelApproval\Tests\Stubs\InvoiceStatus;
@@ -30,6 +31,17 @@ uses()->beforeEach(function (): void {
     WitnessResolver::$sawAmount = null;
     WitnessResolver::$approvers = [];
 })->in(__DIR__);
+
+/**
+ * A deterministic shape for arrays that crossed a `json` column. MySQL stores
+ * JSON in its own binary form and hands objects back with the keys reordered,
+ * so any assertion about such an array compares canonical forms instead of
+ * trusting the driver to preserve an order the engine never promised.
+ */
+function canonical(mixed $value): mixed
+{
+    return CanonicalJson::normalize($value);
+}
 
 /**
  * A workflow, built from a list of level specs.

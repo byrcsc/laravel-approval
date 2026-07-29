@@ -8,6 +8,7 @@ use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use LogicException;
 
@@ -79,6 +80,17 @@ final class ApprovalAction extends Model
     public function actor(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * The files put in evidence of this decision - a signature image, say.
+     *
+     * @return HasMany<ApprovalAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ApprovalAttachment::class, 'action_id')
+            ->orderBy('id');
     }
 
     /**

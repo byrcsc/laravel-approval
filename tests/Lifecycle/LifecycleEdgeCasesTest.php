@@ -89,6 +89,7 @@ it('runs end to end on renamed tables', function (): void {
         'steps' => 'sign_off_steps',
         'step_approvers' => 'sign_off_step_approvers',
         'actions' => 'sign_off_actions',
+        'attachments' => 'sign_off_attachments',
     ]]);
 
     $approver = user('Approver');
