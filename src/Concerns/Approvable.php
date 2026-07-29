@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Concerns;
 
+use ByRcsc\LaravelApproval\Contracts\AutoSubmitsForApproval;
+use ByRcsc\LaravelApproval\Data\AutoSubmission;
 use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
@@ -81,6 +83,24 @@ trait Approvable
                 ->each(fn (ApprovalRequest $request): ApprovalRequest => Approval::cancel($request, force: true));
         });
 
+        static::created(function (self $model): void {
+            $enabled = $model instanceof AutoSubmitsForApproval || $model->shouldAutoSubmitForApproval();
+
+            if (! $enabled || Approval::pendingFor($model) !== null) {
+                return;
+            }
+
+            $submission = $model->approvalAutoSubmission();
+
+            Approval::submit(
+                $model,
+                $submission->workflow,
+                $submission->newAttributes,
+                $submission->submitter,
+                $submission->comment,
+                $submission->metadata,
+            );
+        });
     }
 
     /**
@@ -282,7 +302,18 @@ trait Approvable
         return false;
     }
 
+    public function shouldAutoSubmitForApproval(): bool
+    {
+        return false;
+    }
 
+    public function approvalAutoSubmission(): AutoSubmission
+    {
+        return new AutoSubmission(
+            workflow: $this->approvalWorkflow(),
+            submitter: $this->approvalSubmitter(),
+        );
+    }
 
     /**
      * @param  Builder<static>  $query
