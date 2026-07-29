@@ -21,12 +21,14 @@ use ByRcsc\LaravelApproval\Actions\ResumeReturnedRequest;
 use ByRcsc\LaravelApproval\Actions\ResyncRequestApprovers;
 use ByRcsc\LaravelApproval\Actions\ReturnRequest;
 use ByRcsc\LaravelApproval\Actions\SubmitForApproval;
+use ByRcsc\LaravelApproval\Actions\SyncWorkflowDefinitions;
 use ByRcsc\LaravelApproval\Actions\VerifyAuditTrail;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Exceptions\MissingSubmitterException;
@@ -57,6 +59,14 @@ final class ApprovalManager
     {
         /** @var ApprovalWorkflow|null */
         return ApprovalWorkflow::query()->where('slug', $slug)->first();
+    }
+
+    /**
+     * @param  iterable<int|string, mixed>  $definitions
+     */
+    public function syncDefinitions(iterable $definitions, bool $dryRun = false): WorkflowSyncResult
+    {
+        return $this->container->make(SyncWorkflowDefinitions::class)($definitions, $dryRun);
     }
 
     public function workflow(string $slug): ApprovalWorkflow

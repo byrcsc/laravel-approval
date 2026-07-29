@@ -8,6 +8,7 @@ use ByRcsc\LaravelApproval\Commands\DoctorCommand;
 use ByRcsc\LaravelApproval\Commands\EscalateOverdueCommand;
 use ByRcsc\LaravelApproval\Commands\ResyncRequestCommand;
 use ByRcsc\LaravelApproval\Commands\StatusCommand;
+use ByRcsc\LaravelApproval\Commands\SyncCommand;
 use ByRcsc\LaravelApproval\Commands\VerifyCommand;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
 use ByRcsc\LaravelApproval\Enums\ApprovalMode;
@@ -34,6 +35,7 @@ final class ApprovalServiceProvider extends PackageServiceProvider
                 DoctorCommand::class,
                 ResyncRequestCommand::class,
                 StatusCommand::class,
+                SyncCommand::class,
                 VerifyCommand::class,
             ]);
     }

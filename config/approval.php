@@ -67,6 +67,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Version-controlled workflow definitions
+    |--------------------------------------------------------------------------
+    |
+    | `php artisan approval:sync --dry-run` previews these definitions and
+    | `php artisan approval:sync` applies additive and supported configuration
+    | changes. Removing or reordering existing levels or approvers is refused.
+    |
+    */
+
+    'definitions' => [
+        // 'purchase-order' => ['name' => 'Purchase order', 'levels' => []],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Model modes
     |--------------------------------------------------------------------------
     |

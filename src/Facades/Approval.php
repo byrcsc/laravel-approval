@@ -10,6 +10,7 @@ use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\Facade;
 /**
  * @method static ApprovalWorkflow|null findWorkflow(string $slug)
  * @method static ApprovalWorkflow workflow(string $slug)
+ * @method static WorkflowSyncResult syncDefinitions(iterable<int|string, mixed> $definitions, bool $dryRun = false)
  * @method static ApprovalWorkflow workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null)
  * @method static ApprovalRequest submit(Model $approvable, ApprovalWorkflow|string|null $workflow = null, array<string, mixed>|null $newAttributes = null, Model|null $submitter = null, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static Eligibility eligibility(ApprovalRequest $request, Model $actor)
