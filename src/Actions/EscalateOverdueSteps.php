@@ -44,6 +44,7 @@ final class EscalateOverdueSteps
     public function __construct(
         private readonly Container $container,
         private readonly RecordAction $recordAction,
+        private readonly ScanActiveStepHealth $healthScan,
     ) {}
 
     /**
@@ -178,8 +179,8 @@ final class EscalateOverdueSteps
             ->whereHas('request', function ($query): void {
                 $query->where('state', RequestState::Pending->value);
             })
-            ->orderBy('deadline_at')
-            ->get();
+            ->orderBy('id')
+            ->lazyById(200);
     }
 
     private function reminderIsDue(ApprovalRequestStep $step): bool
@@ -201,20 +202,13 @@ final class EscalateOverdueSteps
     {
         $stranded = [];
 
-        /** @var iterable<int, ApprovalRequestStep> $steps */
-        $steps = ApprovalRequestStep::query()
-            ->where('state', StepState::Active->value)
-            ->whereHas('request', fn ($query) => $query->where('state', RequestState::Pending->value))
-            ->orderBy('id')
-            ->get();
-
-        foreach ($steps as $step) {
+        $this->healthScan->each(function (ApprovalRequestStep $step, StepHealth $health) use (&$stranded): bool {
             // A cheap look first: the lock below is only worth taking when the
             // marker has to move, and on a healthy install it almost never does.
             $marked = $step->getAttributeValue('stranded_at') !== null;
 
-            if (StepHealth::inspect($step)->stranded() === $marked) {
-                continue;
+            if ($health->stranded() === $marked) {
+                return true;
             }
 
             DB::transaction(function () use ($step, &$stranded): void {
@@ -260,7 +254,9 @@ final class EscalateOverdueSteps
                     $health->quorum,
                 ));
             });
-        }
+
+            return true;
+        });
 
         return $stranded;
     }

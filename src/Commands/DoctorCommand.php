@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Commands;
 
+use ByRcsc\LaravelApproval\Actions\ScanActiveStepHealth;
 use ByRcsc\LaravelApproval\Data\StepHealth;
-use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
 use ByRcsc\LaravelApproval\Support\Attributes;
 
 final class DoctorCommand extends Command
@@ -16,15 +14,14 @@ final class DoctorCommand extends Command
 
     protected $description = 'Find pending approval levels whose living seat holders cannot meet quorum';
 
+    public function __construct(private readonly ScanActiveStepHealth $scan)
+    {
+        parent::__construct();
+    }
+
     public function handle(): int
     {
-        $stranded = ApprovalRequestStep::query()
-            ->where('state', StepState::Active->value)
-            ->whereHas('request', fn ($query) => $query->where('state', RequestState::Pending->value))
-            ->orderBy('id')
-            ->get()
-            ->filter(fn (ApprovalRequestStep $step): bool => StepHealth::inspect($step)->stranded())
-            ->take(max(1, (int) $this->option('limit')));
+        $stranded = ($this->scan)(max(1, (int) $this->option('limit')));
 
         if ($stranded->isEmpty()) {
             $this->components->info('No stranded approval levels.');

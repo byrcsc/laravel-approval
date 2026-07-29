@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Commands;
 
+use ByRcsc\LaravelApproval\Actions\ScanActiveStepHealth;
 use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
@@ -28,6 +29,11 @@ final class StatusCommand extends Command
 
     protected $description = 'Summarise approval requests by state, and list the ones needing attention';
 
+    public function __construct(private readonly ScanActiveStepHealth $healthScan)
+    {
+        parent::__construct();
+    }
+
     public function handle(): int
     {
         $this->components->twoColumnDetail('<fg=gray>State</>', '<fg=gray>Requests</>');
@@ -50,13 +56,7 @@ final class StatusCommand extends Command
 
     private function listStranded(int $limit): void
     {
-        $steps = ApprovalRequestStep::query()
-            ->where('state', StepState::Active->value)
-            ->whereHas('request', fn ($query) => $query->where('state', RequestState::Pending->value))
-            ->orderBy('id')
-            ->get()
-            ->filter(fn (ApprovalRequestStep $step): bool => StepHealth::inspect($step)->stranded())
-            ->take($limit);
+        $steps = ($this->healthScan)($limit);
 
         if ($steps->isEmpty()) {
             return;
