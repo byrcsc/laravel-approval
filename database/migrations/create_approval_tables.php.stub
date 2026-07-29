@@ -16,8 +16,10 @@ use Illuminate\Support\Facades\Schema;
  *  - The key type of the polymorphic columns, which assume the models you point
  *    at use auto-incrementing integer keys. If yours use ULIDs or UUIDs, swap
  *    the matching `morphs()` / `nullableMorphs()` call for `ulidMorphs()` /
- *    `uuidMorphs()`. Approvers, submitters, actors, and the approvable record
- *    are independent, so mixing key types is fine.
+ *    `uuidMorphs()` - except for the approvable columns on the requests table,
+ *    which are written out by hand (see the note there): change the type of
+ *    `approvable_id` directly. Approvers, submitters, actors, and the
+ *    approvable record are independent, so mixing key types is fine.
  *
  * `state`, `action`, and `source` are plain strings rather than database enums,
  * so adding a case is a package upgrade rather than an ALTER TABLE.
@@ -31,6 +33,12 @@ return new class extends Migration
         Schema::create($tables['workflows'], function (Blueprint $table) {
             $table->id();
             $table->string('name');
+
+            // One global namespace, deliberately. The package inherits
+            // multi-tenancy rather than managing it: with a database or schema
+            // per tenant this is already per-tenant, and a single-database
+            // multi-tenant host should carry the tenant in the slug
+            // ("acme:purchase-order") or scope workflow lookups itself.
             $table->string('slug')->unique();
             $table->text('description')->nullable();
             $table->boolean('active')->default(true);
@@ -68,8 +76,9 @@ return new class extends Migration
             $table->foreignId('level_id')->index()->constrained($tables['levels'])->cascadeOnDelete();
 
             // Exactly one of these is set. The engine enforces it, since no
-            // portable database constraint expresses it.
-            $table->nullableMorphs('approver');
+            // portable database constraint expresses it. The index is named
+            // by hand: the generated name runs past MySQL's 64-character cap.
+            $table->nullableMorphs('approver', $tables['level_approvers'].'_approver_idx');
             $table->string('resolver')->nullable();
             $table->json('resolver_config')->nullable();
 
@@ -83,7 +92,10 @@ return new class extends Migration
             $table->ulid('ulid')->unique();
 
             // Written out rather than `morphs()`, whose (type, id) index would
-            // be a redundant prefix of the composite index below.
+            // be a redundant prefix of the composite index below. This is the
+            // one polymorphic pair with no `morphs()` call to swap for UUID
+            // models - change this column's type instead (`uuid`, `ulid`, or
+            // `string`), and leave the composite index as it is.
             $table->string('approvable_type');
             $table->unsignedBigInteger('approvable_id');
 
@@ -103,8 +115,9 @@ return new class extends Migration
             $table->morphs('submitter');
 
             // Set on the replacement when a rejected request is resubmitted;
-            // the only link between the two.
-            $table->foreignId('resubmitted_from_id')->nullable()->constrained($tables['requests'])->nullOnDelete();
+            // the only link between the two. Indexed explicitly: MySQL indexes
+            // a foreign key on its own, Postgres does not.
+            $table->foreignId('resubmitted_from_id')->nullable()->index()->constrained($tables['requests'])->nullOnDelete();
 
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('completed_at')->nullable();
@@ -164,8 +177,9 @@ return new class extends Migration
             $table->morphs('approver');
 
             // Who may act on the slot instead. The original approver stays on
-            // the row: who was asked is part of the record.
-            $table->nullableMorphs('delegated_to');
+            // the row: who was asked is part of the record. The index is named
+            // by hand: the generated name runs past MySQL's 64-character cap.
+            $table->nullableMorphs('delegated_to', $tables['step_approvers'].'_delegated_to_idx');
 
             $table->string('source')->default('assigned');
             $table->timestamps();
