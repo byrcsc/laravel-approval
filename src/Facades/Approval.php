@@ -7,6 +7,7 @@ namespace ByRcsc\LaravelApproval\Facades;
 use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
+use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
 use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
@@ -36,6 +37,11 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalRequest approve(ApprovalRequest $request, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static ApprovalRequest reject(ApprovalRequest $request, Model $actor, string $comment, array<string, mixed> $metadata = [])
  * @method static ApprovalRequest returnToSubmitter(ApprovalRequest $request, Model $actor, string $comment, array<string, mixed> $metadata = [])
+ * @method static BulkDecisionResult decideMany(iterable<int, ApprovalRequest> $requests, callable(ApprovalRequest): ApprovalDecision $decision)
+ * @method static BulkDecisionResult approveMany(iterable<int, ApprovalRequest> $requests, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
+ * @method static BulkDecisionResult rejectMany(iterable<int, ApprovalRequest> $requests, Model $actor, string $comment, array<string, mixed> $metadata = [])
+ * @method static BulkDecisionResult bulkApprove(iterable<int, ApprovalRequest> $requests, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
+ * @method static BulkDecisionResult bulkReject(iterable<int, ApprovalRequest> $requests, Model $actor, string $comment, array<string, mixed> $metadata = [])
  * @method static ApprovalRequest cancel(ApprovalRequest $request, Model|null $actor = null, string|null $comment = null, bool $force = false)
  * @method static mixed withoutGuard(Model $approvable, callable $callback, Model|null $actor = null, string|null $comment = null)
  * @method static ApprovalRequestStepApprover delegate(ApprovalRequest $request, Model $approver, Model $delegate, string|null $comment = null)

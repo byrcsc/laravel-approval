@@ -11,6 +11,7 @@ use ByRcsc\LaravelApproval\Actions\CancelRequest;
 use ByRcsc\LaravelApproval\Actions\CheckCancellationEligibility;
 use ByRcsc\LaravelApproval\Actions\CheckDelegationEligibility;
 use ByRcsc\LaravelApproval\Actions\CheckEligibility;
+use ByRcsc\LaravelApproval\Actions\DecideInBulk;
 use ByRcsc\LaravelApproval\Actions\DelegateApproval;
 use ByRcsc\LaravelApproval\Actions\EscalateOverdueSteps;
 use ByRcsc\LaravelApproval\Actions\ReassignApprover;
@@ -25,6 +26,7 @@ use ByRcsc\LaravelApproval\Actions\SyncWorkflowDefinitions;
 use ByRcsc\LaravelApproval\Actions\VerifyAuditTrail;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
+use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
 use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
@@ -190,6 +192,73 @@ final class ApprovalManager
     public function returnToSubmitter(ApprovalRequest $request, Model $actor, string $comment, array $metadata = []): ApprovalRequest
     {
         return $this->decide($request, ApprovalDecision::return($actor, $comment, $metadata));
+    }
+
+    /**
+     * @param  iterable<int, ApprovalRequest>  $requests
+     * @param  callable(ApprovalRequest): ApprovalDecision  $decision
+     */
+    public function decideMany(iterable $requests, callable $decision): BulkDecisionResult
+    {
+        return $this->container->make(DecideInBulk::class)($requests, $decision);
+    }
+
+    /**
+     * @param  iterable<int, ApprovalRequest>  $requests
+     * @param  array<string, mixed>  $metadata
+     */
+    public function approveMany(
+        iterable $requests,
+        Model $actor,
+        ?string $comment = null,
+        array $metadata = [],
+    ): BulkDecisionResult {
+        return $this->decideMany(
+            $requests,
+            fn (): ApprovalDecision => ApprovalDecision::approve($actor, $comment, $metadata),
+        );
+    }
+
+    /**
+     * @param  iterable<int, ApprovalRequest>  $requests
+     * @param  array<string, mixed>  $metadata
+     */
+    public function rejectMany(
+        iterable $requests,
+        Model $actor,
+        string $comment,
+        array $metadata = [],
+    ): BulkDecisionResult {
+        return $this->decideMany(
+            $requests,
+            fn (): ApprovalDecision => ApprovalDecision::reject($actor, $comment, $metadata),
+        );
+    }
+
+    /**
+     * @param  iterable<int, ApprovalRequest>  $requests
+     * @param  array<string, mixed>  $metadata
+     */
+    public function bulkApprove(
+        iterable $requests,
+        Model $actor,
+        ?string $comment = null,
+        array $metadata = [],
+    ): BulkDecisionResult {
+        return $this->approveMany($requests, $actor, $comment, $metadata);
+    }
+
+    /**
+     * @param  iterable<int, ApprovalRequest>  $requests
+     * @param  array<string, mixed>  $metadata
+     */
+    public function bulkReject(
+        iterable $requests,
+        Model $actor,
+        string $comment,
+        array $metadata = [],
+    ): BulkDecisionResult {
+        return $this->rejectMany($requests, $actor, $comment, $metadata);
     }
 
     /**
