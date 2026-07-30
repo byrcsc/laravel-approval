@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Commands;
 
-use ByRcsc\LaravelApproval\Actions\ScanActiveStepHealth;
-use ByRcsc\LaravelApproval\Data\StepHealth;
+use ByRcsc\LaravelApproval\Actions\ScanActiveStageHealth;
+use ByRcsc\LaravelApproval\Data\StageHealth;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Support\Facades\Date;
 
@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Date;
  *
  * The two lists at the end are the ones worth acting on. Overdue requests are
  * waiting on a person. Conflicted ones are waiting on a decision nobody can
- * make automatically - they cleared every level and then found the record had
+ * make automatically - they cleared every stage and then found the record had
  * moved, so they sit there until somebody resolves them, and nothing else in
  * this package will chase them.
  */
@@ -29,7 +29,7 @@ final class StatusCommand extends Command
 
     protected $description = 'Summarise approval requests by state, and list the ones needing attention';
 
-    public function __construct(private readonly ScanActiveStepHealth $healthScan)
+    public function __construct(private readonly ScanActiveStageHealth $healthScan)
     {
         parent::__construct();
     }
@@ -56,30 +56,30 @@ final class StatusCommand extends Command
 
     private function listStranded(int $limit): void
     {
-        $steps = ($this->healthScan)($limit);
+        $stages = ($this->healthScan)($limit);
 
-        if ($steps->isEmpty()) {
+        if ($stages->isEmpty()) {
             return;
         }
 
         $this->newLine();
-        $this->components->error('Stranded, living holders cannot meet quorum');
+        $this->components->error('Stranded, living holders cannot meet the required approvals');
 
-        foreach ($steps as $step) {
-            $health = StepHealth::inspect($step);
-            $request = $step->request;
+        foreach ($stages as $stage) {
+            $health = StageHealth::inspect($stage);
+            $request = $stage->request;
 
             $this->components->twoColumnDetail(
                 $request === null ? '?' : Attributes::string($request, 'ulid'),
-                sprintf('%s, %d living / %d required', Attributes::string($step, 'name'), $health->living, $health->quorum),
+                sprintf('%s, %d living / %d required', Attributes::string($stage, 'name'), $health->livingHolders, $health->requiredApprovals),
             );
         }
     }
 
     private function listOverdue(int $limit): void
     {
-        $steps = ApprovalRequestStep::query()
-            ->where('state', StepState::Active->value)
+        $stages = ApprovalRequestStage::query()
+            ->where('state', StageStatus::Active->value)
             ->whereNotNull('deadline_at')
             ->where('deadline_at', '<=', Date::now())
             ->whereHas('request', fn ($query) => $query->where('state', RequestState::Pending->value))
@@ -87,22 +87,22 @@ final class StatusCommand extends Command
             ->limit($limit)
             ->get();
 
-        if ($steps->isEmpty()) {
+        if ($stages->isEmpty()) {
             return;
         }
 
         $this->newLine();
         $this->components->info('Overdue');
 
-        foreach ($steps as $step) {
-            $request = $step->request;
+        foreach ($stages as $stage) {
+            $request = $stage->request;
 
             $this->components->twoColumnDetail(
                 $request === null ? '?' : Attributes::string($request, 'ulid'),
                 sprintf(
                     '%s, due %s',
-                    Attributes::string($step, 'name'),
-                    Attributes::datetime($step, 'deadline_at')?->diffForHumans() ?? 'unknown',
+                    Attributes::string($stage, 'name'),
+                    Attributes::datetime($stage, 'deadline_at')?->diffForHumans() ?? 'unknown',
                 ),
             );
         }

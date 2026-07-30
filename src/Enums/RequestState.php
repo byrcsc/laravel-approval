@@ -6,8 +6,8 @@ namespace ByRcsc\LaravelApproval\Enums;
 
 /**
  * `Pending` and `Conflicted` are unresolved states. `Returned` may
- * produce a linked successor through resume. `Conflicted` means
- * the draft cleared every level but the record had changed underneath it, so
+ * produce a linked successor through revise and resubmit. `Conflicted` means
+ * the draft cleared every stage but the record had changed underneath it, so
  * nothing was applied and a human has to decide what happens next.
  */
 enum RequestState: string

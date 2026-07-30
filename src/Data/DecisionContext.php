@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Data;
 
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 
 /**
  * The stage and assignment established before a decision is recorded.
@@ -13,8 +13,8 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
 final readonly class DecisionContext
 {
     public function __construct(
-        public ApprovalRequestStep $stage,
+        public ApprovalRequestStage $stage,
         public StageProgress $stageProgress,
-        public ApprovalRequestStepApprover $assignment,
+        public ApprovalRequestAssignment $assignment,
     ) {}
 }

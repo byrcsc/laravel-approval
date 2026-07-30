@@ -24,7 +24,7 @@ it('writes the draft onto the record on final approval', function (): void {
         ->and($fresh?->getAttributeValue('published'))->toBeTrue();
 });
 
-it('waits for the last level before writing anything', function (): void {
+it('waits for the last stage before writing anything', function (): void {
     $first = user('First');
     $second = user('Second');
     $post = post('Original title');

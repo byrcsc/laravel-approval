@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
  * them.
  *
  * This is a floor, not a ceiling. It answers only what the package can know -
- * who holds a seat, whose turn it is, who submitted - and knows nothing about
+ * who holds an assignment, whose turn it is, who submitted - and knows nothing about
  * your organization. A host that needs "and they must still be employed" or
  * "and the amount is under their limit" should extend this and call these rules
  * from theirs, rather than fork them.
@@ -46,7 +46,7 @@ class ApprovalRequestPolicy
 
     /**
      * Rejecting and returning pass through the same gate as approving: all
-     * three are that seat's vote, and differ only in which way it went.
+     * three are that assignment's decision, and differ only in which way it went.
      */
     public function reject(Model $user, ApprovalRequest $request): bool
     {

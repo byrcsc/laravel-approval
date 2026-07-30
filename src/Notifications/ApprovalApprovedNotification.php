@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * "Your request cleared every level."
+ * "Your request cleared every stage."
  *
  * Goes to the submitter only after the request is approved and any draft was
  * applied successfully.

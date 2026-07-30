@@ -6,7 +6,7 @@ use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Tests\Stubs\FlickeringLabelUser;
 use Illuminate\Database\QueryException;
 
@@ -17,7 +17,7 @@ use Illuminate\Database\QueryException;
 
 /**
  * A request with a trail worth attacking: submitted with a justification,
- * delegated, and decided across two levels.
+ * delegated, and decided across two stages.
  */
 function auditedRequest(): ApprovalRequest
 {
@@ -175,20 +175,20 @@ it('refuses to hard-delete a request while its history exists', function (): voi
 
 it('survives a step deletion with the loss on the record, not erased', function (): void {
     $request = auditedRequest();
-    $step = $request->steps()->first();
-    $stepActions = $request->actions()->where('step_id', $step?->getKey())->count();
+    $stage = $request->stages()->first();
+    $stageActions = $request->actions()->where('stage_id', $stage?->getKey())->count();
 
-    expect($stepActions)->toBeGreaterThan(0);
+    expect($stageActions)->toBeGreaterThan(0);
 
     // Steps are deleted by nothing in the engine; this is the host taking a
     // shortcut. The lines survive with the reference nulled - and because the
     // hash covered the reference, the loss shows up in verify instead of
     // passing silently.
-    $request->steps()->getQuery()->whereKey($step?->getKey())->delete();
+    $request->stages()->getQuery()->whereKey($stage?->getKey())->delete();
 
-    expect($request->actions()->count())->toBeGreaterThanOrEqual($stepActions)
-        ->and(ApprovalRequestStep::query()->whereKey($step?->getKey())->exists())->toBeFalse()
-        ->and(count(Approval::verifyTrail($request)))->toBe($stepActions);
+    expect($request->actions()->count())->toBeGreaterThanOrEqual($stageActions)
+        ->and(ApprovalRequestStage::query()->whereKey($stage?->getKey())->exists())->toBeFalse()
+        ->and(count(Approval::verifyTrail($request)))->toBe($stageActions);
 });
 
 it('reports through the artisan command with a failing exit code', function (): void {

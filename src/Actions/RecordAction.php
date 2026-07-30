@@ -7,7 +7,7 @@ namespace ByRcsc\LaravelApproval\Actions;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Support\ActionHash;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use ByRcsc\LaravelApproval\Support\AuditHashPayload;
@@ -39,11 +39,11 @@ final class RecordAction
         ApprovalRequest $request,
         ActionType $action,
         ?Model $actor = null,
-        ?ApprovalRequestStep $step = null,
+        ?ApprovalRequestStage $stage = null,
         ?string $comment = null,
         array $metadata = [],
     ): ApprovalAction {
-        return DB::transaction(function () use ($request, $action, $actor, $step, $comment, $metadata): ApprovalAction {
+        return DB::transaction(function () use ($request, $action, $actor, $stage, $comment, $metadata): ApprovalAction {
             $lockedRequest = ApprovalRequest::query()
                 ->whereKey($request->getKey())
                 ->lockForUpdate()
@@ -54,7 +54,7 @@ final class RecordAction
             $actorLabel = $actor === null ? null : Labels::for($actor);
             $actorId = $actor?->getKey();
             $actorId = is_scalar($actorId) ? (string) $actorId : null;
-            $stepId = $step?->getKey();
+            $stageId = $stage?->getKey();
 
             $hash = ActionHash::compute(new AuditHashPayload(
                 requestUlid: Attributes::string($lockedRequest, 'ulid'),
@@ -63,7 +63,7 @@ final class RecordAction
                 actorType: $actor?->getMorphClass(),
                 actorId: $actorId,
                 actorLabel: $actorLabel,
-                stepId: is_int($stepId) ? $stepId : null,
+                stageId: is_int($stageId) ? $stageId : null,
                 comment: $comment,
                 metadata: $metadata === [] ? null : $metadata,
                 createdAt: $createdAt->format('Y-m-d H:i:s'),
@@ -71,7 +71,7 @@ final class RecordAction
 
             $record = ApprovalAction::create([
                 'request_id' => $lockedRequest->getKey(),
-                'step_id' => $step?->getKey(),
+                'stage_id' => $stage?->getKey(),
                 'actor_type' => $actor?->getMorphClass(),
                 'actor_id' => $actor?->getKey(),
                 'actor_label' => $actorLabel,

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Resolvers;
 
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
-use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\StageSnapshot;
 use ByRcsc\LaravelApproval\Support\Payload;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
@@ -33,7 +33,7 @@ final class CallbackResolver implements ApproverResolver
      * @param  array<string, mixed>  $config
      * @return iterable<int, Model>
      */
-    public function resolve(LevelSnapshot $level, Model $approvable, Model $submitter, array $config): iterable
+    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
     {
         $callback = Payload::nullableString($config, 'callback');
 
@@ -56,7 +56,7 @@ final class CallbackResolver implements ApproverResolver
         }
 
         /** @var mixed $approvers */
-        $approvers = $instance->{$method}($level, $approvable, $submitter, $config);
+        $approvers = $instance->{$method}($stage, $approvable, $submitter, $config);
 
         return is_iterable($approvers) ? $this->onlyModels($approvers) : [];
     }

@@ -36,9 +36,9 @@ final class DecideInBulk
         $collection = new Collection($items);
         $collection->loadMissing([
             'workflow',
-            'steps.approverSlots.approver',
-            'steps.approverSlots.delegatedTo',
-            'steps.actions',
+            'stages.assignments.approver',
+            'stages.assignments.delegatedTo',
+            'stages.actions',
         ]);
 
         $outcomes = [];

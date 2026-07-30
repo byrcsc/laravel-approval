@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalInProgressException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidDraftException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Tests\Stubs\DeletingApprovableResolver;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
 
-it('opens a pending request at the first level', function (): void {
+it('opens a pending request at the first stage', function (): void {
     $author = user('Grace Hopper');
     $editor = user('Ada Lovelace');
     $post = post();
@@ -29,7 +29,7 @@ it('opens a pending request at the first level', function (): void {
     $request = $post->submitForApproval($workflow, null, $author);
 
     expect($request->state)->toBe(RequestState::Pending)
-        ->and($request->getAttributeValue('current_level_sequence'))->toBe(1)
+        ->and($request->getAttributeValue('current_stage_sequence'))->toBe(1)
         ->and($request->getAttributeValue('ulid'))->toBeString()
         ->and($request->submitted_at)->not->toBeNull()
         ->and($request->completed_at)->toBeNull()
@@ -39,7 +39,7 @@ it('opens a pending request at the first level', function (): void {
         ->and($request->workflow?->getKey())->toBe($workflow->getKey());
 });
 
-it('freezes every level onto the request as a step', function (): void {
+it('freezes every stage onto the request as a step', function (): void {
     $first = user('First Approver');
     $second = user('Second Approver');
 
@@ -50,14 +50,14 @@ it('freezes every level onto the request as a step', function (): void {
 
     $request = post()->submitForApproval($workflow, null, user());
 
-    $steps = $request->steps()->get();
+    $stages = $request->stages()->get();
 
-    expect($steps)->toHaveCount(2)
-        ->and($steps[0]->getAttributeValue('name'))->toBe('Team lead')
-        ->and($steps[0]->getAttributeValue('required_approvals'))->toBe(1)
-        ->and($steps[0]->getAttributeValue('sla_minutes'))->toBe(60)
-        ->and($steps[1]->getAttributeValue('name'))->toBe('Finance')
-        ->and($steps[1]->getAttributeValue('required_approvals'))->toBeNull();
+    expect($stages)->toHaveCount(2)
+        ->and($stages[0]->getAttributeValue('name'))->toBe('Team lead')
+        ->and($stages[0]->getAttributeValue('required_approvals'))->toBe(1)
+        ->and($stages[0]->getAttributeValue('sla_minutes'))->toBe(60)
+        ->and($stages[1]->getAttributeValue('name'))->toBe('Finance')
+        ->and($stages[1]->getAttributeValue('required_approvals'))->toBeNull();
 });
 
 it('activates only the first step and queues the rest', function (): void {
@@ -71,10 +71,10 @@ it('activates only the first step and queues the rest', function (): void {
 
     $request = post()->submitForApproval($workflow, null, user());
 
-    expect($request->steps()->get()->pluck('state')->all())->toBe([
-        StepState::Active,
-        StepState::Queued,
-        StepState::Queued,
+    expect($request->stages()->get()->pluck('state')->all())->toBe([
+        StageStatus::Active,
+        StageStatus::Queued,
+        StageStatus::Queued,
     ]);
 });
 
@@ -88,23 +88,23 @@ it('starts the SLA clock only on the step that is somebody turn', function (): v
         ['sla_minutes' => 30, 'approvers' => [$approver]],
     ]);
 
-    $steps = post()->submitForApproval($workflow, null, user())->steps()->get();
+    $stages = post()->submitForApproval($workflow, null, user())->stages()->get();
 
-    expect($steps[0]->deadline_at?->toDateTimeString())->toBe('2026-07-28 10:30:00')
-        ->and($steps[1]->deadline_at)->toBeNull();
+    expect($stages[0]->deadline_at?->toDateTimeString())->toBe('2026-07-28 10:30:00')
+        ->and($stages[1]->deadline_at)->toBeNull();
 
     Date::setTestNow();
 });
 
-it('leaves the deadline empty when a level has no SLA', function (): void {
+it('leaves the deadline empty when a stage has no SLA', function (): void {
     $workflow = workflow([['approvers' => [user()]]]);
 
-    $step = post()->submitForApproval($workflow, null, user())->steps()->sole();
+    $stage = post()->submitForApproval($workflow, null, user())->stages()->sole();
 
-    expect($step->deadline_at)->toBeNull();
+    expect($stage->deadline_at)->toBeNull();
 });
 
-it('materializes concrete approvers into slots', function (): void {
+it('materializes concrete approvers into assignments', function (): void {
     $one = user('One');
     $two = user('Two');
 
@@ -112,23 +112,23 @@ it('materializes concrete approvers into slots', function (): void {
         ['required_approvals' => 2, 'approvers' => [$one, $two]],
     ]);
 
-    $slots = post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->get();
+    $assignments = post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->get();
 
-    expect($slots)->toHaveCount(2)
-        ->and($slots->pluck('approver_id')->all())->toBe([$one->getKey(), $two->getKey()])
-        ->and($slots[0]->source)->toBe(ApproverSource::Assigned)
-        ->and($slots[0]->approver?->getKey())->toBe($one->getKey())
-        ->and($slots[0]->delegatedTo)->toBeNull();
+    expect($assignments)->toHaveCount(2)
+        ->and($assignments->pluck('approver_id')->all())->toBe([$one->getKey(), $two->getKey()])
+        ->and($assignments[0]->source)->toBe(ApproverSource::Assigned)
+        ->and($assignments[0]->approver?->getKey())->toBe($one->getKey())
+        ->and($assignments[0]->delegatedTo)->toBeNull();
 });
 
-it('counts a person named twice as one seat', function (): void {
+it('counts a person named twice as one assignment', function (): void {
     $approver = user();
 
     $workflow = workflow([
         ['approvers' => [$approver, $approver]],
     ]);
 
-    expect(post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->count())->toBe(1);
+    expect(post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->count())->toBe(1);
 });
 
 it('records the submission in the audit trail', function (): void {
@@ -141,7 +141,7 @@ it('records the submission in the audit trail', function (): void {
 
     expect($action->getAttributeValue('action')->value)->toBe('submitted')
         ->and($action->actor?->getKey())->toBe($author->getKey())
-        ->and($action->getAttributeValue('step_id'))->toBeNull()
+        ->and($action->getAttributeValue('stage_id'))->toBeNull()
         ->and($action->getAttributeValue('metadata'))->toBe(['workflow' => 'editorial']);
 });
 
@@ -153,8 +153,8 @@ it('announces the submission with the step that is waiting', function (): void {
 
     Event::assertDispatched(ApprovalSubmitted::class, function (ApprovalSubmitted $event) use ($request): bool {
         return $event->request->is($request)
-            && $event->step instanceof ApprovalRequestStep
-            && $event->step->getAttributeValue('name') === 'Editorial';
+            && $event->stage instanceof ApprovalRequestStage
+            && $event->stage->getAttributeValue('name') === 'Editorial';
     });
 });
 
@@ -202,7 +202,7 @@ it('writes nothing when the approvable disappears while submission is being plan
     expect(ApprovalRequest::query()->count())->toBe(0);
 });
 
-it('writes nothing when a later level turns out to be broken', function (): void {
+it('writes nothing when a later stage turns out to be broken', function (): void {
     $workflow = workflow([
         ['approvers' => [user()]],
         ['approvers' => []],
@@ -212,7 +212,7 @@ it('writes nothing when a later level turns out to be broken', function (): void
         ->toThrow(InvalidWorkflowException::class);
 
     expect(ApprovalRequest::query()->count())->toBe(0)
-        ->and(ApprovalRequestStep::query()->count())->toBe(0);
+        ->and(ApprovalRequestStage::query()->count())->toBe(0);
 });
 
 it('reports the pending request back through the trait', function (): void {

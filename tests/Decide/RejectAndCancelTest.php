@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\ApprovalRejected;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
@@ -22,15 +22,15 @@ describe('rejection', function (): void {
 
         Approval::reject($request, $first, 'The numbers do not add up.');
 
-        $steps = $request->refresh()->steps()->get();
+        $stages = $request->refresh()->stages()->get();
 
         expect($request->state)->toBe(RequestState::Rejected)
             ->and($request->completed_at)->not->toBeNull()
-            ->and($steps[0]->state)->toBe(StepState::Rejected)
-            ->and($steps[1]->state)->toBe(StepState::Skipped);
+            ->and($stages[0]->state)->toBe(StageStatus::Rejected)
+            ->and($stages[1]->state)->toBe(StageStatus::Skipped);
     });
 
-    it('skips rather than rejects the levels that never ran', function (): void {
+    it('skips rather than rejects the stages that never ran', function (): void {
         $second = user('Second');
         $workflow = workflow([
             ['approvers' => [user('First')]],
@@ -39,13 +39,13 @@ describe('rejection', function (): void {
         ]);
 
         $request = post()->submitForApproval($workflow, null, user());
-        Approval::approve($request, $request->steps()->get()[0]->approverSlots()->sole()->approver);
+        Approval::approve($request, $request->stages()->get()[0]->assignments()->sole()->approver);
         Approval::reject($request, $second, 'No.');
 
-        expect($request->steps()->get()->pluck('state')->all())->toBe([
-            StepState::Approved,
-            StepState::Rejected,
-            StepState::Skipped,
+        expect($request->stages()->get()->pluck('state')->all())->toBe([
+            StageStatus::Approved,
+            StageStatus::Rejected,
+            StageStatus::Skipped,
         ]);
     });
 
@@ -113,7 +113,7 @@ describe('withdrawal', function (): void {
 
         expect($request->refresh()->state)->toBe(RequestState::Withdrawn)
             ->and($request->completed_at)->not->toBeNull()
-            ->and($request->steps()->sole()->state)->toBe(StepState::Skipped);
+            ->and($request->stages()->sole()->state)->toBe(StageStatus::Skipped);
     });
 
     it('refuses somebody else withdrawing it', function (): void {

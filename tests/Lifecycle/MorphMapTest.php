@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
@@ -35,7 +36,7 @@ it('runs the whole flow on aliases, never class names', function (): void {
 
     expect($request->getAttributeValue('approvable_type'))->toBe('post')
         ->and($request->getAttributeValue('submitter_type'))->toBe('user')
-        ->and($request->steps()->sole()->approverSlots()->sole()->getAttributeValue('approver_type'))->toBe('user');
+        ->and($request->stages()->sole()->assignments()->sole()->getAttributeValue('approver_type'))->toBe('user');
 
     Approval::delegate($request, $approver, $delegate);
     Approval::approve($request, $delegate);
@@ -65,7 +66,7 @@ it('chains a resubmission through aliased columns', function (): void {
 
     Approval::reject($request, $approver, 'Not yet.');
 
-    $second = Approval::resubmit($request);
+    $second = Approval::reviseAndResubmit($request, RevisedDraft::inherit());
 
     expect($second->getAttributeValue('approvable_type'))->toBe('post')
         ->and($second->resubmittedFrom?->is($request))->toBeTrue()

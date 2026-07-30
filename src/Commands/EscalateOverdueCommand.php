@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Commands;
 
-use ByRcsc\LaravelApproval\Actions\EscalateOverdueSteps;
+use ByRcsc\LaravelApproval\Actions\EscalateOverdueStages;
 
 /**
  * Schedule this. Nothing else moves a deadline along.
@@ -15,17 +15,17 @@ use ByRcsc\LaravelApproval\Actions\EscalateOverdueSteps;
  * knob - the sweep is idempotent, so running it every minute and running it
  * every hour produce the same escalations, just at different resolutions.
  *
- * Exits non-zero if any step's strategy threw, so a scheduler that watches exit
- * codes says something. The steps that succeeded are still committed; the ones
+ * Exits non-zero if any stage's strategy threw, so a scheduler that watches exit
+ * codes says something. The stages that succeeded are still committed; the ones
  * that failed are retried on the next run.
  */
 final class EscalateOverdueCommand extends Command
 {
     protected $signature = 'approval:escalate';
 
-    protected $description = 'Escalate approval levels that have passed their deadline';
+    protected $description = 'Escalate approval stages that have passed their deadline';
 
-    public function handle(EscalateOverdueSteps $escalate): int
+    public function handle(EscalateOverdueStages $escalate): int
     {
         $result = $escalate();
 
@@ -39,7 +39,7 @@ final class EscalateOverdueCommand extends Command
         }
 
         if ($count > 0) {
-            $this->components->info(sprintf('Escalated %d %s.', $count, $count === 1 ? 'level' : 'levels'));
+            $this->components->info(sprintf('Escalated %d %s.', $count, $count === 1 ? 'stage' : 'stages'));
         }
 
         if ($reminders > 0) {
@@ -50,12 +50,12 @@ final class EscalateOverdueCommand extends Command
             $this->components->warn(sprintf(
                 'Detected %d newly stranded %s.',
                 count($result['stranded']),
-                count($result['stranded']) === 1 ? 'level' : 'levels',
+                count($result['stranded']) === 1 ? 'stage' : 'stages',
             ));
         }
 
-        foreach ($result['failed'] as $step => $message) {
-            $this->components->error("Step {$step} could not be escalated: {$message}");
+        foreach ($result['failed'] as $stage => $message) {
+            $this->components->error("Stage {$stage} could not be escalated: {$message}");
         }
 
         return $result['failed'] === [] ? self::SUCCESS : self::FAILURE;

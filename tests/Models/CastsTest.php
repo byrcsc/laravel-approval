@@ -6,7 +6,7 @@ use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use Illuminate\Support\Carbon;
@@ -24,7 +24,7 @@ it('round-trips the workflow settings and flags', function () {
         ->and($workflow->settings)->toBe(['allow_self_approval' => true]);
 });
 
-it('round-trips the level escalation settings', function () {
+it('round-trips the stage escalation settings', function () {
     $workflow = workflow([[
         'name' => 'Finance',
         'sla_minutes' => 120,
@@ -35,14 +35,14 @@ it('round-trips the level escalation settings', function () {
         'condition_config' => ['amount' => 500_000],
     ]]);
 
-    $level = $workflow->levels()->first();
-    $level?->refresh();
+    $stage = $workflow->stages()->first();
+    $stage?->refresh();
 
-    expect($level?->escalation_strategy)->toBe(EscalationAction::Escalate)
-        ->and($level?->sla_minutes)->toBe(120)
-        ->and($level?->escalation_config)->toBe(['resolver' => 'App\\Approvals\\HeadOfFinance'])
-        ->and($level?->remind_every_minutes)->toBe(30)
-        ->and($level?->condition_config)->toBe(['amount' => 500_000]);
+    expect($stage?->escalation_strategy)->toBe(EscalationAction::Escalate)
+        ->and($stage?->sla_minutes)->toBe(120)
+        ->and($stage?->escalation_config)->toBe(['resolver' => 'App\\Approvals\\HeadOfFinance'])
+        ->and($stage?->remind_every_minutes)->toBe(30)
+        ->and($stage?->condition_config)->toBe(['amount' => 500_000]);
 });
 
 it('round-trips a request state, draft, and timestamps', function () {
@@ -70,66 +70,66 @@ it('reads a state written to the database as a plain string', function () {
     expect($request->fresh()?->state)->toBe(RequestState::Cancelled);
 });
 
-it('defaults a fresh request to pending at the first level', function () {
+it('defaults a fresh request to pending at the first stage', function () {
     $request = approvalRequest()->fresh();
 
     expect($request?->state)->toBe(RequestState::Pending)
-        ->and($request?->current_level_sequence)->toBe(1);
+        ->and($request?->current_stage_sequence)->toBe(1);
 });
 
 it('round-trips a step state and its deadlines', function () {
     $request = approvalRequest();
     $deadline = now()->addHours(4);
 
-    $step = $request->steps()->create([
+    $stage = $request->stages()->create([
         'sequence' => 1,
         'name' => 'Manager',
-        'state' => StepState::Active,
+        'state' => StageStatus::Active,
         'deadline_at' => $deadline,
-        'escalation_strategy' => EscalationAction::Notify,
+        'escalation_strategy' => EscalationAction::RecordOnly,
     ]);
 
-    $step->refresh();
+    $stage->refresh();
 
-    expect($step->state)->toBe(StepState::Active)
-        ->and($step->escalation_strategy)->toBe(EscalationAction::Notify)
-        ->and($step->deadline_at?->toDateTimeString())->toBe($deadline->toDateTimeString())
-        ->and($step->escalated_at)->toBeNull();
+    expect($stage->state)->toBe(StageStatus::Active)
+        ->and($stage->escalation_strategy)->toBe(EscalationAction::RecordOnly)
+        ->and($stage->deadline_at?->toDateTimeString())->toBe($deadline->toDateTimeString())
+        ->and($stage->escalated_at)->toBeNull();
 });
 
 it('defaults a fresh step to queued', function () {
     $request = approvalRequest();
 
-    $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager'])->fresh();
+    $stage = $request->stages()->create(['sequence' => 1, 'name' => 'Manager'])->fresh();
 
-    expect($step?->state)->toBe(StepState::Queued);
+    expect($stage?->state)->toBe(StageStatus::Queued);
 });
 
-it('round-trips the provenance of an approver slot', function () {
+it('round-trips the provenance of an approver assignment', function () {
     $request = approvalRequest();
-    $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
+    $stage = $request->stages()->create(['sequence' => 1, 'name' => 'Manager']);
     $approver = user();
 
-    $slot = $step->approverSlots()->create([
+    $assignment = $stage->assignments()->create([
         'approver_type' => $approver->getMorphClass(),
         'approver_id' => $approver->getKey(),
         'source' => ApproverSource::Escalated,
     ])->fresh();
 
-    expect($slot?->source)->toBe(ApproverSource::Escalated);
+    expect($assignment?->source)->toBe(ApproverSource::Escalated);
 });
 
-it('defaults an approver slot to having been assigned', function () {
+it('defaults an approver assignment to having been assigned', function () {
     $request = approvalRequest();
-    $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
+    $stage = $request->stages()->create(['sequence' => 1, 'name' => 'Manager']);
     $approver = user();
 
-    $slot = $step->approverSlots()->create([
+    $assignment = $stage->assignments()->create([
         'approver_type' => $approver->getMorphClass(),
         'approver_id' => $approver->getKey(),
     ])->fresh();
 
-    expect($slot?->source)->toBe(ApproverSource::Assigned);
+    expect($assignment?->source)->toBe(ApproverSource::Assigned);
 });
 
 it('round-trips an action type and its metadata', function () {

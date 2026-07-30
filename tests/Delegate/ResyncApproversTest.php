@@ -8,8 +8,10 @@ use ByRcsc\LaravelApproval\Events\ApproversResynced;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowException;
 use ByRcsc\LaravelApproval\Facades\Approval;
+use ByRcsc\LaravelApproval\Notifications\ApprovalAssignedNotification;
 use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
 
 it('adds the approvers the workflow now names', function (): void {
     $head = user('Head');
@@ -25,14 +27,14 @@ it('adds the approvers the workflow now names', function (): void {
     $deputy = user('Deputy');
     HeadOfDepartmentResolver::$heads = [$head, $deputy];
 
-    $changes = Approval::resync($request);
+    $changes = Approval::resync($request, user('Operator'));
 
-    $seats = $request->steps()->sole()->approverSlots()->get();
+    $assignments = $request->stages()->sole()->assignments()->get();
 
-    expect($seats)->toHaveCount(2)
+    expect($assignments)->toHaveCount(2)
         ->and($changes[1]['added'])->toBe([$deputy->getMorphClass().':'.$deputy->getKey()])
         ->and($changes[1]['removed'])->toBe([])
-        ->and($seats->last()?->source)->toBe(ApproverSource::Resynced);
+        ->and($assignments->last()?->source)->toBe(ApproverSource::Resynced);
 });
 
 it('leaves stale approvers in place unless asked to prune', function (): void {
@@ -48,9 +50,9 @@ it('leaves stale approvers in place unless asked to prune', function (): void {
     $successor = user('Successor');
     HeadOfDepartmentResolver::$heads = [$successor];
 
-    Approval::resync($request);
+    Approval::resync($request, user('Operator'));
 
-    expect($request->steps()->sole()->approverSlots()->count())->toBe(2);
+    expect($request->stages()->sole()->assignments()->count())->toBe(2);
 });
 
 it('drops stale approvers when pruning', function (): void {
@@ -66,13 +68,13 @@ it('drops stale approvers when pruning', function (): void {
     $successor = user('Successor');
     HeadOfDepartmentResolver::$heads = [$successor];
 
-    $changes = Approval::resync($request, null, prune: true);
+    $changes = Approval::resync($request, user('Operator'), prune: true);
 
-    expect($request->steps()->sole()->approverSlots()->sole()->approver?->getKey())->toBe($successor->getKey())
+    expect($request->stages()->sole()->assignments()->sole()->approver?->getKey())->toBe($successor->getKey())
         ->and($changes[1]['removed'])->toBe([$head->getMorphClass().':'.$head->getKey()]);
 });
 
-it('never prunes a seat that has voted', function (): void {
+it('never prunes an assignment that has decided', function (): void {
     $one = user('One');
     HeadOfDepartmentResolver::$heads = [$one, user('Two')];
 
@@ -85,14 +87,14 @@ it('never prunes a seat that has voted', function (): void {
 
     HeadOfDepartmentResolver::$heads = [user('Replacement A'), user('Replacement B')];
 
-    Approval::resync($request, null, prune: true);
+    Approval::resync($request, user('Operator'), prune: true);
 
-    $seats = $request->steps()->sole()->approverSlots()->get();
+    $assignments = $request->stages()->sole()->assignments()->get();
 
-    expect($seats->pluck('approver_id')->all())->toContain($one->getKey());
+    expect($assignments->pluck('approver_id')->all())->toContain($one->getKey());
 });
 
-it('never prunes a seat that has been delegated', function (): void {
+it('never prunes an assignment that has been delegated', function (): void {
     $head = user('Head');
     $delegate = user('Delegate');
     HeadOfDepartmentResolver::$heads = [$head];
@@ -106,12 +108,12 @@ it('never prunes a seat that has been delegated', function (): void {
 
     HeadOfDepartmentResolver::$heads = [user('Successor')];
 
-    Approval::resync($request, null, prune: true);
+    Approval::resync($request, user('Operator'), prune: true);
 
-    expect($request->steps()->sole()->approverSlots()->count())->toBe(2);
+    expect($request->stages()->sole()->assignments()->count())->toBe(2);
 });
 
-it('does not add somebody who already holds a delegated seat', function (): void {
+it('does not add somebody who already holds a delegated assignment', function (): void {
     $one = user('One');
     $two = user('Two');
     $delegate = user('Delegate');
@@ -126,14 +128,14 @@ it('does not add somebody who already holds a delegated seat', function (): void
     Approval::delegate($request, $one, $delegate);
 
     HeadOfDepartmentResolver::$heads = [$delegate, $two];
-    Approval::resync($request);
+    Approval::resync($request, user('Operator'));
     Approval::approve($request, $delegate);
 
-    expect($request->steps()->sole()->approverSlots()->count())->toBe(2)
+    expect($request->stages()->sole()->assignments()->count())->toBe(2)
         ->and($request->refresh()->state)->toBe(RequestState::Pending);
 });
 
-it('resyncs levels the request has not reached yet', function (): void {
+it('resyncs stages the request has not reached yet', function (): void {
     $first = user('First');
     $head = user('Head');
     HeadOfDepartmentResolver::$heads = [$head];
@@ -148,13 +150,13 @@ it('resyncs levels the request has not reached yet', function (): void {
     $deputy = user('Deputy');
     HeadOfDepartmentResolver::$heads = [$head, $deputy];
 
-    $changes = Approval::resync($request);
+    $changes = Approval::resync($request, user('Operator'));
 
     expect(array_keys($changes))->toBe([2])
-        ->and($request->steps()->get()[1]->approverSlots()->count())->toBe(2);
+        ->and($request->stages()->get()[1]->assignments()->count())->toBe(2);
 });
 
-it('rolls back rather than stranding a level below its quorum', function (): void {
+it('rolls back rather than stranding a stage below its required approvals', function (): void {
     $one = user('One');
     $two = user('Two');
     HeadOfDepartmentResolver::$heads = [$one, $two];
@@ -167,13 +169,13 @@ it('rolls back rather than stranding a level below its quorum', function (): voi
 
     HeadOfDepartmentResolver::$heads = [$one];
 
-    expect(fn () => Approval::resync($request, null, prune: true))
+    expect(fn () => Approval::resync($request, user('Operator'), prune: true))
         ->toThrow(InvalidWorkflowException::class, 'approval rule requires 2 approvals but only 1 assignments were resolved');
 
-    expect($request->steps()->sole()->approverSlots()->count())->toBe(2);
+    expect($request->stages()->sole()->assignments()->count())->toBe(2);
 });
 
-it('carries an all-seats level when pruning makes its existing votes sufficient', function (): void {
+it('carries an all-assignments stage when pruning makes its existing decisions sufficient', function (): void {
     $one = user('One');
     $two = user('Two');
     HeadOfDepartmentResolver::$heads = [$one, $two];
@@ -187,7 +189,7 @@ it('carries an all-seats level when pruning makes its existing votes sufficient'
     Approval::approve($request, $one);
 
     HeadOfDepartmentResolver::$heads = [$one];
-    Approval::resync($request, prune: true);
+    Approval::resync($request, user('Operator'), prune: true);
 
     expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
@@ -201,7 +203,7 @@ it('says nothing changed when nothing did', function (): void {
     $workflow = workflow([['approvers' => [['resolver' => HeadOfDepartmentResolver::class]]]]);
     $request = post()->submitForApproval($workflow, null, user());
 
-    expect(Approval::resync($request))->toBe([])
+    expect(Approval::resync($request, user('Operator')))->toBe([])
         ->and($request->actions()->where('action', 'resynced')->count())->toBe(0);
 
     Event::assertNotDispatched(ApproversResynced::class);
@@ -236,11 +238,32 @@ it('refuses to resync a closed request', function (): void {
 
     Approval::approve($request, $approver);
 
-    expect(fn () => Approval::resync($request))
+    expect(fn () => Approval::resync($request, user('Operator')))
         ->toThrow(AlreadyDecidedException::class, 'cannot be decided again');
 });
 
-it('resyncs through the artisan command', function (): void {
+it('resyncs through the artisan command and attributes the operator', function (): void {
+    $head = user('Head');
+    $operator = user('Operator');
+    HeadOfDepartmentResolver::$heads = [$head];
+
+    $workflow = workflow([['required_approvals' => 1, 'approvers' => [['resolver' => HeadOfDepartmentResolver::class]]]]);
+    $request = post()->submitForApproval($workflow, null, user());
+
+    HeadOfDepartmentResolver::$heads = [$head, user('Deputy')];
+
+    $this->artisan('approval:resync', [
+        'request' => $request->getAttributeValue('ulid'),
+        '--operator' => $operator->getMorphClass().':'.$operator->getKey(),
+    ])->assertSuccessful();
+
+    $resynced = $request->actions()->where('action', 'resynced')->sole();
+
+    expect($request->stages()->sole()->assignments()->count())->toBe(2)
+        ->and($resynced->actor?->is($operator))->toBeTrue();
+});
+
+it('refuses to resync without an attributable operator', function (): void {
     $head = user('Head');
     HeadOfDepartmentResolver::$heads = [$head];
 
@@ -250,13 +273,28 @@ it('resyncs through the artisan command', function (): void {
     HeadOfDepartmentResolver::$heads = [$head, user('Deputy')];
 
     $this->artisan('approval:resync', ['request' => $request->getAttributeValue('ulid')])
-        ->assertSuccessful();
+        ->expectsOutputToContain('An attributable operator is required.')
+        ->assertFailed();
 
-    expect($request->steps()->sole()->approverSlots()->count())->toBe(2);
+    expect($request->stages()->sole()->assignments()->count())->toBe(1);
+});
+
+it('reports an unresolvable operator rather than guessing', function (): void {
+    $head = user('Head');
+    HeadOfDepartmentResolver::$heads = [$head];
+
+    $workflow = workflow([['approvers' => [['resolver' => HeadOfDepartmentResolver::class]]]]);
+    $request = post()->submitForApproval($workflow, null, user());
+
+    $this->artisan('approval:resync', [
+        'request' => $request->getAttributeValue('ulid'),
+        '--operator' => '999999',
+    ])->assertFailed();
 });
 
 it('reports an unknown request rather than failing silently', function (): void {
-    $this->artisan('approval:resync', ['request' => 'nope'])->assertFailed();
+    $this->artisan('approval:resync', ['request' => 'nope', '--operator' => (string) user('Operator')->getKey()])
+        ->assertFailed();
 });
 
 it('leaves the request pending throughout', function (): void {
@@ -267,7 +305,30 @@ it('leaves the request pending throughout', function (): void {
     $request = post()->submitForApproval($workflow, null, user());
 
     HeadOfDepartmentResolver::$heads = [$head, user('Deputy')];
-    Approval::resync($request);
+    Approval::resync($request, user('Operator'));
 
     expect($request->refresh()->state)->toBe(RequestState::Pending);
+});
+
+it('notifies the added approver when the resync runs through the console', function (): void {
+    test()->rebootWith(['approval.notifications.enabled' => true]);
+    Notification::fake();
+
+    $head = user('Head');
+    $deputy = user('Deputy');
+    $operator = user('Operator');
+    HeadOfDepartmentResolver::$heads = [$head];
+
+    $workflow = workflow([['required_approvals' => 1, 'approvers' => [['resolver' => HeadOfDepartmentResolver::class]]]]);
+    $request = post()->submitForApproval($workflow, null, user());
+
+    HeadOfDepartmentResolver::$heads = [$head, $deputy];
+
+    $this->artisan('approval:resync', [
+        'request' => $request->getAttributeValue('ulid'),
+        '--operator' => $operator->getMorphClass().':'.$operator->getKey(),
+    ])->assertSuccessful();
+
+    Notification::assertSentTo($deputy, ApprovalAssignedNotification::class);
+    Notification::assertNotSentTo($head, ApprovalAssignedNotification::class);
 });

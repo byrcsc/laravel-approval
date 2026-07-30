@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\DB;
  * request and leaves the record as it is; the edit can be raised again as a
  * fresh request against current values.
  *
- * No re-approval is required for either. The levels already approved this
+ * No re-approval is required for either. The stages already approved this
  * change; what was in doubt was whether it still fit the record, and that is
  * the question being answered here.
  */

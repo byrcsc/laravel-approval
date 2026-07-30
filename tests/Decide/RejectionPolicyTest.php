@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Facades\Approval;
 
 it('keeps a two of three stage open after one rejection while approval remains reachable', function (): void {
@@ -19,7 +19,7 @@ it('keeps a two of three stage open after one rejection while approval remains r
     Approval::reject($request, $first, 'I disagree.');
 
     expect($request->refresh()->state)->toBe(RequestState::Pending)
-        ->and($request->steps()->sole()->state)->toBe(StepState::Active);
+        ->and($request->stages()->sole()->state)->toBe(StageStatus::Active);
 
     Approval::approve($request, $second);
     Approval::approve($request, $third);
@@ -66,14 +66,14 @@ it('preserves the snapshotted rejection policy for the request lifetime', functi
     ]]);
     $request = post()->submitForApproval($workflow, null, user('Requester'));
 
-    $workflow->levels()->sole()->forceFill([
+    $workflow->stages()->sole()->forceFill([
         'rejection_policy' => RejectionPolicy::ApprovalImpossible,
     ])->save();
 
     Approval::reject($request, $first, 'Vetoed under the snapshot.');
 
     expect($request->refresh()->state)->toBe(RequestState::Rejected)
-        ->and($request->steps()->sole()->rejection_policy)->toBe(RejectionPolicy::AnyRejectionVetoes);
+        ->and($request->stages()->sole()->rejection_policy)->toBe(RejectionPolicy::AnyRejectionVetoes);
 });
 
 it('applies approval impossible behavior to one of many and unanimous stages', function (): void {

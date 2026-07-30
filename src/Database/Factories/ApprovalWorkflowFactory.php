@@ -37,17 +37,17 @@ final class ApprovalWorkflowFactory extends Factory
         return $this->state(['active' => false]);
     }
 
-    public function withLevels(int $count = 1): self
+    public function withStages(int $count = 1): self
     {
         return $this->has(
-            ApprovalWorkflowLevelFactory::new()
+            ApprovalWorkflowStageFactory::new()
                 ->withApprovers()
                 ->count($count)
                 ->sequence(fn (Sequence $sequence): array => [
                     'sequence' => $sequence->index + 1,
-                    'name' => 'Level '.($sequence->index + 1),
+                    'name' => 'Stage '.($sequence->index + 1),
                 ]),
-            'levels',
+            'stages',
         );
     }
 }

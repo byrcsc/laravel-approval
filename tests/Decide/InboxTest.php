@@ -18,7 +18,7 @@ it('lists the requests waiting on a person', function (): void {
     expect(Approval::awaiting($approver)->pluck('id')->all())->toBe([$mine->getKey()]);
 });
 
-it('leaves a request off the list until the level is theirs', function (): void {
+it('leaves a request off the list until the stage is theirs', function (): void {
     $first = user('First');
     $second = user('Second');
 
@@ -37,7 +37,7 @@ it('leaves a request off the list until the level is theirs', function (): void 
         ->and(Approval::awaiting($first)->count())->toBe(0);
 });
 
-it('drops a request off the list once the person has voted', function (): void {
+it('drops a request off the list once the person has decided', function (): void {
     $one = user('One');
     $two = user('Two');
 
@@ -62,7 +62,7 @@ it('drops closed requests off the list entirely', function (): void {
     expect(Approval::awaiting($approver)->count())->toBe(0);
 });
 
-it('hands a delegated seat to the delegate and takes it from the original', function (): void {
+it('hands a delegated assignment to the delegate and takes it from the original', function (): void {
     $approver = user('Approver');
     $delegate = user('Delegate');
 
@@ -71,7 +71,7 @@ it('hands a delegated seat to the delegate and takes it from the original', func
 
     // Written directly: delegation gets its own action in a later phase, and
     // the inbox query should already read the column correctly.
-    $request->steps()->sole()->approverSlots()->sole()->forceFill([
+    $request->stages()->sole()->assignments()->sole()->forceFill([
         'delegated_to_type' => $delegate->getMorphClass(),
         'delegated_to_id' => $delegate->getKey(),
     ])->save();

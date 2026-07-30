@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Exceptions;
 
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
-use ByRcsc\LaravelApproval\Contracts\LevelCondition;
+use ByRcsc\LaravelApproval\Contracts\StageCondition;
 
 /**
  * A workflow that cannot produce a decision. Every one of these is raised at
- * submit time, before a single row is written: a request that stalls at level
+ * submit time, before a single row is written: a request that stalls at stage
  * three because nobody was assigned to it is far more expensive to discover
  * than one that never started.
  */
@@ -20,21 +20,16 @@ final class InvalidWorkflowException extends ApprovalException
         return new self("The approval workflow [{$slug}] is not active.");
     }
 
-    public static function hasNoLevels(string $slug): self
+    public static function hasNoStages(string $slug): self
     {
-        return new self("The approval workflow [{$slug}] has no levels, so there is nothing to approve.");
+        return new self("The approval workflow [{$slug}] has no stages, so there is nothing to approve.");
     }
 
-    public static function levelHasNoApprovers(string $slug, int $sequence): self
+    public static function stageHasNoApprovers(string $slug, int $sequence): self
     {
         return new self(
-            "Level {$sequence} of the approval workflow [{$slug}] resolved to no approvers, so the request could never advance past it."
+            "Stage {$sequence} of the approval workflow [{$slug}] resolved to no approvers, so the request could never advance past it."
         );
-    }
-
-    public static function quorumUnreachable(string $slug, int $sequence, int $required, int $available): self
-    {
-        return self::approvalRuleUnreachable($slug, $sequence, $required, $available);
     }
 
     public static function approvalRuleUnreachable(string $slug, int $sequence, int $required, int $available): self
@@ -42,11 +37,6 @@ final class InvalidWorkflowException extends ApprovalException
         return new self(
             "Stage {$sequence} of the approval workflow [{$slug}] has an invalid approval rule: the approval rule requires {$required} approvals but only {$available} assignments were resolved."
         );
-    }
-
-    public static function quorumNotPositive(string $slug, int $sequence, int $required): self
-    {
-        return self::approvalRuleNotPositive($slug, $sequence, $required);
     }
 
     public static function approvalRuleNotPositive(string $slug, int $sequence, int $required): self
@@ -63,7 +53,7 @@ final class InvalidWorkflowException extends ApprovalException
         );
     }
 
-    public static function livingQuorumUnreachable(string $slug, int $sequence, int $required, int $living): self
+    public static function livingHoldersBelowRequired(string $slug, int $sequence, int $required, int $living): self
     {
         return new self(
             "Stage {$sequence} of the approval workflow [{$slug}] requires {$required} approvals but has only {$living} available assignments."
@@ -73,14 +63,14 @@ final class InvalidWorkflowException extends ApprovalException
     public static function ambiguousApprover(string $slug, int $sequence): self
     {
         return new self(
-            "Level {$sequence} of the approval workflow [{$slug}] has an approver entry that sets both a concrete approver and a resolver. Set exactly one."
+            "Stage {$sequence} of the approval workflow [{$slug}] has an approver entry that sets both a concrete approver and a resolver. Set exactly one."
         );
     }
 
     public static function emptyApprover(string $slug, int $sequence): self
     {
         return new self(
-            "Level {$sequence} of the approval workflow [{$slug}] has an approver entry that sets neither a concrete approver nor a resolver. Set exactly one."
+            "Stage {$sequence} of the approval workflow [{$slug}] has an approver entry that sets neither a concrete approver nor a resolver. Set exactly one."
         );
     }
 
@@ -91,21 +81,21 @@ final class InvalidWorkflowException extends ApprovalException
         int|string $id,
     ): self {
         return new self(
-            "Level {$sequence} of the approval workflow [{$slug}] points at an approver that does not exist [{$type}:{$id}]."
+            "Stage {$sequence} of the approval workflow [{$slug}] points at an approver that does not exist [{$type}:{$id}]."
         );
     }
 
     public static function unknownResolver(string $slug, int $sequence, string $resolver): self
     {
         return new self(
-            "Level {$sequence} of the approval workflow [{$slug}] names the resolver [{$resolver}], which does not exist."
+            "Stage {$sequence} of the approval workflow [{$slug}] names the resolver [{$resolver}], which does not exist."
         );
     }
 
     public static function notAResolver(string $slug, int $sequence, string $resolver): self
     {
         return new self(sprintf(
-            'Level %d of the approval workflow [%s] names the resolver [%s], which does not implement %s.',
+            'Stage %d of the approval workflow [%s] names the resolver [%s], which does not implement %s.',
             $sequence,
             $slug,
             $resolver,
@@ -116,7 +106,7 @@ final class InvalidWorkflowException extends ApprovalException
     public static function escalationNeedsResolver(int $sequence): self
     {
         return new self(
-            "Level {$sequence} escalates by bringing somebody in, but its escalation_config names no resolver to find them."
+            "Stage {$sequence} escalates by bringing somebody in, but its escalation_config names no resolver to find them."
         );
     }
 
@@ -127,24 +117,24 @@ final class InvalidWorkflowException extends ApprovalException
 
     public static function resolverReturnedUnsavedModel(string $resolver): self
     {
-        return new self("The approver resolver [{$resolver}] returned a model that has not been saved, so it cannot hold an approver slot.");
+        return new self("The approver resolver [{$resolver}] returned a model that has not been saved, so it cannot hold an approval assignment.");
     }
 
     public static function unknownCondition(string $slug, int $sequence, string $condition): self
     {
         return new self(
-            "Level {$sequence} of the approval workflow [{$slug}] names the condition [{$condition}], which does not exist."
+            "Stage {$sequence} of the approval workflow [{$slug}] names the condition [{$condition}], which does not exist."
         );
     }
 
     public static function notACondition(string $slug, int $sequence, string $condition): self
     {
         return new self(sprintf(
-            'Level %d of the approval workflow [%s] names the condition [%s], which does not implement %s.',
+            'Stage %d of the approval workflow [%s] names the condition [%s], which does not implement %s.',
             $sequence,
             $slug,
             $condition,
-            LevelCondition::class,
+            StageCondition::class,
         ));
     }
 }

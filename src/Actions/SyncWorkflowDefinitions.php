@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
-use ByRcsc\LaravelApproval\Definitions\LevelDefinition;
+use ByRcsc\LaravelApproval\Definitions\StageDefinition;
 use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
 use ByRcsc\LaravelApproval\Definitions\WorkflowDefinition;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowDefinitionException;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevelApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStage;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStageApprover;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use ByRcsc\LaravelApproval\Support\CanonicalJson;
 use Illuminate\Database\Eloquent\Model;
@@ -33,7 +33,7 @@ final class SyncWorkflowDefinitions
 
         foreach ($normalized as $definition) {
             $workflow = ApprovalWorkflow::withTrashed()
-                ->with(['levels.approvers'])
+                ->with(['stages.approvers'])
                 ->where('slug', $definition->slug)
                 ->first();
 
@@ -41,11 +41,11 @@ final class SyncWorkflowDefinitions
                 $created[] = "workflow:{$definition->slug}";
                 $plans[] = fn (): ApprovalWorkflow => $this->create($definition);
 
-                foreach ($definition->levels as $level) {
-                    $created[] = "level:{$definition->slug}:{$level->sequence}";
+                foreach ($definition->stages as $stage) {
+                    $created[] = "stage:{$definition->slug}:{$stage->sequence}";
 
-                    foreach ($level->approvers as $approver) {
-                        $created[] = "approver:{$definition->slug}:{$level->sequence}:{$approver->key()}";
+                    foreach ($stage->approvers as $approver) {
+                        $created[] = "approver:{$definition->slug}:{$stage->sequence}:{$approver->key()}";
                     }
                 }
 
@@ -120,21 +120,21 @@ final class SyncWorkflowDefinitions
         $created = [];
         $updated = [];
         $refused = [];
-        $existingLevels = $workflow->levels->keyBy('sequence');
-        $definedLevels = collect($definition->levels)->keyBy('sequence');
+        $existingLevels = $workflow->stages->keyBy('sequence');
+        $definedLevels = collect($definition->stages)->keyBy('sequence');
 
         foreach ($existingLevels as $sequence => $existing) {
             if (! $definedLevels->has($sequence)) {
-                $refused[] = "workflow:{$definition->slug}: removing level {$sequence} is not supported";
+                $refused[] = "workflow:{$definition->slug}: removing stage {$sequence} is not supported";
             }
 
-            $moved = collect($definition->levels)->first(
-                fn (LevelDefinition $level): bool => $level->name === Attributes::string($existing, 'name')
-                    && $level->sequence !== (int) $sequence,
+            $moved = collect($definition->stages)->first(
+                fn (StageDefinition $stage): bool => $stage->name === Attributes::string($existing, 'name')
+                    && $stage->sequence !== (int) $sequence,
             );
 
             if ($moved !== null) {
-                $refused[] = "workflow:{$definition->slug}: moving level {$sequence} is not supported";
+                $refused[] = "workflow:{$definition->slug}: moving stage {$sequence} is not supported";
             }
         }
 
@@ -146,36 +146,36 @@ final class SyncWorkflowDefinitions
             $updated[] = "workflow:{$definition->slug}";
         }
 
-        foreach ($definition->levels as $level) {
-            /** @var ApprovalWorkflowLevel|null $existing */
-            $existing = $existingLevels->get($level->sequence);
+        foreach ($definition->stages as $stage) {
+            /** @var ApprovalWorkflowStage|null $existing */
+            $existing = $existingLevels->get($stage->sequence);
 
             if ($existing === null) {
-                $created[] = "level:{$definition->slug}:{$level->sequence}";
+                $created[] = "stage:{$definition->slug}:{$stage->sequence}";
 
-                foreach ($level->approvers as $approver) {
-                    $created[] = "approver:{$definition->slug}:{$level->sequence}:{$approver->key()}";
+                foreach ($stage->approvers as $approver) {
+                    $created[] = "approver:{$definition->slug}:{$stage->sequence}:{$approver->key()}";
                 }
 
                 continue;
             }
 
-            if ($this->different($existing, $level->attributes())) {
-                $updated[] = "level:{$definition->slug}:{$level->sequence}";
+            if ($this->different($existing, $stage->attributes())) {
+                $updated[] = "stage:{$definition->slug}:{$stage->sequence}";
             }
 
-            $definedApprovers = collect($level->approvers)->keyBy->key();
-            $existingApprovers = $existing->approvers->keyBy(fn (ApprovalWorkflowLevelApprover $approver): string => $this->approverKey($approver));
+            $definedApprovers = collect($stage->approvers)->keyBy->key();
+            $existingApprovers = $existing->approvers->keyBy(fn (ApprovalWorkflowStageApprover $approver): string => $this->approverKey($approver));
 
             foreach ($existingApprovers as $key => $approver) {
                 if (! $definedApprovers->has($key)) {
-                    $refused[] = "workflow:{$definition->slug}: removing approver {$key} from level {$level->sequence} is not supported";
+                    $refused[] = "workflow:{$definition->slug}: removing approver {$key} from stage {$stage->sequence} is not supported";
                 }
             }
 
             foreach ($definedApprovers as $key => $approver) {
                 if (! $existingApprovers->has($key)) {
-                    $created[] = "approver:{$definition->slug}:{$level->sequence}:{$key}";
+                    $created[] = "approver:{$definition->slug}:{$stage->sequence}:{$key}";
                 }
             }
         }
@@ -187,8 +187,8 @@ final class SyncWorkflowDefinitions
     {
         $workflow = ApprovalWorkflow::create($definition->attributes());
 
-        foreach ($definition->levels as $level) {
-            $this->createLevel($workflow, $level);
+        foreach ($definition->stages as $stage) {
+            $this->createLevel($workflow, $stage);
         }
 
         return $workflow;
@@ -202,22 +202,22 @@ final class SyncWorkflowDefinitions
 
         $workflow->forceFill($definition->attributes())->save();
 
-        foreach ($definition->levels as $level) {
-            /** @var ApprovalWorkflowLevel|null $existing */
-            $existing = $workflow->levels()->where('sequence', $level->sequence)->first();
+        foreach ($definition->stages as $stage) {
+            /** @var ApprovalWorkflowStage|null $existing */
+            $existing = $workflow->stages()->where('sequence', $stage->sequence)->first();
 
             if ($existing === null) {
-                $this->createLevel($workflow, $level);
+                $this->createLevel($workflow, $stage);
 
                 continue;
             }
 
-            $existing->forceFill($level->attributes())->save();
+            $existing->forceFill($stage->attributes())->save();
             $keys = $existing->approvers->mapWithKeys(
-                fn (ApprovalWorkflowLevelApprover $approver): array => [$this->approverKey($approver) => true],
+                fn (ApprovalWorkflowStageApprover $approver): array => [$this->approverKey($approver) => true],
             );
 
-            foreach ($level->approvers as $approver) {
+            foreach ($stage->approvers as $approver) {
                 if (! $keys->has($approver->key())) {
                     $existing->approvers()->create($approver->attributes());
                 }
@@ -227,16 +227,16 @@ final class SyncWorkflowDefinitions
         return $workflow->refresh();
     }
 
-    private function createLevel(ApprovalWorkflow $workflow, LevelDefinition $definition): ApprovalWorkflowLevel
+    private function createLevel(ApprovalWorkflow $workflow, StageDefinition $definition): ApprovalWorkflowStage
     {
-        /** @var ApprovalWorkflowLevel $level */
-        $level = $workflow->levels()->create($definition->attributes());
+        /** @var ApprovalWorkflowStage $stage */
+        $stage = $workflow->stages()->create($definition->attributes());
 
         foreach ($definition->approvers as $approver) {
-            $level->approvers()->create($approver->attributes());
+            $stage->approvers()->create($approver->attributes());
         }
 
-        return $level;
+        return $stage;
     }
 
     /**
@@ -253,7 +253,7 @@ final class SyncWorkflowDefinitions
         return false;
     }
 
-    private function approverKey(ApprovalWorkflowLevelApprover $approver): string
+    private function approverKey(ApprovalWorkflowStageApprover $approver): string
     {
         $resolver = Attributes::nullableString($approver, 'resolver');
 

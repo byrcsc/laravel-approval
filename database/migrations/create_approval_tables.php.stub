@@ -49,13 +49,13 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        Schema::create($tables['levels'], function (Blueprint $table) use ($tables) {
+        Schema::create($tables['workflow_stages'], function (Blueprint $table) use ($tables) {
             $table->id();
             $table->foreignId('workflow_id')->constrained($tables['workflows'])->cascadeOnDelete();
             $table->unsignedInteger('sequence');
             $table->string('name');
 
-            // The quorum. Null means all of this level's approvers.
+            // The approval rule. Null means all of this stage's approvers.
             $table->unsignedInteger('required_approvals')->nullable();
             $table->string('rejection_policy')->default('approval_impossible');
 
@@ -67,18 +67,18 @@ return new class extends Migration
             $table->json('condition_config')->nullable();
             $table->timestamps();
 
-            // Levels are ordered, and two levels cannot share a position.
+            // Stages are ordered, and two stages cannot share a position.
             $table->unique(['workflow_id', 'sequence']);
         });
 
-        Schema::create($tables['level_approvers'], function (Blueprint $table) use ($tables) {
+        Schema::create($tables['workflow_stage_approvers'], function (Blueprint $table) use ($tables) {
             $table->id();
-            $table->foreignId('level_id')->index()->constrained($tables['levels'])->cascadeOnDelete();
+            $table->foreignId('stage_id')->index()->constrained($tables['workflow_stages'])->cascadeOnDelete();
 
             // Exactly one of these is set. The engine enforces it, since no
             // portable database constraint expresses it. The index is named
             // by hand: the generated name runs past MySQL's 64-character cap.
-            $this->identityMorphs($table, 'approver', true, $tables['level_approvers'].'_approver_idx');
+            $this->identityMorphs($table, 'approver', true, $tables['workflow_stage_approvers'].'_approver_idx');
             $table->string('resolver')->nullable();
             $table->json('resolver_config')->nullable();
 
@@ -104,7 +104,7 @@ return new class extends Migration
             $table->foreignId('workflow_id')->nullable()->index()->constrained($tables['workflows'])->nullOnDelete();
 
             $table->string('state')->default('pending');
-            $table->unsignedInteger('current_level_sequence')->default(1);
+            $table->unsignedInteger('current_stage_sequence')->default(1);
 
             // The draft, and the values it was changed from - the second is
             // what the stale check reads. Both null when the record itself is
@@ -134,11 +134,11 @@ return new class extends Migration
             $table->index(['approvable_type', 'approvable_id', 'state']);
         });
 
-        Schema::create($tables['steps'], function (Blueprint $table) use ($tables) {
+        Schema::create($tables['request_stages'], function (Blueprint $table) use ($tables) {
             $table->id();
             $table->foreignId('request_id')->constrained($tables['requests'])->cascadeOnDelete();
 
-            // Copied from the workflow level at submit time; editing the
+            // Copied from the workflow stage at submit time; editing the
             // workflow afterwards does not reach in here.
             $table->unsignedInteger('sequence');
             $table->string('name');
@@ -152,12 +152,12 @@ return new class extends Migration
             $table->json('condition_config')->nullable();
             $table->boolean('condition_result')->default(true);
 
-            // Computed when the step becomes active: the clock only starts
-            // once the level is somebody's turn.
+            // Computed when the stage becomes active: the clock only starts
+            // once the stage is somebody's turn.
             $table->timestamp('deadline_at')->nullable();
 
             // Checked before escalating, so a command on a one-minute schedule
-            // still escalates each step exactly once.
+            // still escalates each stage exactly once.
             $table->timestamp('escalated_at')->nullable();
             $table->timestamp('last_reminded_at')->nullable();
             $table->timestamp('stranded_at')->nullable();
@@ -169,18 +169,18 @@ return new class extends Migration
             $table->index(['request_id', 'state']);
         });
 
-        Schema::create($tables['step_approvers'], function (Blueprint $table) use ($tables) {
+        Schema::create($tables['assignments'], function (Blueprint $table) use ($tables) {
             $table->id();
-            $table->foreignId('step_id')->index()->constrained($tables['steps'])->cascadeOnDelete();
+            $table->foreignId('stage_id')->index()->constrained($tables['request_stages'])->cascadeOnDelete();
 
             // Materialized at submit time: concrete approvers copied across,
             // resolver-backed ones run and expanded.
             $this->identityMorphs($table, 'approver');
 
-            // Who may act on the slot instead. The original approver stays on
+            // Who may act on the assignment instead. The original approver stays on
             // the row: who was asked is part of the record. The index is named
             // by hand: the generated name runs past MySQL's 64-character cap.
-            $this->identityMorphs($table, 'delegated_to', true, $tables['step_approvers'].'_delegated_to_idx');
+            $this->identityMorphs($table, 'delegated_to', true, $tables['assignments'].'_delegated_to_idx');
 
             $table->string('source')->default('assigned');
             $table->timestamps();
@@ -196,12 +196,12 @@ return new class extends Migration
             // done on purpose.
             $table->foreignId('request_id')->index()->constrained($tables['requests'])->restrictOnDelete();
 
-            // Nulled rather than cascaded for the same reason: losing a step
+            // Nulled rather than cascaded for the same reason: losing a stage
             // must not erase what people did on it. A nulled reference also
             // breaks that line's hash, so the loss is visible to `approval:verify`.
             // Indexed explicitly: MySQL indexes a foreign key on its own,
             // Postgres does not.
-            $table->foreignId('step_id')->nullable()->index()->constrained($tables['steps'])->nullOnDelete();
+            $table->foreignId('stage_id')->nullable()->index()->constrained($tables['request_stages'])->nullOnDelete();
 
             // Null for what the system did on nobody's behalf.
             $this->identityMorphs($table, 'actor', true);
@@ -269,7 +269,7 @@ return new class extends Migration
 
         // Reverse creation order, so nothing is dropped while another table
         // still points at it.
-        foreach (['attachments', 'actions', 'step_approvers', 'steps', 'requests', 'level_approvers', 'levels', 'workflows'] as $key) {
+        foreach (['attachments', 'actions', 'assignments', 'request_stages', 'requests', 'workflow_stage_approvers', 'workflow_stages', 'workflows'] as $key) {
             Schema::dropIfExists($tables[$key]);
         }
     }
@@ -281,11 +281,11 @@ return new class extends Migration
     {
         $defaults = [
             'workflows' => 'approval_workflows',
-            'levels' => 'approval_workflow_levels',
-            'level_approvers' => 'approval_workflow_level_approvers',
+            'workflow_stages' => 'approval_workflow_stages',
+            'workflow_stage_approvers' => 'approval_workflow_stage_approvers',
             'requests' => 'approval_requests',
-            'steps' => 'approval_request_steps',
-            'step_approvers' => 'approval_request_step_approvers',
+            'request_stages' => 'approval_request_stages',
+            'assignments' => 'approval_request_assignments',
             'actions' => 'approval_actions',
             'attachments' => 'approval_attachments',
         ];

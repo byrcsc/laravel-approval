@@ -6,7 +6,7 @@ use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStage;
 use ByRcsc\LaravelApproval\Support\CanonicalJson;
 use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use ByRcsc\LaravelApproval\Tests\Stubs\Invoice;
@@ -47,16 +47,16 @@ function canonical(mixed $value): mixed
 }
 
 /**
- * A workflow, built from a list of level specs.
+ * A workflow, built from a list of stage specs.
  *
- * Alongside the level's own columns, a spec may carry `approvers` (models, or
+ * Alongside the stage's own columns, a spec may carry `approvers` (models, or
  * `['resolver' => ..., 'resolver_config' => [...]]` entries) which become that
- * level's approver rows.
+ * stage's approver rows.
  *
- * @param  array<int, array<string, mixed>>  $levels
+ * @param  array<int, array<string, mixed>>  $stages
  * @param  array<string, mixed>  $attributes
  */
-function workflow(array $levels = [], array $attributes = []): ApprovalWorkflow
+function workflow(array $stages = [], array $attributes = []): ApprovalWorkflow
 {
     $workflow = ApprovalWorkflow::create(array_merge([
         'name' => 'Expense approval',
@@ -66,17 +66,17 @@ function workflow(array $levels = [], array $attributes = []): ApprovalWorkflow
 
     $sequence = 1;
 
-    foreach ($levels as $level) {
-        $approvers = $level['approvers'] ?? [];
-        unset($level['approvers']);
+    foreach ($stages as $stage) {
+        $approvers = $stage['approvers'] ?? [];
+        unset($stage['approvers']);
 
-        $created = $workflow->levels()->create(array_merge([
+        $created = $workflow->stages()->create(array_merge([
             'sequence' => $sequence++,
             'name' => 'Level '.($sequence - 1),
             'required_approvals' => 1,
-        ], $level));
+        ], $stage));
 
-        assert($created instanceof ApprovalWorkflowLevel);
+        assert($created instanceof ApprovalWorkflowStage);
         assert(is_array($approvers));
 
         foreach ($approvers as $approver) {
@@ -90,9 +90,9 @@ function workflow(array $levels = [], array $attributes = []): ApprovalWorkflow
 /**
  * @param  Model|array<string, mixed>  $approver
  */
-function approverRow(ApprovalWorkflowLevel $level, Model|array $approver): void
+function approverRow(ApprovalWorkflowStage $stage, Model|array $approver): void
 {
-    $level->approvers()->create($approver instanceof Model
+    $stage->approvers()->create($approver instanceof Model
         ? ['approver_type' => $approver->getMorphClass(), 'approver_id' => $approver->getKey()]
         : $approver);
 }
@@ -182,23 +182,23 @@ function approvalRequest(?Post $post = null, ?User $submitter = null, array $att
 }
 
 /**
- * A one-level request with a 60 minute SLA and the given policy.
+ * A one-stage request with a 60 minute SLA and the given policy.
  *
- * A null `$requiredApprovals` is the all-of-them quorum, which is the case
+ * A null `$requiredApprovals` is the all-of-them required approvals, which is the case
  * escalation has to be careful with.
  *
  * @param  array<string, mixed>  $escalationConfig
  */
 function overdueRequest(
-    EscalationAction $strategy = EscalationAction::Notify,
+    EscalationAction $strategy = EscalationAction::RecordOnly,
     array $escalationConfig = [],
     ?int $requiredApprovals = 1,
     int $approvers = 1,
 ): ApprovalRequest {
-    $seats = [];
+    $assignments = [];
 
     for ($i = 0; $i < $approvers; $i++) {
-        $seats[] = user('Approver '.($i + 1));
+        $assignments[] = user('Approver '.($i + 1));
     }
 
     $workflow = workflow([[
@@ -206,7 +206,7 @@ function overdueRequest(
         'required_approvals' => $requiredApprovals,
         'escalation_strategy' => $strategy,
         'escalation_config' => $escalationConfig === [] ? null : $escalationConfig,
-        'approvers' => $seats,
+        'approvers' => $assignments,
     ]]);
 
     return post()->submitForApproval($workflow, null, user('Author'));

@@ -8,7 +8,7 @@ use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Escalation\AutoDecideStrategy;
 use ByRcsc\LaravelApproval\Escalation\EscalateStrategy;
-use ByRcsc\LaravelApproval\Escalation\NotifyStrategy;
+use ByRcsc\LaravelApproval\Escalation\RecordOnlyStrategy;
 
 /**
  * Which class handles which overdue case.
@@ -23,7 +23,7 @@ final class EscalationStrategies
      * @var array<string, class-string<EscalationStrategy>>
      */
     private const DEFAULTS = [
-        'notify' => NotifyStrategy::class,
+        'record_only' => RecordOnlyStrategy::class,
         'escalate' => EscalateStrategy::class,
         'auto_approve' => AutoDecideStrategy::class,
         'auto_reject' => AutoDecideStrategy::class,

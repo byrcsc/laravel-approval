@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
-use ByRcsc\LaravelApproval\Data\ApproverSlot;
-use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\AssignmentSnapshot;
+use ByRcsc\LaravelApproval\Data\StageHealth;
 use ByRcsc\LaravelApproval\Data\StageProgress;
-use ByRcsc\LaravelApproval\Data\StepHealth;
+use ByRcsc\LaravelApproval\Data\StageSnapshot;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\ApproversResynced;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowException;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStage;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -33,8 +33,8 @@ use Illuminate\Support\Facades\Event;
  * reorganisation has left half a department's pending requests pointing at
  * people who no longer approve anything.
  *
- * It only touches steps that have not been decided, and never removes a seat
- * that has voted or been delegated: both are records of something a person did,
+ * It only touches stages that have not been decided, and never removes an assignment
+ * that has decided or been delegated: both are records of something a person did,
  * and a resync is a correction to the future, not to the past.
  *
  * Pruning is off by default. Adding the people who should now be asked is
@@ -44,16 +44,17 @@ use Illuminate\Support\Facades\Event;
 final class ResyncRequestApprovers
 {
     public function __construct(
-        private readonly ResolveLevelApprovers $resolveApprovers,
+        private readonly ResolveStageApprovers $resolveApprovers,
         private readonly RecordAction $recordAction,
-        private readonly CarryStep $carryStep,
+        private readonly CompleteStage $completeStage,
     ) {}
 
     /**
-     * @param  bool  $prune  also drop seats the workflow no longer names
-     * @return array<int, array{added: list<string>, removed: list<string>}> keyed by step sequence
+     * @param  Model  $actor  the operator this rebuild is attributed to
+     * @param  bool  $prune  also drop assignments the workflow no longer names
+     * @return array<int, array{added: list<string>, removed: list<string>}> keyed by stage sequence
      */
-    public function __invoke(ApprovalRequest $request, ?Model $actor = null, bool $prune = false): array
+    public function __invoke(ApprovalRequest $request, Model $actor, bool $prune = false): array
     {
         return DB::transaction(function () use ($request, $actor, $prune): array {
             $request->newQuery()->whereKey($request->getKey())->lockForUpdate()->get();
@@ -70,32 +71,33 @@ final class ResyncRequestApprovers
             $submitter = $request->submitter;
 
             if (! $approvable instanceof Model || ! $submitter instanceof Model) {
-                throw AlreadyDecidedException::retryHasNoSubject($request);
+                throw AlreadyDecidedException::hasNoSubject($request);
             }
 
             $slug = Attributes::string($workflow, 'slug');
 
-            /** @var array<int, ApprovalWorkflowLevel> $levels */
-            $levels = $workflow->levels()
-                ->with(ResolveLevelApprovers::ordered())
+            /** @var array<int, ApprovalWorkflowStage> $workflowStages */
+            $workflowStages = $workflow->stages()
+                ->with(ResolveStageApprovers::ordered())
                 ->get()
-                ->keyBy(fn (ApprovalWorkflowLevel $level): int => Attributes::int($level, 'sequence'))
+                ->keyBy(fn (ApprovalWorkflowStage $stage): int => Attributes::int($stage, 'sequence'))
                 ->all();
 
             $changes = [];
+            $created = [];
 
-            foreach ($this->openSteps($request) as $step) {
-                $sequence = Attributes::int($step, 'sequence');
-                $level = $levels[$sequence] ?? null;
+            foreach ($this->openStages($request) as $stage) {
+                $sequence = Attributes::int($stage, 'sequence');
+                $workflowStage = $workflowStages[$sequence] ?? null;
 
-                if ($level === null) {
-                    // The level was deleted from the workflow. The step keeps
-                    // its own snapshot and runs as it always would have; there
-                    // is nothing current to resync it against.
+                if ($workflowStage === null) {
+                    // The stage was deleted from the workflow. The request
+                    // stage keeps its own snapshot and runs as it always would
+                    // have; there is nothing current to resync it against.
                     continue;
                 }
 
-                $change = $this->resyncStep($step, $level, $slug, $approvable, $submitter, $prune);
+                $change = $this->resyncStage($stage, $workflowStage, $slug, $approvable, $submitter, $prune, $created);
 
                 if ($change['added'] !== [] || $change['removed'] !== []) {
                     $changes[$sequence] = $change;
@@ -107,12 +109,12 @@ final class ResyncRequestApprovers
                     request: $request,
                     action: ActionType::Resynced,
                     actor: $actor,
-                    metadata: ['steps' => $changes, 'pruned' => $prune],
+                    metadata: ['stages' => $changes, 'pruned' => $prune],
                 );
 
-                Event::dispatch(new ApproversResynced($request, $changes, $actor));
+                Event::dispatch(new ApproversResynced($request, $changes, $actor, $created));
 
-                $this->carryActiveStepIfSatisfied($request);
+                $this->completeActiveStageIfSatisfied($request);
             }
 
             return $changes;
@@ -120,85 +122,87 @@ final class ResyncRequestApprovers
     }
 
     /**
+     * @param  list<ApprovalRequestAssignment>  $created  collects the assignment rows this resync writes
      * @return array{added: list<string>, removed: list<string>}
      */
-    private function resyncStep(
-        ApprovalRequestStep $step,
-        ApprovalWorkflowLevel $level,
+    private function resyncStage(
+        ApprovalRequestStage $stage,
+        ApprovalWorkflowStage $workflowStage,
         string $slug,
         Model $approvable,
         Model $submitter,
         bool $prune,
+        array &$created,
     ): array {
-        $snapshot = LevelSnapshot::fromStep($step);
-        $wanted = ($this->resolveApprovers)($level, $snapshot, $approvable, $submitter, $slug);
+        $snapshot = StageSnapshot::fromRequestStage($stage);
+        $wanted = ($this->resolveApprovers)($workflowStage, $snapshot, $approvable, $submitter, $slug);
 
-        $health = StepHealth::inspect($step);
-        $progress = StageProgress::for($step);
+        $health = StageHealth::inspect($stage);
+        $progress = StageProgress::for($stage);
 
-        /** @var array<string, ApprovalRequestStepApprover> $held */
+        /** @var array<string, ApprovalRequestAssignment> $held */
         $held = [];
         $represented = $progress->representedApproverIdentities();
 
-        foreach ($step->approverSlots()->orderBy('id')->get() as $seat) {
-            $seatKey = $this->seatKey($seat);
-            $held[$seatKey] = $seat;
+        foreach ($stage->assignments()->orderBy('id')->get() as $assignment) {
+            $assignmentKey = $this->assignmentKey($assignment);
+            $held[$assignmentKey] = $assignment;
         }
 
         $added = [];
 
-        foreach ($wanted as $slot) {
-            if (isset($represented[$slot->key()])) {
+        foreach ($wanted as $assignment) {
+            if (isset($represented[$assignment->key()])) {
                 continue;
             }
 
-            $step->approverSlots()->create(
-                array_merge($slot->toAttributes(), ['source' => ApproverSource::Resynced]),
+            $created[] = $stage->assignments()->create(
+                array_merge($assignment->toAttributes(), ['source' => ApproverSource::Resynced]),
             );
 
-            $added[] = $slot->key();
-            $represented[$slot->key()] = true;
+            $added[] = $assignment->key();
+            $represented[$assignment->key()] = true;
         }
 
         $removed = $prune
-            ? $this->prune($step, $held, $wanted, $progress)
+            ? $this->prune($stage, $held, $wanted, $progress)
             : [];
 
-        $this->guardQuorum($step, $snapshot, $slug, $health);
+        $this->guardApprovalRule($stage, $snapshot, $slug, $health);
 
         return ['added' => $added, 'removed' => $removed];
     }
 
     /**
-     * @param  array<string, ApprovalRequestStepApprover>  $held
-     * @param  list<ApproverSlot>  $wanted
+     * @param  array<string, ApprovalRequestAssignment>  $held
+     * @param  list<AssignmentSnapshot>  $wanted
      * @return list<string>
      */
     private function prune(
-        ApprovalRequestStep $step,
+        ApprovalRequestStage $stage,
         array $held,
         array $wanted,
         StageProgress $progress,
     ): array {
         $keep = [];
 
-        foreach ($wanted as $slot) {
-            $keep[$slot->key()] = true;
+        foreach ($wanted as $assignment) {
+            $keep[$assignment->key()] = true;
         }
 
         $removed = [];
 
-        foreach ($held as $key => $seat) {
+        foreach ($held as $key => $assignment) {
             if (isset($keep[$key])) {
                 continue;
             }
 
-            // A cast vote and a handed-over seat are both things somebody did.
-            if ($progress->hasDecision($seat) || $seat->getAttributeValue('delegated_to_id') !== null) {
+            // A cast decision and a handed-over assignment are both things somebody did.
+            if ($progress->hasDecision($assignment) || $assignment->getAttributeValue('delegated_to_id') !== null) {
                 continue;
             }
 
-            $seat->delete();
+            $assignment->delete();
 
             $removed[] = $key;
         }
@@ -207,61 +211,61 @@ final class ResyncRequestApprovers
     }
 
     /**
-     * A resync that leaves a level unable to reach its quorum has stranded the
+     * A resync that leaves a stage unable to reach its required approvals has stranded the
      * request, so it fails and the transaction takes the changes with it.
      */
-    private function guardQuorum(
-        ApprovalRequestStep $step,
-        LevelSnapshot $snapshot,
+    private function guardApprovalRule(
+        ApprovalRequestStage $stage,
+        StageSnapshot $snapshot,
         string $slug,
-        StepHealth $before,
+        StageHealth $before,
     ): void {
-        $seats = $step->approverSlots()->count();
+        $assignments = $stage->assignments()->count();
 
-        if ($seats === 0) {
-            throw InvalidWorkflowException::levelHasNoApprovers($slug, $snapshot->sequence);
+        if ($assignments === 0) {
+            throw InvalidWorkflowException::stageHasNoApprovers($slug, $snapshot->sequence);
         }
 
         $required = $snapshot->requiredApprovals;
 
-        if ($required !== null && $required > $seats) {
-            throw InvalidWorkflowException::quorumUnreachable($slug, $snapshot->sequence, $required, $seats);
+        if ($required !== null && $required > $assignments) {
+            throw InvalidWorkflowException::approvalRuleUnreachable($slug, $snapshot->sequence, $required, $assignments);
         }
 
-        StepHealth::assertNotWorsened($step, $slug, $before);
+        StageHealth::assertNotWorsened($stage, $slug, $before);
     }
 
     /**
-     * @return iterable<int, ApprovalRequestStep>
+     * @return iterable<int, ApprovalRequestStage>
      */
-    private function openSteps(ApprovalRequest $request): iterable
+    private function openStages(ApprovalRequest $request): iterable
     {
-        /** @var iterable<int, ApprovalRequestStep> */
-        return $request->steps()
-            ->whereIn('state', [StepState::Active->value, StepState::Queued->value])
+        /** @var iterable<int, ApprovalRequestStage> */
+        return $request->stages()
+            ->whereIn('state', [StageStatus::Active->value, StageStatus::Queued->value])
             ->get();
     }
 
-    private function carryActiveStepIfSatisfied(ApprovalRequest $request): void
+    private function completeActiveStageIfSatisfied(ApprovalRequest $request): void
     {
-        /** @var ApprovalRequestStep|null $step */
-        $step = $request->steps()
-            ->where('state', StepState::Active->value)
+        /** @var ApprovalRequestStage|null $stage */
+        $stage = $request->stages()
+            ->where('state', StageStatus::Active->value)
             ->first();
 
-        if ($step === null) {
+        if ($stage === null) {
             return;
         }
 
-        if (! StageProgress::for($step)->isSatisfied()) {
+        if (! StageProgress::for($stage)->isSatisfied()) {
             return;
         }
 
-        ($this->carryStep)($request, $step);
+        ($this->completeStage)($request, $stage);
     }
 
-    private function seatKey(ApprovalRequestStepApprover $seat): string
+    private function assignmentKey(ApprovalRequestAssignment $assignment): string
     {
-        return Attributes::string($seat, 'approver_type').':'.Attributes::string($seat, 'approver_id');
+        return Attributes::string($assignment, 'approver_type').':'.Attributes::string($assignment, 'approver_id');
     }
 }

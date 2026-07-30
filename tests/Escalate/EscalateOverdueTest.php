@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
-use ByRcsc\LaravelApproval\Events\StepOverdue;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
+use ByRcsc\LaravelApproval\Events\StageOverdue;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
@@ -18,32 +18,32 @@ afterEach(function (): void {
     Date::setTestNow();
 });
 
-it('leaves a level alone before its deadline', function (): void {
+it('leaves a stage alone before its deadline', function (): void {
     $request = overdueRequest();
 
     Date::setTestNow('2026-07-28 09:59:00');
 
     expect(Approval::escalateOverdue()['escalated'])->toBe([])
-        ->and($request->steps()->sole()->escalated_at)->toBeNull();
+        ->and($request->stages()->sole()->escalated_at)->toBeNull();
 });
 
-it('escalates a level once its deadline has passed', function (): void {
-    Event::fake([StepOverdue::class]);
+it('escalates a stage once its deadline has passed', function (): void {
+    Event::fake([StageOverdue::class]);
 
     $request = overdueRequest();
 
     Date::setTestNow('2026-07-28 10:01:00');
 
     expect(Approval::escalateOverdue()['escalated'])->toHaveCount(1)
-        ->and($request->steps()->sole()->escalated_at?->toDateTimeString())->toBe('2026-07-28 10:01:00');
+        ->and($request->stages()->sole()->escalated_at?->toDateTimeString())->toBe('2026-07-28 10:01:00');
 
     Event::assertDispatched(
-        StepOverdue::class,
-        fn (StepOverdue $e): bool => $e->action === EscalationAction::Notify,
+        StageOverdue::class,
+        fn (StageOverdue $e): bool => $e->action === EscalationAction::RecordOnly,
     );
 });
 
-it('escalates each level exactly once however often it runs', function (): void {
+it('escalates each stage exactly once however often it runs', function (): void {
     $request = overdueRequest();
 
     Date::setTestNow('2026-07-28 10:01:00');
@@ -68,11 +68,11 @@ it('records the deadline it missed', function (): void {
 
     $metadata = $request->actions()->where('action', 'escalated')->sole()->getAttributeValue('metadata');
 
-    expect($metadata['strategy'])->toBe('notify')
+    expect($metadata['strategy'])->toBe('record_only')
         ->and($metadata['deadline_at'])->toStartWith('2026-07-28T10:00:00');
 });
 
-it('ignores a level nobody is waiting on', function (): void {
+it('ignores a stage nobody is waiting on', function (): void {
     $first = user('First');
 
     $workflow = workflow([
@@ -82,12 +82,12 @@ it('ignores a level nobody is waiting on', function (): void {
 
     $request = post()->submitForApproval($workflow, null, user());
 
-    // The second level is queued; its clock has not started.
+    // The second stage is queued; its clock has not started.
     Date::setTestNow('2026-07-28 23:00:00');
 
     expect(Approval::escalateOverdue()['escalated'])->toBe([]);
 
-    // It only starts once the level becomes somebody's turn.
+    // It only starts once the stage becomes somebody's turn.
     Approval::approve($request, $first);
 
     Date::setTestNow('2026-07-29 00:01:00');
@@ -97,7 +97,7 @@ it('ignores a level nobody is waiting on', function (): void {
 
 it('ignores a request that closed before the sweep ran', function (): void {
     $request = overdueRequest();
-    $approver = $request->steps()->sole()->approverSlots()->sole()->approver;
+    $approver = $request->stages()->sole()->assignments()->sole()->approver;
 
     Date::setTestNow('2026-07-28 10:01:00');
     Approval::approve($request, $approver);
@@ -105,7 +105,7 @@ it('ignores a request that closed before the sweep ran', function (): void {
     expect(Approval::escalateOverdue()['escalated'])->toBe([]);
 });
 
-it('ignores a level with no SLA at all', function (): void {
+it('ignores a stage with no SLA at all', function (): void {
     $workflow = workflow([['approvers' => [user()]]]);
     post()->submitForApproval($workflow, null, user());
 
@@ -122,7 +122,7 @@ it('lists overdue requests without escalating them', function (): void {
     Date::setTestNow('2026-07-28 10:01:00');
 
     expect(Approval::overdue()->pluck('id')->all())->toBe([$request->getKey()])
-        ->and($request->steps()->sole()->escalated_at)->toBeNull();
+        ->and($request->stages()->sole()->escalated_at)->toBeNull();
 });
 
 it('keeps a request on the overdue list after escalating it', function (): void {
@@ -143,13 +143,13 @@ describe('the notify policy', function (): void {
         Approval::escalateOverdue();
 
         expect($request->refresh()->state)->toBe(RequestState::Pending)
-            ->and($request->steps()->sole()->state)->toBe(StepState::Active)
-            ->and($request->steps()->sole()->approverSlots()->count())->toBe(1);
+            ->and($request->stages()->sole()->state)->toBe(StageStatus::Active)
+            ->and($request->stages()->sole()->assignments()->count())->toBe(1);
     });
 
     it('still lets the original approver decide afterwards', function (): void {
         $request = overdueRequest();
-        $approver = $request->steps()->sole()->approverSlots()->sole()->approver;
+        $approver = $request->stages()->sole()->assignments()->sole()->approver;
 
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
@@ -173,11 +173,11 @@ describe('the artisan command', function (): void {
 
         $this->artisan('approval:escalate')->assertSuccessful();
 
-        expect($request->steps()->sole()->escalated_at)->not->toBeNull();
+        expect($request->stages()->sole()->escalated_at)->not->toBeNull();
     });
 
-    it('fails when a level cannot be escalated', function (): void {
-        // `escalate` with no resolver named is a misconfigured level.
+    it('fails when a stage cannot be escalated', function (): void {
+        // `escalate` with no resolver named is a misconfigured stage.
         $request = overdueRequest(EscalationAction::Escalate);
 
         Date::setTestNow('2026-07-28 10:01:00');
@@ -185,10 +185,10 @@ describe('the artisan command', function (): void {
         $this->artisan('approval:escalate')->assertFailed();
 
         // The failure rolled the step back, so the next run tries again.
-        expect($request->steps()->sole()->escalated_at)->toBeNull();
+        expect($request->stages()->sole()->escalated_at)->toBeNull();
     });
 
-    it('escalates the levels it can even when one fails', function (): void {
+    it('escalates the stages it can even when one fails', function (): void {
         overdueRequest(EscalationAction::Escalate);
         $healthy = overdueRequest();
 
@@ -198,6 +198,28 @@ describe('the artisan command', function (): void {
 
         expect($result['escalated'])->toHaveCount(1)
             ->and($result['failed'])->toHaveCount(1)
-            ->and($healthy->steps()->sole()->escalated_at)->not->toBeNull();
+            ->and($healthy->stages()->sole()->escalated_at)->not->toBeNull();
     });
+});
+
+it('records escalations and reminders as automated system actions', function (): void {
+    $request = post()->submitForApproval(workflow([[
+        'sla_minutes' => 60,
+        'remind_every_minutes' => 30,
+        'approvers' => [user('Approver')],
+    ]]), null, user('Author'));
+
+    Date::setTestNow('2026-07-28 10:01:00');
+    Approval::escalateOverdue();
+
+    Date::setTestNow('2026-07-28 10:31:30');
+    Approval::escalateOverdue();
+
+    $escalated = $request->actions()->where('action', 'escalated')->sole();
+    $reminded = $request->actions()->where('action', 'reminded')->sole();
+
+    expect($escalated->actor_id)->toBeNull()
+        ->and($escalated->getAttributeValue('metadata')['automatic'])->toBeTrue()
+        ->and($reminded->actor_id)->toBeNull()
+        ->and($reminded->getAttributeValue('metadata')['automatic'])->toBeTrue();
 });

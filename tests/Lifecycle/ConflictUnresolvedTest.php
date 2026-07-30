@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
@@ -64,7 +65,7 @@ it('refuses to reapply over another unresolved request', function (): void {
 it('atomically supersedes a conflict and audits both sides of its replacement', function (): void {
     [$conflicted] = unresolvedConflict();
 
-    $replacement = Approval::resubmit($conflicted, ['title' => 'Replacement']);
+    $replacement = Approval::reviseAndResubmit($conflicted, RevisedDraft::withAttributes(['title' => 'Replacement']));
 
     expect($conflicted->refresh()->state)->toBe(RequestState::Superseded)
         ->and($conflicted->completed_at)->not->toBeNull()
@@ -81,9 +82,9 @@ it('serializes competing conflict replacements into one unresolved request', fun
     [$conflicted, $post] = unresolvedConflict();
     $stale = ApprovalRequest::query()->findOrFail($conflicted->getKey());
 
-    Approval::resubmit($conflicted, ['title' => 'Winner']);
+    Approval::reviseAndResubmit($conflicted, RevisedDraft::withAttributes(['title' => 'Winner']));
 
-    expect(fn () => Approval::resubmit($stale, ['title' => 'Loser']))
+    expect(fn () => Approval::reviseAndResubmit($stale, RevisedDraft::withAttributes(['title' => 'Loser'])))
         ->toThrow(AlreadyDecidedException::class)
         ->and(ApprovalRequest::query()->forApprovable($post)->unresolved()->count())->toBe(1);
 });

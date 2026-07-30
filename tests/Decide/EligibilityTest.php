@@ -10,7 +10,7 @@ use ByRcsc\LaravelApproval\Exceptions\SelfApprovalException;
 use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 
-it('refuses somebody who holds no seat', function (): void {
+it('refuses somebody who holds no assignment', function (): void {
     $workflow = workflow([['approvers' => [user('Approver')]]]);
     $request = post()->submitForApproval($workflow, null, user());
 
@@ -18,7 +18,7 @@ it('refuses somebody who holds no seat', function (): void {
         ->toThrow(UnauthorizedApproverException::class, 'has no assignment on the active stage');
 });
 
-it('refuses an approver from a level that is not this one', function (): void {
+it('refuses an approver from a stage that is not this one', function (): void {
     $first = user('First');
     $second = user('Second');
 
@@ -33,7 +33,7 @@ it('refuses an approver from a level that is not this one', function (): void {
         ->toThrow(UnauthorizedApproverException::class);
 });
 
-it('refuses the same approver voting twice', function (): void {
+it('refuses the same approver deciding twice', function (): void {
     $one = user('One');
     $workflow = workflow([['required_approvals' => 2, 'approvers' => [$one, user('Two')]]]);
     $request = post()->submitForApproval($workflow, null, user());
@@ -41,10 +41,10 @@ it('refuses the same approver voting twice', function (): void {
     Approval::approve($request, $one);
 
     expect(fn () => Approval::approve($request, $one))
-        ->toThrow(AlreadyDecidedException::class, 'has already approved the active level');
+        ->toThrow(AlreadyDecidedException::class, 'has already approved the active stage');
 });
 
-it('does not let a second vote count toward the quorum', function (): void {
+it('does not let a second decision count toward the required approvals', function (): void {
     $one = user('One');
     $workflow = workflow([['required_approvals' => 2, 'approvers' => [$one, user('Two')]]]);
     $request = post()->submitForApproval($workflow, null, user());
@@ -115,7 +115,7 @@ it('lets a workflow forbid self-approval the config allows', function (): void {
     expect(fn () => Approval::approve($request, $author))->toThrow(SelfApprovalException::class);
 });
 
-it('lets the submitter approve a level they are not the only seat on', function (): void {
+it('lets the submitter approve a stage they are not the only assignment on', function (): void {
     config()->set('approval.allow_self_approval', false);
 
     $author = user('Author');
@@ -124,7 +124,7 @@ it('lets the submitter approve a level they are not the only seat on', function 
     $workflow = workflow([['required_approvals' => 1, 'approvers' => [$author, $colleague]]]);
     $request = post()->submitForApproval($workflow, null, $author);
 
-    // The submitter still cannot vote, but the level is not deadlocked.
+    // The submitter still cannot decision, but the stage is not deadlocked.
     expect(fn () => Approval::approve($request, $author))->toThrow(SelfApprovalException::class);
 
     Approval::approve($request, $colleague);

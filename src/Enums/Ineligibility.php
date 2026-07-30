@@ -15,7 +15,7 @@ enum Ineligibility: string
     /** The request has been decided, withdrawn, or returned. */
     case RequestClosed = 'request_closed';
 
-    /** No level is currently waiting - the request is between states. */
+    /** No stage is currently waiting - the request is between states. */
     case NoActiveStage = 'no_active_stage';
 
     /** This actor has no assignment on the active stage. */

@@ -18,7 +18,7 @@ final class WorkflowBuilder
             'slug' => $slug,
             'name' => $name,
             'active' => true,
-            'levels' => [],
+            'stages' => [],
         ];
     }
 
@@ -52,16 +52,16 @@ final class WorkflowBuilder
     }
 
     /**
-     * @param  Closure(LevelBuilder): void  $configure
+     * @param  Closure(StageBuilder): void  $configure
      */
-    public function level(string $name, Closure $configure): self
+    public function stage(string $name, Closure $configure): self
     {
-        /** @var list<array<string, mixed>> $levels */
-        $levels = $this->definition['levels'];
-        $level = new LevelBuilder($name, count($levels) + 1);
-        $configure($level);
-        $levels[] = $level->toArray();
-        $this->definition['levels'] = $levels;
+        /** @var list<array<string, mixed>> $stages */
+        $stages = $this->definition['stages'];
+        $stage = new StageBuilder($name, count($stages) + 1);
+        $configure($stage);
+        $stages[] = $stage->toArray();
+        $this->definition['stages'] = $stages;
 
         return $this;
     }

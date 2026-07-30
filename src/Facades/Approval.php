@@ -10,12 +10,13 @@ use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Database\Eloquent\Builder;
@@ -47,12 +48,11 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalRequest withdraw(ApprovalRequest $request, Model $actor, string|null $comment = null)
  * @method static ApprovalRequest cancel(ApprovalRequest $request, Model $actor, string|null $comment = null)
  * @method static mixed withoutGuard(Model $approvable, callable $callback, Model|null $actor = null, string|null $comment = null)
- * @method static ApprovalRequestStepApprover delegate(ApprovalRequest $request, Model $approver, Model $delegate, string|null $comment = null)
- * @method static ApprovalRequestStepApprover reassign(ApprovalRequest $request, ApprovalRequestStepApprover $seat, Model $to, Model|null $actor = null, string|null $comment = null)
- * @method static array<int, array{added: list<string>, removed: list<string>}> resync(ApprovalRequest $request, Model|null $actor = null, bool $prune = false)
+ * @method static ApprovalRequestAssignment delegate(ApprovalRequest $request, Model $approver, Model $delegate, string|null $comment = null)
+ * @method static ApprovalRequestAssignment reassign(ApprovalRequest $request, ApprovalRequestAssignment $assignment, Model $to, Model $actor, string|null $comment = null)
+ * @method static array<int, array{added: list<string>, removed: list<string>}> resync(ApprovalRequest $request, Model $actor, bool $prune = false)
  * @method static ApprovalRequest resolve(ApprovalRequest $request, ConflictResolution $resolution, Model|null $actor = null, string|null $comment = null)
- * @method static ApprovalRequest resubmit(ApprovalRequest $request, array<string, mixed>|null $newAttributes = null, Model|null $submitter = null, ApprovalWorkflow|string|null $workflow = null)
- * @method static ApprovalRequest resume(ApprovalRequest $request, array<string, mixed>|null $changes = null, ApprovalWorkflow|string|null $workflow = null)
+ * @method static ApprovalRequest reviseAndResubmit(ApprovalRequest $request, RevisedDraft $draft, Model|null $requester = null, ApprovalWorkflow|string|null $workflow = null)
  * @method static ApprovalAttachment attach(AttachmentEvidence $evidence)
  * @method static list<array{request: string, subject: string, problem: string}> verifyTrail(ApprovalRequest|null $only = null)
  * @method static array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>} escalateOverdue()

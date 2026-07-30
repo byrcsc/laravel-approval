@@ -14,24 +14,24 @@ it('refuses an inactive workflow', function (): void {
         ->toThrow(InvalidWorkflowException::class, 'The approval workflow [retired] is not active.');
 });
 
-it('refuses a workflow with no levels', function (): void {
+it('refuses a workflow with no stages', function (): void {
     $workflow = workflow([], ['slug' => 'empty']);
 
     expect(fn () => post()->submitForApproval($workflow, null, user()))
-        ->toThrow(InvalidWorkflowException::class, 'has no levels');
+        ->toThrow(InvalidWorkflowException::class, 'has no stages');
 });
 
-it('refuses a level nobody would be asked to approve', function (): void {
+it('refuses a stage nobody would be asked to approve', function (): void {
     $workflow = workflow([
         ['approvers' => [user()]],
         ['approvers' => []],
     ], ['slug' => 'gappy']);
 
     expect(fn () => post()->submitForApproval($workflow, null, user()))
-        ->toThrow(InvalidWorkflowException::class, 'Level 2 of the approval workflow [gappy] resolved to no approvers');
+        ->toThrow(InvalidWorkflowException::class, 'Stage 2 of the approval workflow [gappy] resolved to no approvers');
 });
 
-it('refuses a level whose resolver comes back empty', function (): void {
+it('refuses a stage whose resolver comes back empty', function (): void {
     HeadOfDepartmentResolver::$heads = [];
 
     $workflow = workflow([
@@ -42,7 +42,7 @@ it('refuses a level whose resolver comes back empty', function (): void {
         ->toThrow(InvalidWorkflowException::class, 'resolved to no approvers');
 });
 
-it('refuses a quorum larger than the level can ever reach', function (): void {
+it('refuses a required approvals larger than the stage can ever reach', function (): void {
     $workflow = workflow([
         ['required_approvals' => 3, 'approvers' => [user(), user('Second')]],
     ], ['slug' => 'overreaching']);
@@ -51,7 +51,7 @@ it('refuses a quorum larger than the level can ever reach', function (): void {
         ->toThrow(InvalidWorkflowException::class, 'approval rule requires 3 approvals but only 2 assignments were resolved');
 });
 
-it('counts duplicated approvers once when checking the quorum', function (): void {
+it('counts duplicated approvers once when checking the required approvals', function (): void {
     $approver = user();
 
     $workflow = workflow([
@@ -62,7 +62,7 @@ it('counts duplicated approvers once when checking the quorum', function (): voi
         ->toThrow(InvalidWorkflowException::class, 'approval rule requires 2 approvals but only 1 assignments were resolved');
 });
 
-it('refuses a quorum of zero rather than reading it as none needed', function (): void {
+it('refuses a required approvals of zero rather than reading it as none needed', function (): void {
     $workflow = workflow([
         ['required_approvals' => 0, 'approvers' => [user()]],
     ], ['slug' => 'rubber-stamp']);
@@ -71,24 +71,24 @@ it('refuses a quorum of zero rather than reading it as none needed', function ()
         ->toThrow(InvalidWorkflowException::class, 'minimum approvals must be positive');
 });
 
-it('reads a null quorum as all of them', function (): void {
+it('reads a null required approvals as all of them', function (): void {
     $workflow = workflow([
         ['required_approvals' => null, 'approvers' => [user(), user('Second'), user('Third')]],
     ]);
 
-    $step = post()->submitForApproval($workflow, null, user())->steps()->sole();
+    $stage = post()->submitForApproval($workflow, null, user())->stages()->sole();
 
-    expect($step->getAttributeValue('required_approvals'))->toBeNull()
-        ->and($step->approverSlots()->count())->toBe(3);
+    expect($stage->getAttributeValue('required_approvals'))->toBeNull()
+        ->and($stage->assignments()->count())->toBe(3);
 });
 
 it('refuses an approver entry that is both a record and a rule', function (): void {
     $workflow = workflow([], ['slug' => 'ambiguous']);
     $approver = user();
 
-    $workflow->levels()->create(['sequence' => 1, 'name' => 'Level 1', 'required_approvals' => 1]);
+    $workflow->stages()->create(['sequence' => 1, 'name' => 'Level 1', 'required_approvals' => 1]);
 
-    approverRow($workflow->levels()->sole(), [
+    approverRow($workflow->stages()->sole(), [
         'approver_type' => $approver->getMorphClass(),
         'approver_id' => $approver->getKey(),
         'resolver' => HeadOfDepartmentResolver::class,

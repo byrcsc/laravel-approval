@@ -130,14 +130,14 @@ describe('near-equivalent writes are drift', function (): void {
 });
 
 describe('a draft that cannot be written', function (): void {
-    it('rolls the whole final vote back rather than leaving half of it', function (): void {
+    it('rolls the whole final decision back rather than leaving half of it', function (): void {
         $approver = user('Approver');
         $post = post();
         $workflow = workflow([['approvers' => [$approver]]]);
 
         // No allow-list on Post, so an attribute the table does not have gets
-        // through submit and fails at apply time - inside the vote's
-        // transaction, which must take the vote down with it.
+        // through submit and fails at apply time - inside the decision's
+        // transaction, which must take the decision down with it.
         $request = $post->submitForApproval($workflow, ['no_such_column' => 'value'], user());
 
         expect(fn () => Approval::approve($request, $approver))->toThrow(Exception::class);
@@ -145,6 +145,6 @@ describe('a draft that cannot be written', function (): void {
         expect($request->refresh()->state)->toBe(RequestState::Pending)
             ->and($request->actions()->where('action', 'approved')->count())->toBe(0)
             ->and($request->actions()->where('action', 'applied')->count())->toBe(0)
-            ->and($request->steps()->sole()->state->value)->toBe('active');
+            ->and($request->stages()->sole()->state->value)->toBe('active');
     });
 });

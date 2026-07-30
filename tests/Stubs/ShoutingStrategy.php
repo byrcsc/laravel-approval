@@ -7,7 +7,7 @@ namespace ByRcsc\LaravelApproval\Tests\Stubs;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 
 /**
  * A host app's own escalation policy, standing in for whatever they would
@@ -25,7 +25,7 @@ class ShoutingStrategy implements EscalationStrategy
      */
     public function handle(
         ApprovalRequest $request,
-        ApprovalRequestStep $step,
+        ApprovalRequestStage $stage,
         EscalationAction $action,
         array $config,
     ): void {

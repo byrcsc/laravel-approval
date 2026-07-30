@@ -10,7 +10,7 @@ final readonly class WorkflowDefinition
 {
     /**
      * @param  array<string, mixed>|null  $settings
-     * @param  list<LevelDefinition>  $levels
+     * @param  list<StageDefinition>  $stages
      */
     public function __construct(
         public string $slug,
@@ -18,22 +18,22 @@ final readonly class WorkflowDefinition
         public ?string $description,
         public bool $active,
         public ?array $settings,
-        public array $levels,
+        public array $stages,
     ) {
         if (trim($slug) === '' || trim($name) === '') {
             throw InvalidWorkflowDefinitionException::because('workflow slugs and names cannot be blank.');
         }
 
-        $sequences = array_map(fn (LevelDefinition $level): int => $level->sequence, $levels);
+        $sequences = array_map(fn (StageDefinition $stage): int => $stage->sequence, $stages);
 
-        if ($levels === [] || count($sequences) !== count(array_unique($sequences))) {
-            throw InvalidWorkflowDefinitionException::because("workflow [{$slug}] needs levels with unique sequences.");
+        if ($stages === [] || count($sequences) !== count(array_unique($sequences))) {
+            throw InvalidWorkflowDefinitionException::because("workflow [{$slug}] needs stages with unique sequences.");
         }
 
         sort($sequences);
 
         if ($sequences !== range(1, count($sequences))) {
-            throw InvalidWorkflowDefinitionException::because("workflow [{$slug}] level sequences must be contiguous from one.");
+            throw InvalidWorkflowDefinitionException::because("workflow [{$slug}] stage sequences must be contiguous from one.");
         }
     }
 
@@ -44,10 +44,10 @@ final readonly class WorkflowDefinition
     {
         $slug = $value['slug'] ?? $key;
         $name = $value['name'] ?? $slug;
-        $levels = $value['levels'] ?? null;
+        $stages = $value['stages'] ?? null;
 
-        if (! is_string($slug) || ! is_string($name) || ! is_array($levels)) {
-            throw InvalidWorkflowDefinitionException::because('a workflow needs a slug, name, and levels array.');
+        if (! is_string($slug) || ! is_string($name) || ! is_array($stages)) {
+            throw InvalidWorkflowDefinitionException::because('a workflow needs a slug, name, and stages array.');
         }
 
         $settings = $value['settings'] ?? null;
@@ -58,15 +58,15 @@ final readonly class WorkflowDefinition
 
         $definitions = [];
 
-        foreach (array_values($levels) as $index => $level) {
-            if (! is_array($level)) {
-                throw InvalidWorkflowDefinitionException::because("workflow [{$slug}] levels must be arrays.");
+        foreach (array_values($stages) as $index => $stage) {
+            if (! is_array($stage)) {
+                throw InvalidWorkflowDefinitionException::because("workflow [{$slug}] stages must be arrays.");
             }
 
-            $definitions[] = LevelDefinition::from($level, $index + 1);
+            $definitions[] = StageDefinition::from($stage, $index + 1);
         }
 
-        usort($definitions, fn (LevelDefinition $left, LevelDefinition $right): int => $left->sequence <=> $right->sequence);
+        usort($definitions, fn (StageDefinition $left, StageDefinition $right): int => $left->sequence <=> $right->sequence);
 
         $settings = $settings === null || $settings === [] ? null : self::object($settings, $slug);
 
@@ -76,7 +76,7 @@ final readonly class WorkflowDefinition
             description: is_string($value['description'] ?? null) ? $value['description'] : null,
             active: is_bool($value['active'] ?? true) ? $value['active'] ?? true : true,
             settings: $settings,
-            levels: $definitions,
+            stages: $definitions,
         );
     }
 

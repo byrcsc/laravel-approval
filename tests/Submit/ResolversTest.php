@@ -9,7 +9,7 @@ use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use ByRcsc\LaravelApproval\Tests\Stubs\User;
 use Illuminate\Database\Eloquent\Model;
 
-it('expands a resolver into slots marked as resolved', function (): void {
+it('expands a resolver into assignments marked as resolved', function (): void {
     $head = user('Department Head');
     $deputy = user('Deputy');
 
@@ -19,11 +19,11 @@ it('expands a resolver into slots marked as resolved', function (): void {
         ['required_approvals' => 1, 'approvers' => [['resolver' => HeadOfDepartmentResolver::class]]],
     ]);
 
-    $slots = post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->get();
+    $assignments = post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->get();
 
-    expect($slots)->toHaveCount(2)
-        ->and($slots->pluck('approver_id')->all())->toBe([$head->getKey(), $deputy->getKey()])
-        ->and($slots[0]->source)->toBe(ApproverSource::Resolved);
+    expect($assignments)->toHaveCount(2)
+        ->and($assignments->pluck('approver_id')->all())->toBe([$head->getKey(), $deputy->getKey()])
+        ->and($assignments[0]->source)->toBe(ApproverSource::Resolved);
 });
 
 it('hands the resolver its own config', function (): void {
@@ -36,7 +36,7 @@ it('hands the resolver its own config', function (): void {
         ]]],
     ]);
 
-    expect(post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->count())->toBe(2);
+    expect(post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->count())->toBe(2);
 });
 
 it('keeps the answer a resolver gave even after the org chart moves', function (): void {
@@ -52,10 +52,10 @@ it('keeps the answer a resolver gave even after the org chart moves', function (
     // The org chart changes the day after submission.
     HeadOfDepartmentResolver::$heads = [user('Successor')];
 
-    expect($request->steps()->sole()->approverSlots()->pluck('approver_id')->all())->toBe([$head->getKey()]);
+    expect($request->stages()->sole()->assignments()->pluck('approver_id')->all())->toBe([$head->getKey()]);
 });
 
-it('merges a resolver and a concrete approver into one level', function (): void {
+it('merges a resolver and a concrete approver into one stage', function (): void {
     $cfo = user('CFO');
     $head = user('Head');
     HeadOfDepartmentResolver::$heads = [$head];
@@ -64,10 +64,10 @@ it('merges a resolver and a concrete approver into one level', function (): void
         ['required_approvals' => 2, 'approvers' => [$cfo, ['resolver' => HeadOfDepartmentResolver::class]]],
     ]);
 
-    $slots = post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->get();
+    $assignments = post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->get();
 
-    expect($slots->pluck('approver_id')->all())->toBe([$cfo->getKey(), $head->getKey()])
-        ->and($slots->pluck('source')->all())->toBe([ApproverSource::Assigned, ApproverSource::Resolved]);
+    expect($assignments->pluck('approver_id')->all())->toBe([$cfo->getKey(), $head->getKey()])
+        ->and($assignments->pluck('source')->all())->toBe([ApproverSource::Assigned, ApproverSource::Resolved]);
 });
 
 it('lets a concrete assignment win over the same person resolved', function (): void {
@@ -78,10 +78,10 @@ it('lets a concrete assignment win over the same person resolved', function (): 
         ['approvers' => [$both, ['resolver' => HeadOfDepartmentResolver::class]]],
     ]);
 
-    $slots = post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->get();
+    $assignments = post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->get();
 
-    expect($slots)->toHaveCount(1)
-        ->and($slots[0]->source)->toBe(ApproverSource::Assigned);
+    expect($assignments)->toHaveCount(1)
+        ->and($assignments[0]->source)->toBe(ApproverSource::Assigned);
 });
 
 describe('StaticUsersResolver', function (): void {
@@ -97,10 +97,10 @@ describe('StaticUsersResolver', function (): void {
             ]]],
         ]);
 
-        $slots = post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->get();
+        $assignments = post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->get();
 
-        expect($slots->pluck('approver_id')->all())->toBe([$one->getKey(), $two->getKey()])
-            ->and($slots->pluck('approver_type')->unique()->all())->toBe([(new User)->getMorphClass()]);
+        expect($assignments->pluck('approver_id')->all())->toBe([$one->getKey(), $two->getKey()])
+            ->and($assignments->pluck('approver_type')->unique()->all())->toBe([(new User)->getMorphClass()]);
     });
 
     it('takes an explicit model over the configured one', function (): void {
@@ -113,9 +113,9 @@ describe('StaticUsersResolver', function (): void {
             ]]],
         ]);
 
-        $slot = post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->sole();
+        $assignment = post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->sole();
 
-        expect($slot->getAttributeValue('approver_type'))->toBe($order->getMorphClass());
+        expect($assignment->getAttributeValue('approver_type'))->toBe($order->getMorphClass());
     });
 
     it('silently skips keys that no longer exist', function (): void {
@@ -128,7 +128,7 @@ describe('StaticUsersResolver', function (): void {
             ]]],
         ]);
 
-        expect(post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->count())->toBe(1);
+        expect(post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->count())->toBe(1);
     });
 });
 
@@ -144,9 +144,9 @@ describe('CallbackResolver', function (): void {
             ]]],
         ]);
 
-        $slot = post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->sole();
+        $assignment = post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->sole();
 
-        expect($slot->getAttributeValue('approver_id'))->toBe($head->getKey());
+        expect($assignment->getAttributeValue('approver_id'))->toBe($head->getKey());
     });
 
     it('defaults to __invoke when no method is named', function (): void {
@@ -160,9 +160,9 @@ describe('CallbackResolver', function (): void {
             ]]],
         ]);
 
-        $slot = post()->submitForApproval($workflow, null, user())->steps()->sole()->approverSlots()->sole();
+        $assignment = post()->submitForApproval($workflow, null, user())->stages()->sole()->assignments()->sole();
 
-        expect($slot->getAttributeValue('approver_id'))->toBe($approver->getKey());
+        expect($assignment->getAttributeValue('approver_id'))->toBe($approver->getKey());
 
         InvokableLookup::$approvers = [];
     });

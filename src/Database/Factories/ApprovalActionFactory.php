@@ -26,7 +26,7 @@ final class ApprovalActionFactory extends Factory
     {
         return [
             'request_id' => ApprovalRequestFactory::new(),
-            'step_id' => null,
+            'stage_id' => null,
             'actor_type' => null,
             'actor_id' => null,
             'actor_label' => null,
@@ -59,7 +59,7 @@ final class ApprovalActionFactory extends Factory
                         actorType: Attributes::nullableString($action, 'actor_type'),
                         actorId: Attributes::nullableString($action, 'actor_id'),
                         actorLabel: Attributes::nullableString($action, 'actor_label'),
-                        stepId: Attributes::nullableInt($action, 'step_id'),
+                        stageId: Attributes::nullableInt($action, 'stage_id'),
                         comment: Attributes::nullableString($action, 'comment'),
                         metadata: $action->getAttributeValue('metadata') === null
                             ? null

@@ -15,7 +15,7 @@ it('resolves the manager as a singleton behind the facade', function () {
 
 it('publishes a config file that holds every table name', function () {
     expect(config('approval.table_names'))
-        ->toHaveKeys(['workflows', 'levels', 'level_approvers', 'requests', 'steps', 'step_approvers', 'actions']);
+        ->toHaveKeys(['workflows', 'workflow_stages', 'workflow_stage_approvers', 'requests', 'request_stages', 'assignments', 'actions']);
 });
 
 it('refuses to boot when a table name is missing', function () {

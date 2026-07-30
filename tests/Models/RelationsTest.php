@@ -6,7 +6,7 @@ use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStage;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
 use ByRcsc\LaravelApproval\Tests\Stubs\User;
 
@@ -14,38 +14,38 @@ it('walks a workflow down to its approvers', function () {
     $workflow = workflow([['name' => 'Manager'], ['name' => 'Finance']]);
     $approver = user('Grace Hopper');
 
-    $workflow->levels()->first()?->approvers()->create([
+    $workflow->stages()->first()?->approvers()->create([
         'approver_type' => $approver->getMorphClass(),
         'approver_id' => $approver->getKey(),
     ]);
 
-    $workflow = ApprovalWorkflow::with('levels.approvers.approver')->find($workflow->getKey());
+    $workflow = ApprovalWorkflow::with('stages.approvers.approver')->find($workflow->getKey());
 
-    expect($workflow?->levels)->toHaveCount(2)
-        ->and($workflow?->levels->first()?->approvers)->toHaveCount(1)
-        ->and($workflow?->levels->first()?->approvers->first()?->approver)
+    expect($workflow?->stages)->toHaveCount(2)
+        ->and($workflow?->stages->first()?->approvers)->toHaveCount(1)
+        ->and($workflow?->stages->first()?->approvers->first()?->approver)
         ->toBeInstanceOf(User::class);
 });
 
-it('orders levels by sequence rather than by insertion', function () {
+it('orders stages by sequence rather than by insertion', function () {
     $workflow = workflow();
 
-    $workflow->levels()->create(['sequence' => 3, 'name' => 'Director']);
-    $workflow->levels()->create(['sequence' => 1, 'name' => 'Manager']);
-    $workflow->levels()->create(['sequence' => 2, 'name' => 'Finance']);
+    $workflow->stages()->create(['sequence' => 3, 'name' => 'Director']);
+    $workflow->stages()->create(['sequence' => 1, 'name' => 'Manager']);
+    $workflow->stages()->create(['sequence' => 2, 'name' => 'Finance']);
 
-    expect($workflow->levels()->pluck('name')->all())
+    expect($workflow->stages()->pluck('name')->all())
         ->toBe(['Manager', 'Finance', 'Director']);
 });
 
-it('reads a level back to its workflow', function () {
+it('reads a stage back to its workflow', function () {
     $workflow = workflow([['name' => 'Manager']]);
 
-    /** @var ApprovalWorkflowLevel $level */
-    $level = $workflow->levels()->first();
+    /** @var ApprovalWorkflowStage $stage */
+    $stage = $workflow->stages()->first();
 
-    expect($level->workflow)->toBeInstanceOf(ApprovalWorkflow::class)
-        ->and($level->workflow?->getKey())->toBe($workflow->getKey());
+    expect($stage->workflow)->toBeInstanceOf(ApprovalWorkflow::class)
+        ->and($stage->workflow?->getKey())->toBe($workflow->getKey());
 });
 
 it('points a request at what it is approving and who asked', function () {
@@ -60,33 +60,33 @@ it('points a request at what it is approving and who asked', function () {
         ->and($request->submitter?->getKey())->toBe($submitter->getKey());
 });
 
-it('walks a request down to its steps and approver slots', function () {
+it('walks a request down to its steps and approver assignments', function () {
     $request = approvalRequest();
     $approver = user('Katherine Johnson');
 
-    $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
-    $step->approverSlots()->create([
+    $stage = $request->stages()->create(['sequence' => 1, 'name' => 'Manager']);
+    $stage->assignments()->create([
         'approver_type' => $approver->getMorphClass(),
         'approver_id' => $approver->getKey(),
         'source' => ApproverSource::Resolved,
     ]);
 
-    $request = ApprovalRequest::with('steps.approverSlots.approver')->find($request->getKey());
+    $request = ApprovalRequest::with('stages.assignments.approver')->find($request->getKey());
 
-    expect($request?->steps)->toHaveCount(1)
-        ->and($request?->steps->first()?->approverSlots)->toHaveCount(1)
-        ->and($request?->steps->first()?->approverSlots->first()?->approver)
+    expect($request?->stages)->toHaveCount(1)
+        ->and($request?->stages->first()?->assignments)->toHaveCount(1)
+        ->and($request?->stages->first()?->assignments->first()?->approver)
         ->toBeInstanceOf(User::class);
 });
 
-it('reads a delegated slot back to both people', function () {
+it('reads a delegated assignment back to both people', function () {
     $request = approvalRequest();
-    $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
+    $stage = $request->stages()->create(['sequence' => 1, 'name' => 'Manager']);
 
     $approver = user('Original Approver');
     $delegate = user('Standing In');
 
-    $slot = $step->approverSlots()->create([
+    $assignment = $stage->assignments()->create([
         'approver_type' => $approver->getMorphClass(),
         'approver_id' => $approver->getKey(),
         'delegated_to_type' => $delegate->getMorphClass(),
@@ -94,43 +94,43 @@ it('reads a delegated slot back to both people', function () {
         'source' => ApproverSource::Delegated,
     ]);
 
-    $slot->refresh();
+    $assignment->refresh();
 
     // Who was asked survives the delegation.
-    expect($slot->approver?->getKey())->toBe($approver->getKey())
-        ->and($slot->delegatedTo?->getKey())->toBe($delegate->getKey());
+    expect($assignment->approver?->getKey())->toBe($approver->getKey())
+        ->and($assignment->delegatedTo?->getKey())->toBe($delegate->getKey());
 });
 
 it('leaves the delegate empty until somebody delegates', function () {
     $request = approvalRequest();
-    $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
+    $stage = $request->stages()->create(['sequence' => 1, 'name' => 'Manager']);
     $approver = user();
 
-    $slot = $step->approverSlots()->create([
+    $assignment = $stage->assignments()->create([
         'approver_type' => $approver->getMorphClass(),
         'approver_id' => $approver->getKey(),
     ]);
 
-    expect($slot->delegatedTo)->toBeNull();
+    expect($assignment->delegatedTo)->toBeNull();
 });
 
 it('hangs the audit trail off both the request and the step', function () {
     $request = approvalRequest();
-    $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
+    $stage = $request->stages()->create(['sequence' => 1, 'name' => 'Manager']);
     $actor = user('Auditor');
 
     $request->actions()->create(['action' => 'submitted', 'hash' => str_repeat('0', 64)]);
     $request->actions()->create([
         'action' => 'approved',
-        'step_id' => $step->getKey(),
+        'stage_id' => $stage->getKey(),
         'actor_type' => $actor->getMorphClass(),
         'actor_id' => $actor->getKey(),
         'hash' => str_repeat('0', 64),
     ]);
 
     expect($request->actions()->count())->toBe(2)
-        ->and($step->actions()->count())->toBe(1)
-        ->and($step->actions()->first()?->actor?->getKey())->toBe($actor->getKey());
+        ->and($stage->actions()->count())->toBe(1)
+        ->and($stage->actions()->first()?->actor?->getKey())->toBe($actor->getKey());
 });
 
 it('leaves the actor empty for actions nobody took', function () {
@@ -140,7 +140,7 @@ it('leaves the actor empty for actions nobody took', function () {
 
     expect($action->actor)->toBeNull()
         ->and($action->request?->getKey())->toBe($request->getKey())
-        ->and($action->step)->toBeNull();
+        ->and($action->stage)->toBeNull();
 });
 
 it('chains a resubmission back to the request it replaced', function () {

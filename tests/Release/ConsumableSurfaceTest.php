@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ByRcsc\LaravelApproval\Actions\ScanActiveStepHealth;
+use ByRcsc\LaravelApproval\Actions\ScanActiveStageHealth;
 use ByRcsc\LaravelApproval\Data\ApprovalInteraction;
 use ByRcsc\LaravelApproval\Data\DecisionContext;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
@@ -18,11 +18,11 @@ use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevelApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStage;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStageApprover;
 use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use ByRcsc\LaravelApproval\Tests\Stubs\AutoPurchaseOrder;
 use ByRcsc\LaravelApproval\Tests\Stubs\ClosingSoftPost;
@@ -107,7 +107,7 @@ it('returns an eager-loadable progress timeline and pending holders', function (
         ['approvers' => [$two]],
     ]), null, user('Submitter'));
 
-    expect($request->currentStep()?->sequence)->toBe(1)
+    expect($request->currentStage()?->sequence)->toBe(1)
         ->and($request->pendingApprovers()[0]->is($one))->toBeTrue()
         ->and($request->timeline()->pluck('state')->all())
         ->toBe([TimelineState::Active, TimelineState::Queued]);
@@ -115,7 +115,7 @@ it('returns an eager-loadable progress timeline and pending holders', function (
     Approval::approve($request, $one);
     $request = ApprovalRequest::query()->withProgress()->findOrFail($request->getKey());
 
-    expect($request->currentStep()?->sequence)->toBe(2)
+    expect($request->currentStage()?->sequence)->toBe(2)
         ->and($request->pendingApprovers()[0]->is($two))->toBeTrue()
         ->and($request->timeline()->pluck('state')->all())
         ->toBe([TimelineState::Approved, TimelineState::Active]);
@@ -144,11 +144,11 @@ it('closes hard deletes while leaving ordinary soft deletes model-configurable',
 
 it('exports factories for every package model with coherent defaults', function (): void {
     expect(ApprovalWorkflow::factory()->create())->toBeInstanceOf(ApprovalWorkflow::class)
-        ->and(ApprovalWorkflowLevel::factory()->withApprovers()->create())->toBeInstanceOf(ApprovalWorkflowLevel::class)
-        ->and(ApprovalWorkflowLevelApprover::factory()->create())->toBeInstanceOf(ApprovalWorkflowLevelApprover::class)
-        ->and(ApprovalRequest::factory()->withSteps()->create())->toBeInstanceOf(ApprovalRequest::class)
-        ->and(ApprovalRequestStep::factory()->withApprovers()->create())->toBeInstanceOf(ApprovalRequestStep::class)
-        ->and(ApprovalRequestStepApprover::factory()->create())->toBeInstanceOf(ApprovalRequestStepApprover::class)
+        ->and(ApprovalWorkflowStage::factory()->withApprovers()->create())->toBeInstanceOf(ApprovalWorkflowStage::class)
+        ->and(ApprovalWorkflowStageApprover::factory()->create())->toBeInstanceOf(ApprovalWorkflowStageApprover::class)
+        ->and(ApprovalRequest::factory()->withStages()->create())->toBeInstanceOf(ApprovalRequest::class)
+        ->and(ApprovalRequestStage::factory()->withApprovers()->create())->toBeInstanceOf(ApprovalRequestStage::class)
+        ->and(ApprovalRequestAssignment::factory()->create())->toBeInstanceOf(ApprovalRequestAssignment::class)
         ->and(ApprovalAction::factory()->create())->toBeInstanceOf(ApprovalAction::class)
         ->and(ApprovalAttachment::factory()->create())->toBeInstanceOf(ApprovalAttachment::class);
 });
@@ -157,7 +157,7 @@ it('previews, applies, updates, and refuses destructive workflow definition drif
     $approver = user('Approver');
     $builder = WorkflowBuilder::make('defined-flow', 'Defined flow')
         ->settings(['allow_self_approval' => false])
-        ->level('Manager', fn ($level) => $level->approver($approver)->sla(60));
+        ->stage('Manager', fn ($stage) => $stage->approver($approver)->sla(60));
 
     $preview = Approval::syncDefinitions([$builder], true);
 
@@ -171,28 +171,28 @@ it('previews, applies, updates, and refuses destructive workflow definition drif
         null,
         user('In-flight submitter'),
     );
-    $changed = $builder->description('Changed')->level('Finance', fn ($level) => $level->approver(user('Finance')));
+    $changed = $builder->description('Changed')->stage('Finance', fn ($stage) => $stage->approver(user('Finance')));
     $updated = Approval::syncDefinitions([$changed]);
 
     expect($applied->successful())->toBeTrue()
         ->and($unchanged->changed())->toBeFalse()
         ->and($updated->created)->not->toBeEmpty()
         ->and($updated->updated)->not->toBeEmpty()
-        ->and(Approval::workflow('defined-flow')->levels()->count())->toBe(2)
-        ->and($inFlight->steps()->count())->toBe(1)
-        ->and((string) $inFlight->steps()->sole()->approverSlots()->sole()->approver_id)->toBe((string) $approver->getKey());
+        ->and(Approval::workflow('defined-flow')->stages()->count())->toBe(2)
+        ->and($inFlight->stages()->count())->toBe(1)
+        ->and((string) $inFlight->stages()->sole()->assignments()->sole()->approver_id)->toBe((string) $approver->getKey());
 
     $refused = Approval::syncDefinitions([[
         'slug' => 'defined-flow',
         'name' => 'Defined flow',
-        'levels' => [[
+        'stages' => [[
             'name' => 'Manager',
             'approvers' => [$approver],
         ]],
     ]]);
 
     expect($refused->successful())->toBeFalse()
-        ->and(Approval::workflow('defined-flow')->levels()->count())->toBe(2);
+        ->and(Approval::workflow('defined-flow')->stages()->count())->toBe(2);
 });
 
 it('processes bulk outcomes independently and identifies each failure', function (): void {
@@ -247,13 +247,13 @@ it('bounds active-step health scans and applies the finding limit during scannin
 
     for ($index = 0; $index < 120; $index++) {
         $request = approvalRequest(attributes: ['ulid' => (string) Str::ulid()]);
-        $step = $request->steps()->create([
+        $stage = $request->stages()->create([
             'sequence' => 1,
             'name' => "Health {$index}",
             'required_approvals' => 1,
             'state' => 'active',
         ]);
-        $step->approverSlots()->create([
+        $stage->assignments()->create([
             'approver_type' => $living->getMorphClass(),
             'approver_id' => $index < 2 ? 999_000 + $index : $living->getKey(),
         ]);
@@ -262,7 +262,7 @@ it('bounds active-step health scans and applies the finding limit during scannin
     DB::flushQueryLog();
     DB::enableQueryLog();
 
-    $stranded = app(ScanActiveStepHealth::class)(2, 50);
+    $stranded = app(ScanActiveStageHealth::class)(2, 50);
     $queries = DB::getQueryLog();
 
     expect($stranded)->toHaveCount(2)

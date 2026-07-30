@@ -16,11 +16,11 @@ final class TableNames
      */
     private const DEFAULTS = [
         'workflows' => 'approval_workflows',
-        'levels' => 'approval_workflow_levels',
-        'level_approvers' => 'approval_workflow_level_approvers',
+        'workflow_stages' => 'approval_workflow_stages',
+        'workflow_stage_approvers' => 'approval_workflow_stage_approvers',
         'requests' => 'approval_requests',
-        'steps' => 'approval_request_steps',
-        'step_approvers' => 'approval_request_step_approvers',
+        'request_stages' => 'approval_request_stages',
+        'assignments' => 'approval_request_assignments',
         'actions' => 'approval_actions',
         'attachments' => 'approval_attachments',
     ];

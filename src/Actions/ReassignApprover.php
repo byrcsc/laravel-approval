@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\Data\StageHealth;
 use ByRcsc\LaravelApproval\Data\StageProgress;
-use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\ApproverReassigned;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\DelegationException;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -23,17 +23,17 @@ use Illuminate\Support\Facades\Event;
 /**
  * "She left in March. Give it to him."
  *
- * The administrative counterpart to {@see DelegateApproval}: the seat is
+ * The administrative counterpart to {@see DelegateApproval}: the assignment is
  * rewritten rather than lent, because there is nobody to lend it. Any
- * delegation on the seat is cleared - it was the departed approver's to make,
- * and it dies with their claim to the seat.
+ * delegation on the assignment is cleared - it was the departed approver's to make,
+ * and it dies with their claim to the assignment.
  *
- * Works on any step that has not been decided, not only the active one, which
- * is the point: somebody leaving affects the levels their request has not
+ * Works on any stage that has not been decided, not only the active one, which
+ * is the point: somebody leaving affects the stages their request has not
  * reached yet, and those are exactly the ones worth fixing before it does.
  *
- * A seat that has already voted is not reassigned. That vote was cast by a
- * person, and moving the seat under it would make the audit trail claim
+ * An assignment that has already decided is not reassigned. That decision was cast by a
+ * person, and moving the assignment under it would make the audit trail claim
  * somebody approved something they never saw.
  */
 final class ReassignApprover
@@ -42,15 +42,15 @@ final class ReassignApprover
 
     public function __invoke(
         ApprovalRequest $request,
-        ApprovalRequestStepApprover $seat,
+        ApprovalRequestAssignment $assignment,
         Model $to,
-        ?Model $actor = null,
+        Model $actor,
         ?string $comment = null,
-    ): ApprovalRequestStepApprover {
-        return DB::transaction(function () use ($request, $seat, $to, $actor, $comment): ApprovalRequestStepApprover {
+    ): ApprovalRequestAssignment {
+        return DB::transaction(function () use ($request, $assignment, $to, $actor, $comment): ApprovalRequestAssignment {
             $request->newQuery()->whereKey($request->getKey())->lockForUpdate()->get();
             $request->refresh();
-            $seat->refresh();
+            $assignment->refresh();
 
             $state = Attributes::enum($request, 'state', RequestState::class) ?? RequestState::Pending;
 
@@ -58,21 +58,21 @@ final class ReassignApprover
                 throw AlreadyDecidedException::requestIsClosed($request, $state);
             }
 
-            $step = $seat->step;
+            $stage = $assignment->stage;
 
-            if ($step === null || ! $request->is($step->request)) {
+            if ($stage === null || ! $request->is($stage->request)) {
                 throw AlreadyDecidedException::assignmentIsNotOnRequest($request);
             }
 
-            $stepState = Attributes::enum($step, 'state', StepState::class) ?? StepState::Queued;
+            $stageState = Attributes::enum($stage, 'state', StageStatus::class) ?? StageStatus::Queued;
 
-            if (! in_array($stepState, [StepState::Active, StepState::Queued], true)) {
+            if (! in_array($stageState, [StageStatus::Active, StageStatus::Queued], true)) {
                 throw AlreadyDecidedException::stageIsClosed($request);
             }
 
-            $progress = StageProgress::for($step);
+            $progress = StageProgress::for($stage);
 
-            if ($progress->hasDecision($seat)) {
+            if ($progress->hasDecision($assignment)) {
                 throw AlreadyDecidedException::assignmentHasDecision($request);
             }
 
@@ -80,16 +80,16 @@ final class ReassignApprover
                 throw DelegationException::alreadyAssigned($to);
             }
 
-            // A seat handed to somebody who has themselves gone is the problem
+            // An assignment handed to somebody who has themselves gone is the problem
             // this action exists to solve, not a solution to it.
             if (! $to->exists) {
                 throw DelegationException::doesNotExist($to);
             }
 
-            $from = $seat->approver;
-            $health = StepHealth::inspect($step);
+            $from = $assignment->approver;
+            $health = StageHealth::inspect($stage);
 
-            $seat->forceFill([
+            $assignment->forceFill([
                 'approver_type' => $to->getMorphClass(),
                 'approver_id' => $to->getKey(),
                 'delegated_to_type' => null,
@@ -97,13 +97,13 @@ final class ReassignApprover
                 'source' => ApproverSource::Reassigned,
             ])->save();
 
-            StepHealth::assertNotWorsened($step, $request->workflowName(), $health);
+            StageHealth::assertNotWorsened($stage, $request->workflowSlug(), $health);
 
             ($this->recordAction)(
                 request: $request,
                 action: ActionType::Reassigned,
                 actor: $actor,
-                step: $step,
+                stage: $stage,
                 comment: $comment,
                 metadata: array_filter([
                     'from' => $from === null ? null : $from->getMorphClass().':'.$this->key($from),
@@ -111,9 +111,9 @@ final class ReassignApprover
                 ]),
             );
 
-            Event::dispatch(new ApproverReassigned($request, $seat, $from, $to, $actor));
+            Event::dispatch(new ApproverReassigned($request, $assignment, $from, $to, $actor));
 
-            return $seat;
+            return $assignment;
         });
     }
 

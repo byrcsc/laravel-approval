@@ -35,11 +35,11 @@ final class ApprovalWorkflow extends Model
     }
 
     /**
-     * @return HasMany<ApprovalWorkflowLevel, $this>
+     * @return HasMany<ApprovalWorkflowStage, $this>
      */
-    public function levels(): HasMany
+    public function stages(): HasMany
     {
-        return $this->hasMany(ApprovalWorkflowLevel::class, 'workflow_id')
+        return $this->hasMany(ApprovalWorkflowStage::class, 'workflow_id')
             ->orderBy('sequence');
     }
 
