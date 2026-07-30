@@ -22,8 +22,9 @@ use Illuminate\Database\Eloquent\Model;
  * request or its audit trail.
  *
  * Implementations are resolved from the container, so constructor injection
- * works. They must be free of side effects: resolvers also run during
- * definition validation, which may be abandoned if a later stage is invalid.
+ * works. They must be free of side effects: every stage is planned before the
+ * request is written, so a resolver can run and the submission still be
+ * abandoned because a later stage turns out to be invalid.
  */
 interface ApproverResolver
 {

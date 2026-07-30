@@ -47,6 +47,65 @@ function canonical(mixed $value): mixed
 }
 
 /**
+ * The public methods a class declares itself, excluding magic methods and
+ * anything it inherits. Shared by the release-surface suites, which pin the
+ * intentionally small public API member by member.
+ *
+ * @param  class-string  $class
+ * @return list<string>
+ */
+function declaredMethods(string $class): array
+{
+    $names = [];
+
+    foreach ((new ReflectionClass($class))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+        if ($method->getDeclaringClass()->getName() !== $class || str_starts_with($method->getName(), '__')) {
+            continue;
+        }
+
+        $names[] = $method->getName();
+    }
+
+    sort($names);
+
+    return $names;
+}
+
+/**
+ * @param  class-string  $class
+ * @return list<string>
+ */
+function declaredProperties(string $class): array
+{
+    $names = [];
+
+    foreach ((new ReflectionClass($class))->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+        $names[] = $property->getName();
+    }
+
+    sort($names);
+
+    return $names;
+}
+
+/**
+ * The class short-names in one `src/` directory, sorted.
+ *
+ * @return list<string>
+ */
+function classesIn(string $directory): array
+{
+    $files = glob(__DIR__.'/../src/'.$directory.'/*.php');
+    $names = array_map(
+        fn (string $file): string => basename($file, '.php'),
+        $files === false ? [] : $files,
+    );
+    sort($names);
+
+    return $names;
+}
+
+/**
  * A workflow, built from a list of stage specs.
  *
  * Alongside the stage's own columns, a spec may carry `approvers` (models, or

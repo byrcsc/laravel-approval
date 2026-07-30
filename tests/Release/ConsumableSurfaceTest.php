@@ -54,21 +54,11 @@ it('keeps stage progress public names in the approval domain', function (): void
         StageStatus::class,
     ];
 
-    $publicNames = collect($classes)->flatMap(function (string $class): array {
-        $reflection = new ReflectionClass($class);
-
-        return [
-            $reflection->getShortName(),
-            ...array_map(
-                fn (ReflectionMethod $method): string => $method->getName(),
-                $reflection->getMethods(ReflectionMethod::IS_PUBLIC),
-            ),
-            ...array_map(
-                fn (ReflectionProperty $property): string => $property->getName(),
-                $reflection->getProperties(ReflectionProperty::IS_PUBLIC),
-            ),
-        ];
-    })->implode(' ');
+    $publicNames = collect($classes)->flatMap(fn (string $class): array => [
+        (new ReflectionClass($class))->getShortName(),
+        ...declaredMethods($class),
+        ...declaredProperties($class),
+    ])->implode(' ');
 
     expect(class_exists('ByRcsc\\LaravelApproval\\Data\\Ballot'))->toBeFalse()
         ->and($publicNames)->not->toMatch('/ballot|vote|quorum|seat|slot|carried/i');

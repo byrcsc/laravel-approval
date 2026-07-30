@@ -139,8 +139,10 @@ pre-release testing and compatibility review.
   so `assertNothingRecorded()` covers every interaction. `assertBulkApproved()`
   and `assertBulkRejected()` are now `assertApprovedMany()` and
   `assertRejectedMany()`, and `assertReturned()` is
-  `assertReturnedForRevision()`. Interactions carry the assignment recipient as
-  a first-class field.
+  `assertReturnedForRevision()`. `ApprovalInteraction::$type` is now an
+  `InteractionType` enum whose `assertion()` names the covering assertion, and
+  interactions carry the assignment recipient as a first-class field. An omitted
+  submitter now resolves the same way a real submission resolves it.
 - Corrected the documented guarantees. The action history is described as
   application-enforced append-only and tamper-evident within a stated trust
   boundary rather than immutable; `approval:verify` documents exactly which rows

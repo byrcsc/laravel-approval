@@ -170,6 +170,12 @@ resolver-backed entry cannot name its approvers from the workflow alone: it need
 the approvable model, the requester, and the stage configuration. Its approvers
 are resolved and snapshotted when a request is submitted.
 
+> [!NOTE]
+> The requester reaches a resolver as its `$submitter` argument, and is stored in
+> the `submitter_type` / `submitter_id` columns. Those persisted names predate the
+> move to *requester* in the documented vocabulary and are kept to avoid a schema
+> and contract rename; they mean the same thing.
+
 ### Submitting and deciding
 
 Submit the record, optionally holding proposed attribute changes until the
@@ -211,6 +217,41 @@ Approval::reviseAndResubmit($request, RevisedDraft::withAttributes([
 `RevisedDraft::inherit()` carries the previous draft forward unchanged, and
 `RevisedDraft::none()` submits the record itself. Revised attributes are
 revalidated against the model's `approvableAttributes()`.
+
+A requester withdraws their own pending request; an approver hands their
+assignment to someone else; either may attach supporting evidence:
+
+```php
+use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
+
+Approval::withdraw($request, $requester, 'Raised in error');
+Approval::delegate($request, $financeUser, $deputy, 'On leave this week');
+
+Approval::attach(new AttachmentEvidence(
+    request: $request,
+    disk: 's3',
+    path: 'quotes/PO-1001.pdf',
+    checksum: hash_file('sha256', $localPath),
+    name: 'Supplier quote.pdf',
+    uploader: $requester,
+));
+```
+
+### Deciding many at once
+
+Bulk operations use one naming convention, the `Many` suffix. Each request is
+decided in its own transaction, so one failure does not roll back the rest:
+
+```php
+$result = Approval::approveMany($requests, $financeUser);
+$result = Approval::rejectMany($requests, $financeUser, 'Over budget');
+
+$result->successful();   // list<BulkDecisionOutcome>
+$result->failed();       // each carrying the request and its exception
+```
+
+`Approval::decideMany($requests, fn ($request) => $decision)` is the advanced
+form, for building a different decision per request.
 
 ### Reading the active request
 
@@ -274,6 +315,37 @@ policy. Its abilities are `view`, `approve`, `reject`, `returnForRevision`,
 `withdraw`, `delegate`, and `cancel`. `cancel` denies by default because
 administrative cancellation is host-owned; grant it in your own policy. Extend
 the shipped policy when your application has additional organizational rules.
+
+### The routine facade surface
+
+One path per routine command and query. `$model->submitForApproval(...)` is the
+only model-side alias, for the one operation that starts on the model.
+
+| Command | |
+|---|---|
+| `Approval::submit()` | Submit a persisted record, optionally with a draft |
+| `Approval::approve()` / `reject()` / `returnForRevision()` | The three decisions |
+| `Approval::decide()` | Advanced: record a decision built elsewhere |
+| `Approval::approveMany()` / `rejectMany()` / `decideMany()` | The same, in bulk |
+| `Approval::withdraw()` | Requester withdrawal |
+| `Approval::delegate()` | An approver hands their assignment on |
+| `Approval::reviseAndResubmit()` | Revise a closed request into a new linked one |
+| `Approval::attach()` | Put a file in evidence |
+
+| Query | |
+|---|---|
+| `Approval::eligibility()` / `canApprove()` | May this actor decide, and why not |
+| `Approval::withdrawalEligibility()` / `canWithdraw()` | May this actor withdraw |
+| `Approval::delegationEligibility()` / `canDelegate()` | May this actor delegate |
+| `Approval::awaiting()` | The approver inbox |
+| `Approval::overdue()` | Open requests past their stage deadline |
+| `Approval::pendingFor()` | A model's one unresolved request, or null |
+| `Approval::requestsFor()` | A model's request history, newest first |
+| `Approval::workflow()` / `findWorkflow()` / `workflowFor()` | Workflow lookup |
+
+The `canX()` forms return the boolean; the eligibility forms return the reason
+too. The request-level equivalents (`$request->canBeApprovedBy()` and friends)
+answer the same questions when you already hold the request.
 
 ### Administrative and operational operations
 

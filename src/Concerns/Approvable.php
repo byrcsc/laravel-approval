@@ -29,11 +29,20 @@ use Illuminate\Support\Collection;
 /**
  * Makes a model submittable to an approval workflow.
  *
- * The trait is deliberately limited to model-centric members: the approval
- * relationships, submission, access to the model's current request, reporting
- * conveniences for the current stage, and model scopes. Commands and
- * request-level authorization questions live on the `Approval` facade and on
- * {@see ApprovalRequest} respectively, so there is one path to each.
+ * The trait is limited to model-centric members: the approval relationships,
+ * submission, access to the model's current request, reporting conveniences for
+ * the current stage, and model scopes.
+ *
+ * Commands have exactly one path, the `Approval` facade. The trait mirrors none
+ * of them, with one deliberate exception: {@see withoutApprovalGuard()}, because
+ * guard mode is itself a model-level feature.
+ *
+ * Eligibility is the other deliberate duplication. `Approval::eligibility()`
+ * takes a request, {@see ApprovalRequest::approvalEligibility()} asks it of a
+ * request you already hold, and {@see approvalEligibility()} here asks it of this
+ * model's current request, returning null when there is none. Withdrawal and
+ * delegation eligibility are request-level questions only, so ask those on the
+ * request.
  *
  * Submission is explicit. Guard mode can additionally intercept Eloquent saves
  * to attributes held in a pending draft; explicit mode, the default, intercepts

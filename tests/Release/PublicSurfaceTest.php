@@ -6,6 +6,7 @@ use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Concerns\Approvable;
 use ByRcsc\LaravelApproval\Data\ApprovalInteraction;
 use ByRcsc\LaravelApproval\Data\StageProgress;
+use ByRcsc\LaravelApproval\Enums\InteractionType;
 use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -19,60 +20,6 @@ use ByRcsc\LaravelApproval\Testing\ApprovalFake;
  * deliberate addition to the released API, so adding one should require adding
  * it here too. That is what stops duplicate helpers accumulating again.
  */
-
-/**
- * @param  class-string  $class
- * @return list<string>
- */
-function declaredMethods(string $class): array
-{
-    $names = [];
-
-    foreach ((new ReflectionClass($class))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-        if ($method->getDeclaringClass()->getName() !== $class || str_starts_with($method->getName(), '__')) {
-            continue;
-        }
-
-        $names[] = $method->getName();
-    }
-
-    sort($names);
-
-    return $names;
-}
-
-/**
- * @param  class-string  $class
- * @return list<string>
- */
-function declaredProperties(string $class): array
-{
-    $names = [];
-
-    foreach ((new ReflectionClass($class))->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-        $names[] = $property->getName();
-    }
-
-    sort($names);
-
-    return $names;
-}
-
-/**
- * @return list<string>
- */
-function classesIn(string $directory): array
-{
-    $files = glob(__DIR__.'/../../src/'.$directory.'/*.php');
-    $names = array_map(
-        fn (string $file): string => basename($file, '.php'),
-        $files === false ? [] : $files,
-    );
-    sort($names);
-
-    return $names;
-}
-
 it('pins the facade and manager command and query surface', function (): void {
     expect(declaredMethods(ApprovalManager::class))->toBe([
         'approve',
@@ -170,12 +117,30 @@ it('keeps commands off the approvable trait and the request model', function ():
     $commands = [
         'approve', 'reject', 'returnForRevision', 'decide', 'withdraw', 'cancel',
         'delegate', 'reassign', 'resync', 'resolve', 'reviseAndResubmit', 'attach',
+        'withoutGuard', 'syncDefinitions', 'escalateOverdue', 'verifyTrail',
     ];
 
     foreach ([Approvable::class, ApprovalRequest::class] as $class) {
         expect(array_intersect(declaredMethods($class), $commands))
             ->toBe([], "[{$class}] must not mirror facade commands.");
     }
+});
+
+it('mirrors exactly one facade operation on the trait, and documents why', function (): void {
+    // Guard mode is a model-level feature - the interception lives on the
+    // model's saving hook - so the bypass is the one operation offered on both
+    // the model and the facade. Any second exception should be argued for here.
+    $trait = new ReflectionClass(Approvable::class);
+    $mirrors = array_values(array_filter(
+        declaredMethods(Approvable::class),
+        fn (string $method): bool => in_array($method, ['withoutApprovalGuard'], true),
+    ));
+
+    expect($mirrors)->toBe(['withoutApprovalGuard'])
+        ->and((string) $trait->getMethod('withoutApprovalGuard')->getDocComment())
+        ->toContain('Approval::withoutGuard(')
+        ->and((string) $trait->getDocComment())
+        ->toContain('one deliberate exception');
 });
 
 it('pins the request model to state, relationships, progress, and authorization', function (): void {
@@ -276,19 +241,11 @@ it('pins the fake recording and assertion surface', function (): void {
 });
 
 it('pairs every recorded interaction type with an assertion', function (): void {
-    $types = (new ReflectionClass(ApprovalFake::class))->getConstants();
     $assertions = declaredMethods(ApprovalFake::class);
 
-    foreach ($types as $name => $type) {
-        $expected = 'assert'.str_replace(' ', '', ucwords(str_replace('_', ' ', (string) $type)));
-        $expected = match ($expected) {
-            'assertDecision' => 'assertApproved',
-            'assertDecisionsMany' => 'assertApprovedMany',
-            default => $expected,
-        };
-
-        expect(in_array($expected, $assertions, true))
-            ->toBeTrue("Interaction [{$name}] has no matching [{$expected}] assertion.");
+    foreach (InteractionType::cases() as $type) {
+        expect(in_array($type->assertion(), $assertions, true))
+            ->toBeTrue("Interaction [{$type->value}] names a missing [{$type->assertion()}] assertion.");
     }
 });
 
@@ -368,6 +325,12 @@ it('pins the public enums and their cases', function (): void {
         'Ineligibility' => [
             'request_closed', 'no_active_stage', 'not_an_approver', 'assignment_delegated',
             'decision_already_recorded', 'self_approval',
+        ],
+        'InteractionType' => [
+            'submitted', 'decision', 'decisions_many', 'withdrawn', 'cancelled',
+            'delegated', 'reassigned', 'resynced', 'conflict_resolved',
+            'resubmitted', 'attached', 'guard_bypassed', 'overdue_processed',
+            'definitions_synced',
         ],
         'RejectionPolicy' => ['approval_impossible', 'any_rejection_vetoes'],
         'RequestState' => [

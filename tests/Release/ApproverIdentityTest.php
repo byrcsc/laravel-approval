@@ -2,21 +2,24 @@
 
 declare(strict_types=1);
 
-use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
-use ByRcsc\LaravelApproval\Data\StageSnapshot;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\Ineligibility;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowDefinitionException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Tests\Stubs\Team;
+use ByRcsc\LaravelApproval\Tests\Stubs\TeamMembersResolver;
+use ByRcsc\LaravelApproval\Tests\Stubs\UnsavedApproverResolver;
 use ByRcsc\LaravelApproval\Tests\Stubs\User;
-use Illuminate\Database\Eloquent\Model;
 
 /**
  * A concrete assignment names one exact actor identity. Roles, teams, positions,
  * and other container models are never expanded into their members; that is what
  * approver resolvers are for, and a resolver must return persisted actor models.
+ */
+
+/**
+ * @param  list<User>  $members
  */
 function team(string $name, array $members): Team
 {
@@ -24,33 +27,6 @@ function team(string $name, array $members): Team
     $team->members()->attach(array_map(fn (User $member): int|string => $member->getKey(), $members));
 
     return $team;
-}
-
-final class TeamMembersResolver implements ApproverResolver
-{
-    /**
-     * @param  array<string, mixed>  $config
-     * @return iterable<int, Model>
-     */
-    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
-    {
-        /** @var Team $team */
-        $team = Team::query()->findOrFail($config['team']);
-
-        return $team->members()->orderBy('id')->get()->all();
-    }
-}
-
-final class UnsavedApproverResolver implements ApproverResolver
-{
-    /**
-     * @param  array<string, mixed>  $config
-     * @return iterable<int, Model>
-     */
-    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
-    {
-        return [new User(['name' => 'Never saved'])];
-    }
 }
 
 it('assigns a container model as itself and never as its members', function (): void {

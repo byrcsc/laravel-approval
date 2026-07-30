@@ -359,11 +359,9 @@ class ApprovalManager
         return $this->authenticated() ?? throw MissingSubmitterException::forApprovable($approvable);
     }
 
-    // Administrative and operational operations follow. These are not part of
-    // routine approval flow: they change or inspect approval state outside the
-    // requester-approver decision path, and a host application should place
-    // them behind administrative authorization, a console command, or a
-    // scheduled job rather than expose them to ordinary users.
+    // Administrative and operational operations. Each is labelled as such in its
+    // own docblock, which is what identifies it; this comment only marks where
+    // the group starts for a reader scanning the class.
 
     /**
      * Administrative cancellation. Requires an attributable actor; the host
