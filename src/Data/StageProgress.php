@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Data;
 
 use ByRcsc\LaravelApproval\Enums\ActionType;
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
@@ -31,6 +32,8 @@ final readonly class StageProgress
         public int $approvalsRequired,
         public int $remainingApprovals,
         public int $rejectionsReceived,
+        public int $possibleApprovals,
+        public RejectionPolicy $rejectionPolicy,
         public StageStatus $status,
     ) {}
 
@@ -74,24 +77,27 @@ final readonly class StageProgress
                 $approvingIdentities[self::holderOf($assignment)],
             ))
             ->count();
+        $decisionsRecorded = $assignments
+            ->filter(fn (ApprovalRequestStepApprover $assignment): bool => isset(
+                $decidingIdentities[self::holderOf($assignment)],
+            ))
+            ->count();
+        $rejectionPolicy = Attributes::enum($stage, 'rejection_policy', RejectionPolicy::class)
+            ?? RejectionPolicy::ApprovalImpossible;
 
         return new self(
             assignments: $assignments,
             decidingIdentities: $decidingIdentities,
             assignedApprovers: $assignments->count(),
-            decisionsRecorded: $actions->filter(
-                fn ($action): bool => in_array(
-                    Attributes::enum($action, 'action', ActionType::class),
-                    [ActionType::Approved, ActionType::Rejected, ActionType::Returned],
-                    true,
-                ),
-            )->count(),
+            decisionsRecorded: $decisionsRecorded,
             approvalsReceived: $approvalsReceived,
             approvalsRequired: $approvalsRequired,
             remainingApprovals: max(0, $approvalsRequired - $approvalsReceived),
             rejectionsReceived: $actions->filter(
                 fn ($action): bool => Attributes::enum($action, 'action', ActionType::class) === ActionType::Rejected,
             )->count(),
+            possibleApprovals: $approvalsReceived + $assignments->count() - $decisionsRecorded,
+            rejectionPolicy: $rejectionPolicy,
             status: StageStatus::from(
                 (Attributes::enum($stage, 'state', StepState::class) ?? StepState::Queued)->value,
             ),
@@ -101,6 +107,14 @@ final readonly class StageProgress
     public function isSatisfied(): bool
     {
         return $this->approvalsReceived >= $this->approvalsRequired;
+    }
+
+    public function isRejected(): bool
+    {
+        return match ($this->rejectionPolicy) {
+            RejectionPolicy::AnyRejectionVetoes => $this->rejectionsReceived > 0,
+            RejectionPolicy::ApprovalImpossible => $this->possibleApprovals < $this->approvalsRequired,
+        };
     }
 
     public function assignmentFor(Model $actor): ?ApprovalRequestStepApprover

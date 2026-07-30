@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Events\ApprovalApproved;
 use ByRcsc\LaravelApproval\Events\ApprovalCompleted;
 use ByRcsc\LaravelApproval\Events\ApprovalRejected;
 use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
+use ByRcsc\LaravelApproval\Events\DraftConflicted;
 use ByRcsc\LaravelApproval\Events\LevelCompleted;
 use ByRcsc\LaravelApproval\Events\StepOverdue;
 use ByRcsc\LaravelApproval\Facades\Approval;
@@ -276,11 +278,12 @@ describe('the map', function (): void {
         expect(NotificationMap::resolved())->toBe([]);
     });
 
-    it('maps the five events it ships with', function (): void {
+    it('maps the six events it ships with', function (): void {
         expect(array_keys(NotificationMap::defaults()))->toBe([
             ApprovalSubmitted::class,
             LevelCompleted::class,
-            ApprovalCompleted::class,
+            ApprovalApproved::class,
+            DraftConflicted::class,
             ApprovalRejected::class,
             StepOverdue::class,
         ]);

@@ -45,7 +45,7 @@ it('describes a workflow and its levels', function () {
     ]))->toBeTrue();
 
     expect(Schema::hasColumns('approval_workflow_levels', [
-        'id', 'workflow_id', 'sequence', 'name', 'required_approvals',
+        'id', 'workflow_id', 'sequence', 'name', 'required_approvals', 'rejection_policy',
         'sla_minutes', 'escalation_strategy', 'escalation_config',
         'remind_every_minutes', 'condition', 'condition_config',
     ]))->toBeTrue();
@@ -64,7 +64,7 @@ it('describes a request, its steps, and its approver slots', function () {
     ]))->toBeTrue();
 
     expect(Schema::hasColumns('approval_request_steps', [
-        'id', 'request_id', 'sequence', 'name', 'required_approvals', 'sla_minutes',
+        'id', 'request_id', 'sequence', 'name', 'required_approvals', 'rejection_policy', 'sla_minutes',
         'escalation_strategy', 'escalation_config', 'remind_every_minutes',
         'condition', 'condition_config', 'condition_result',
         'deadline_at', 'escalated_at', 'last_reminded_at', 'stranded_at', 'state',

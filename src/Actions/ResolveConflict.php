@@ -7,6 +7,7 @@ namespace ByRcsc\LaravelApproval\Actions;
 use ByRcsc\LaravelApproval\Data\Draft;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\RequestState;
+use ByRcsc\LaravelApproval\Exceptions\ApprovalInProgressException;
 use ByRcsc\LaravelApproval\Exceptions\DraftConflictException;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Support\Attributes;
@@ -62,22 +63,37 @@ final class ResolveConflict
             throw DraftConflictException::nothingToApply($request);
         }
 
-        if (! $request->approvable instanceof Model) {
+        $approvable = $request->approvable;
+
+        if (! $approvable instanceof Model) {
             throw DraftConflictException::approvableIsGone($request);
+        }
+
+        $approvable->newQuery()->whereKey($approvable->getKey())->lockForUpdate()->get();
+
+        /** @var ApprovalRequest|null $other */
+        $other = ApprovalRequest::query()
+            ->forApprovable($approvable)
+            ->unresolved()
+            ->whereKeyNot($request->getKey())
+            ->first();
+
+        if ($other !== null) {
+            throw ApprovalInProgressException::forApprovable($approvable, $other);
         }
 
         return ($this->applyDraft)($request, $actor, force: true);
     }
 
     /**
-     * Cancelling runs through the ordinary action so the trail reads the same
-     * as any other withdrawal. Forced, because the person clearing up a
-     * conflict is rarely the person who submitted it.
+     * Discarding is recorded as an attributable administrative cancellation.
      */
     private function discard(ApprovalRequest $request, ?Model $actor, ?string $comment): ApprovalRequest
     {
-        $request->forceFill(['state' => RequestState::Pending, 'completed_at' => null])->save();
+        if (! $actor instanceof Model) {
+            throw new \InvalidArgumentException('An actor is required to discard a conflicted request.');
+        }
 
-        return ($this->cancelRequest)($request, $actor, $comment ?? 'Conflicted draft discarded.', force: true);
+        return ($this->cancelRequest)($request, $actor, $comment ?? 'Conflicted draft discarded.');
     }
 }

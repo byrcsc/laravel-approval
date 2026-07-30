@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
-use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Data\TimelineEntry;
+use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalRequestFactory;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
@@ -221,14 +221,14 @@ final class ApprovalRequest extends Model
         })->values();
     }
 
-    public function cancellationEligibility(Model $actor): CancellationEligibility
+    public function withdrawalEligibility(Model $actor): WithdrawalEligibility
     {
-        return Approval::cancellationEligibility($this, $actor);
+        return Approval::withdrawalEligibility($this, $actor);
     }
 
-    public function canBeCancelledBy(Model $actor): bool
+    public function canBeWithdrawnBy(Model $actor): bool
     {
-        return $this->cancellationEligibility($actor)->eligible;
+        return $this->withdrawalEligibility($actor)->eligible;
     }
 
     public function delegationEligibility(Model $actor, ?Model $delegate = null): DelegationEligibility
@@ -282,6 +282,19 @@ final class ApprovalRequest extends Model
     public function scopePending(Builder $query): void
     {
         $query->where('state', RequestState::Pending);
+    }
+
+    /**
+     * Requests that still require a decision or conflict resolution.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeUnresolved(Builder $query): void
+    {
+        $query->whereIn('state', [
+            RequestState::Pending->value,
+            RequestState::Conflicted->value,
+        ]);
     }
 
     /**

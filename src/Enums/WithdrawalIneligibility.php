@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Enums;
 
-enum CancellationIneligibility: string
+enum WithdrawalIneligibility: string
 {
     case RequestClosed = 'request_closed';
-    case NotSubmitter = 'not_submitter';
+    case NotRequester = 'not_requester';
 }

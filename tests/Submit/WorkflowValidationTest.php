@@ -48,7 +48,7 @@ it('refuses a quorum larger than the level can ever reach', function (): void {
     ], ['slug' => 'overreaching']);
 
     expect(fn () => post()->submitForApproval($workflow, null, user()))
-        ->toThrow(InvalidWorkflowException::class, 'requires 3 approvals but has only 2 approvers');
+        ->toThrow(InvalidWorkflowException::class, 'approval rule requires 3 approvals but only 2 assignments were resolved');
 });
 
 it('counts duplicated approvers once when checking the quorum', function (): void {
@@ -59,7 +59,7 @@ it('counts duplicated approvers once when checking the quorum', function (): voi
     ], ['slug' => 'double-counted']);
 
     expect(fn () => post()->submitForApproval($workflow, null, user()))
-        ->toThrow(InvalidWorkflowException::class, 'requires 2 approvals but has only 1 approver');
+        ->toThrow(InvalidWorkflowException::class, 'approval rule requires 2 approvals but only 1 assignments were resolved');
 });
 
 it('refuses a quorum of zero rather than reading it as none needed', function (): void {
@@ -68,7 +68,7 @@ it('refuses a quorum of zero rather than reading it as none needed', function ()
     ], ['slug' => 'rubber-stamp']);
 
     expect(fn () => post()->submitForApproval($workflow, null, user()))
-        ->toThrow(InvalidWorkflowException::class, 'Leave the column null to mean all of them');
+        ->toThrow(InvalidWorkflowException::class, 'minimum approvals must be positive');
 });
 
 it('reads a null quorum as all of them', function (): void {

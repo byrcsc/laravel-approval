@@ -29,8 +29,8 @@ it('completes an all-skipped submission with coherent events and audit trail', f
 
     $order = purchaseOrder(amount: 100);
     $request = $order->submitForApproval(workflow([
-        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 500], 'approvers' => []],
-        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 900], 'approvers' => []],
+        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 500], 'required_approvals' => null, 'approvers' => []],
+        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 900], 'required_approvals' => null, 'approvers' => []],
     ]), ['amount' => 300], user('Author'));
 
     Event::assertDispatched(ApprovalSubmitted::class, fn (ApprovalSubmitted $event): bool => $event->step === null);
@@ -55,6 +55,7 @@ it('completes an all-skipped record-gating submission without an apply line', fu
     $request = purchaseOrder(amount: 100)->submitForApproval(workflow([[
         'condition' => AmountExceedsCondition::class,
         'condition_config' => ['amount' => 500],
+        'required_approvals' => null,
         'approvers' => [],
     ]]), null, user('Author'));
 
@@ -75,6 +76,7 @@ it('sends an all-skipped submission through the stale check, not around it', fun
     $request = $order->submitForApproval(workflow([[
         'condition' => MeddlingCondition::class,
         'condition_config' => ['set' => 999],
+        'required_approvals' => null,
         'approvers' => [],
     ]]), ['amount' => 700], user('Author'));
 
@@ -125,6 +127,7 @@ it('resolves conditions from the container with constructor dependencies', funct
 
     $second = purchaseOrder('PO-1002', 100)->submitForApproval(workflow([[
         'condition' => ThresholdFromConfigCondition::class,
+        'required_approvals' => null,
         'approvers' => [],
     ]]), ['amount' => 600], user('Author'));
 
@@ -192,9 +195,9 @@ it('advances over a skipped middle level and completes past a skipped tail', fun
     $order = purchaseOrder(amount: 100);
     $request = $order->submitForApproval(workflow([
         ['approvers' => [$first]],
-        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 500], 'approvers' => []],
+        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 500], 'required_approvals' => null, 'approvers' => []],
         ['approvers' => [$third]],
-        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 900], 'approvers' => []],
+        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 900], 'required_approvals' => null, 'approvers' => []],
     ]), ['amount' => 300], user('Author'));
 
     Approval::approve($request, $first);
@@ -213,7 +216,7 @@ it('does not resurrect a skipped step on resync, even after the workflow changes
     $approver = user('Approver');
     $late = user('Late Addition');
     $workflow = workflow([
-        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 500], 'approvers' => []],
+        ['condition' => AmountExceedsCondition::class, 'condition_config' => ['amount' => 500], 'required_approvals' => null, 'approvers' => []],
         ['approvers' => [$approver]],
     ]);
 
@@ -244,6 +247,7 @@ it('never escalates or strands a skipped step, whatever its SLA says', function 
             'condition_config' => ['amount' => 500],
             'sla_minutes' => 30,
             'remind_every_minutes' => 10,
+            'required_approvals' => null,
             'approvers' => [],
         ],
         ['approvers' => [user('Approver')]],

@@ -57,6 +57,7 @@ return new class extends Migration
 
             // The quorum. Null means all of this level's approvers.
             $table->unsignedInteger('required_approvals')->nullable();
+            $table->string('rejection_policy')->default('approval_impossible');
 
             $table->unsignedInteger('sla_minutes')->nullable();
             $table->string('escalation_strategy')->nullable();
@@ -142,6 +143,7 @@ return new class extends Migration
             $table->unsignedInteger('sequence');
             $table->string('name');
             $table->unsignedInteger('required_approvals')->nullable();
+            $table->string('rejection_policy')->default('approval_impossible');
             $table->unsignedInteger('sla_minutes')->nullable();
             $table->string('escalation_strategy')->nullable();
             $table->json('escalation_config')->nullable();

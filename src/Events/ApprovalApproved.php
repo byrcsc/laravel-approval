@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ByRcsc\LaravelApproval\Events;
+
+/**
+ * The request reached its final approved state, including successful draft
+ * application when the request carried a draft.
+ */
+final class ApprovalApproved extends ApprovalEvent {}

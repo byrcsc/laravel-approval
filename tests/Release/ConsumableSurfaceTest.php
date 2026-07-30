@@ -9,11 +9,11 @@ use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
-use ByRcsc\LaravelApproval\Enums\CancellationIneligibility;
 use ByRcsc\LaravelApproval\Enums\DelegationIneligibility;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Enums\TimelineState;
+use ByRcsc\LaravelApproval\Enums\WithdrawalIneligibility;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
@@ -32,14 +32,14 @@ use ByRcsc\LaravelApproval\Tests\Stubs\SoftPost;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-it('exposes cancellation and delegation eligibility through every public surface', function (): void {
+it('exposes withdrawal and delegation eligibility through every public surface', function (): void {
     $submitter = user('Submitter');
     $approver = user('Approver');
     $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, $submitter);
 
-    expect(Approval::cancellationEligibility($request, $submitter)->eligible)->toBeTrue()
-        ->and($request->canBeCancelledBy($submitter))->toBeTrue()
-        ->and($request->cancellationEligibility($approver)->reason)->toBe(CancellationIneligibility::NotSubmitter)
+    expect(Approval::withdrawalEligibility($request, $submitter)->eligible)->toBeTrue()
+        ->and($request->canBeWithdrawnBy($submitter))->toBeTrue()
+        ->and($request->withdrawalEligibility($approver)->reason)->toBe(WithdrawalIneligibility::NotRequester)
         ->and(Approval::delegationEligibility($request, $approver)->eligible)->toBeTrue()
         ->and($request->canBeDelegatedBy($approver))->toBeTrue()
         ->and($request->delegationEligibility($submitter)->reason)->toBe(DelegationIneligibility::NotAnApprover);
@@ -137,7 +137,7 @@ it('closes hard deletes while leaving ordinary soft deletes model-configurable',
     $closing->delete();
 
     expect($hardRequest->refresh()->state)->toBe(RequestState::Cancelled)
-        ->and($hardRequest->actions()->where('action', 'cancelled')->sole()->actor_id)->toBeNull()
+        ->and($hardRequest->actions()->where('action', 'system_closed')->sole()->actor_id)->toBeNull()
         ->and($softRequest->refresh()->state)->toBe(RequestState::Pending)
         ->and($closingRequest->refresh()->state)->toBe(RequestState::Cancelled);
 });
@@ -199,15 +199,16 @@ it('processes bulk outcomes independently and identifies each failure', function
     $approver = user('Approver');
     $flow = workflow([['approvers' => [$approver]]]);
     $first = post('First')->submitForApproval($flow, null, user('First submitter'));
-    $second = post('Second')->submitForApproval($flow, null, user('Second submitter'));
-    Approval::cancel($second, force: true);
+    $secondSubmitter = user('Second submitter');
+    $second = post('Second')->submitForApproval($flow, null, $secondSubmitter);
+    Approval::withdraw($second, $secondSubmitter);
 
     $result = Approval::approveMany([$first, $second], $approver);
 
     expect($result->successful())->toHaveCount(1)
         ->and($result->failed())->toHaveCount(1)
         ->and($first->refresh()->state)->toBe(RequestState::Approved)
-        ->and($second->refresh()->state)->toBe(RequestState::Cancelled);
+        ->and($second->refresh()->state)->toBe(RequestState::Withdrawn);
 });
 
 it('fakes submissions and decisions without mutating workflow state and restores cleanly', function (): void {

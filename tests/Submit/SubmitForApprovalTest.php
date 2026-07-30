@@ -165,7 +165,7 @@ it('refuses a second request while one is still open', function (): void {
     $first = $post->submitForApproval($workflow, null, user());
 
     expect(fn () => $post->submitForApproval($workflow, null, user()))
-        ->toThrow(ApprovalInProgressException::class, 'already has an approval request');
+        ->toThrow(ApprovalInProgressException::class, 'already has an unresolved approval request');
 
     expect(ApprovalRequest::query()->count())->toBe(1)
         ->and($post->pendingApprovalRequest()?->is($first))->toBeTrue();

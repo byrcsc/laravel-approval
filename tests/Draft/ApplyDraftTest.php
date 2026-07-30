@@ -115,7 +115,7 @@ describe('the stale check', function (): void {
         Approval::approve($request, $approver);
 
         expect($request->refresh()->state)->toBe(RequestState::Conflicted)
-            ->and($request->completed_at)->not->toBeNull()
+            ->and($request->completed_at)->toBeNull()
             ->and($post->fresh()?->getAttributeValue('title'))->toBe('Edited by somebody else');
 
         Event::assertNotDispatched(DraftApplied::class);
@@ -184,6 +184,6 @@ describe('the stale check', function (): void {
         $post->delete();
 
         expect($request->refresh()->state)->toBe(RequestState::Cancelled)
-            ->and($request->actions()->where('action', 'cancelled')->sole()->actor_id)->toBeNull();
+            ->and($request->actions()->where('action', 'system_closed')->sole()->actor_id)->toBeNull();
     });
 });

@@ -17,7 +17,10 @@ enum ActionType: string
     case Reassigned = 'reassigned';
     case Escalated = 'escalated';
     case Commented = 'commented';
+    case Withdrawn = 'withdrawn';
     case Cancelled = 'cancelled';
+    case SystemClosed = 'system_closed';
+    case Superseded = 'superseded';
     case Resubmitted = 'resubmitted';
     case Applied = 'applied';
     case Conflicted = 'conflicted';

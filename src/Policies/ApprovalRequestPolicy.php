@@ -58,9 +58,18 @@ class ApprovalRequestPolicy
         return Approval::canApprove($request, $user);
     }
 
+    public function withdraw(Model $user, ApprovalRequest $request): bool
+    {
+        return Approval::canWithdraw($request, $user);
+    }
+
+    /**
+     * Administrative cancellation is host-owned. Applications grant this in
+     * their own policy rather than inheriting requester authority.
+     */
     public function cancel(Model $user, ApprovalRequest $request): bool
     {
-        return Approval::canCancel($request, $user);
+        return false;
     }
 
     public function delegate(Model $user, ApprovalRequest $request): bool

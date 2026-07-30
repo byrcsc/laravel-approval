@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Ineligibility;
 use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
 use ByRcsc\LaravelApproval\Facades\Approval;
@@ -116,7 +115,6 @@ it('reports a conflicted request as closed, since no level is waiting', function
     expect(Approval::eligibility($request->refresh(), $approver)->reason)
         ->toBe(Ineligibility::RequestClosed);
 
-    Approval::resolve($request, ConflictResolution::Discard, user('Admin'));
 });
 
 it('never grants and refuses the same actor differently', function (): void {

@@ -12,6 +12,7 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -37,6 +38,7 @@ final class ResubmitRequest
      */
     private const RETRYABLE = [
         RequestState::Rejected,
+        RequestState::Withdrawn,
         RequestState::Cancelled,
         RequestState::Conflicted,
     ];
@@ -56,6 +58,7 @@ final class ResubmitRequest
         ApprovalWorkflow|string|null $workflow = null,
     ): ApprovalRequest {
         return DB::transaction(function () use ($request, $newAttributes, $submitter, $workflow): ApprovalRequest {
+            $request->newQuery()->whereKey($request->getKey())->lockForUpdate()->get();
             $request->refresh();
 
             $state = Attributes::enum($request, 'state', RequestState::class) ?? RequestState::Pending;
@@ -69,6 +72,15 @@ final class ResubmitRequest
 
             if (! $approvable instanceof Model || ! $original instanceof Model) {
                 throw AlreadyDecidedException::retryHasNoSubject($request);
+            }
+
+            $supersedingConflict = $state === RequestState::Conflicted;
+
+            if ($supersedingConflict) {
+                $request->forceFill([
+                    'state' => RequestState::Superseded,
+                    'completed_at' => Date::now(),
+                ])->save();
             }
 
             $replacement = ($this->submit)(
@@ -86,6 +98,15 @@ final class ResubmitRequest
                 actor: $submitter ?? $original,
                 metadata: ['resubmitted_from' => Attributes::string($request, 'ulid')],
             );
+
+            if ($supersedingConflict) {
+                ($this->recordAction)(
+                    request: $request,
+                    action: ActionType::Superseded,
+                    actor: $submitter ?? $original,
+                    metadata: ['replacement' => Attributes::string($replacement, 'ulid')],
+                );
+            }
 
             return $replacement;
         });

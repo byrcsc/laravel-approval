@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Facades\Approval;
 
@@ -56,7 +57,11 @@ it('reports satisfied stage progress using the routing result', function (): voi
 it('reports rejected stage progress', function (): void {
     $one = user('One');
     $request = post()->submitForApproval(
-        workflow([['required_approvals' => 2, 'approvers' => [$one, user('Two'), user('Three')]]]),
+        workflow([[
+            'required_approvals' => 2,
+            'rejection_policy' => RejectionPolicy::AnyRejectionVetoes,
+            'approvers' => [$one, user('Two'), user('Three')],
+        ]]),
         null,
         user('Requester'),
     );

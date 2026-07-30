@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
-use ByRcsc\LaravelApproval\Events\ApprovalCancelled;
 use ByRcsc\LaravelApproval\Events\ApprovalRejected;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
@@ -104,15 +103,15 @@ describe('rejection', function (): void {
     });
 });
 
-describe('cancellation', function (): void {
+describe('withdrawal', function (): void {
     it('lets the submitter withdraw their own request', function (): void {
         $author = user('Author');
         $workflow = workflow([['approvers' => [user('Approver')]]]);
         $request = post()->submitForApproval($workflow, null, $author);
 
-        Approval::cancel($request, $author, 'Sent by mistake.');
+        Approval::withdraw($request, $author, 'Sent by mistake.');
 
-        expect($request->refresh()->state)->toBe(RequestState::Cancelled)
+        expect($request->refresh()->state)->toBe(RequestState::Withdrawn)
             ->and($request->completed_at)->not->toBeNull()
             ->and($request->steps()->sole()->state)->toBe(StepState::Skipped);
     });
@@ -121,34 +120,8 @@ describe('cancellation', function (): void {
         $workflow = workflow([['approvers' => [user('Approver')]]]);
         $request = post()->submitForApproval($workflow, null, user('Author'));
 
-        expect(fn () => Approval::cancel($request, user('Meddler')))
+        expect(fn () => Approval::withdraw($request, user('Meddler')))
             ->toThrow(UnauthorizedApproverException::class, 'did not submit approval request');
-    });
-
-    it('lets an admin force it through', function (): void {
-        $workflow = workflow([['approvers' => [user('Approver')]]]);
-        $request = post()->submitForApproval($workflow, null, user('Author'));
-
-        Approval::cancel($request, user('Admin'), 'Duplicate.', force: true);
-
-        expect($request->refresh()->state)->toBe(RequestState::Cancelled);
-    });
-
-    it('lets the system withdraw one with no actor at all', function (): void {
-        Event::fake([ApprovalCancelled::class]);
-
-        $workflow = workflow([['approvers' => [user('Approver')]]]);
-        $request = post()->submitForApproval($workflow, null, user('Author'));
-
-        Approval::cancel($request);
-
-        expect($request->refresh()->state)->toBe(RequestState::Cancelled)
-            ->and($request->actions()->where('action', 'cancelled')->sole()->getAttributeValue('actor_id'))->toBeNull();
-
-        Event::assertDispatched(
-            ApprovalCancelled::class,
-            fn (ApprovalCancelled $e): bool => $e->actor === null,
-        );
     });
 
     it('refuses to withdraw one that already closed', function (): void {
@@ -159,7 +132,7 @@ describe('cancellation', function (): void {
 
         Approval::approve($request, $approver);
 
-        expect(fn () => Approval::cancel($request, $author))
+        expect(fn () => Approval::withdraw($request, $author))
             ->toThrow(AlreadyDecidedException::class, 'cannot be decided again');
     });
 
@@ -168,11 +141,11 @@ describe('cancellation', function (): void {
         $author = user('Author');
         $workflow = workflow([['approvers' => [user('Approver')]]]);
 
-        expect($post->cancelApproval($author))->toBeFalse();
+        expect($post->withdrawApproval($author))->toBeFalse();
 
         $post->submitForApproval($workflow, null, $author);
 
-        expect($post->cancelApproval($author))->toBeTrue()
+        expect($post->withdrawApproval($author))->toBeTrue()
             ->and($post->isPendingApproval())->toBeFalse();
     });
 });

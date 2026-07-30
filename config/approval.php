@@ -137,7 +137,7 @@ return [
     | recipients, so the audience is not stranded in a listener you would have
     | to fork. Extend ByRcsc\LaravelApproval\Notifications\ApprovalNotification.
     |
-    | Only five of the events are mapped. The rest are there to be listened to;
+    | Only six of the events are mapped. The rest are there to be listened to;
     | not every state change is worth an email.
     |
     */
@@ -151,7 +151,8 @@ return [
         'map' => [
             Events\ApprovalSubmitted::class => Notifications\ApprovalRequestedNotification::class,
             Events\LevelCompleted::class => Notifications\ApprovalRequestedNotification::class,
-            Events\ApprovalCompleted::class => Notifications\ApprovalApprovedNotification::class,
+            Events\ApprovalApproved::class => Notifications\ApprovalApprovedNotification::class,
+            Events\DraftConflicted::class => Notifications\ApprovalConflictNotification::class,
             Events\ApprovalRejected::class => Notifications\ApprovalRejectedNotification::class,
             Events\StepOverdue::class => Notifications\ApprovalOverdueNotification::class,
         ],

@@ -7,6 +7,7 @@ namespace ByRcsc\LaravelApproval\Actions;
 use ByRcsc\LaravelApproval\Data\ApproverSlot;
 use ByRcsc\LaravelApproval\Data\LevelSnapshot;
 use ByRcsc\LaravelApproval\Enums\ActionType;
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Events\ApprovalCompleted;
@@ -179,23 +180,23 @@ final class SubmitForApproval
         $proposed = $this->proposed($approvable, $newAttributes);
 
         foreach ($levels as $level) {
+            $this->guardRejectionPolicy($slug, $level);
             $snapshot = LevelSnapshot::fromLevel($level);
             $passes = ($this->evaluateCondition)($snapshot, $proposed, $submitter, $slug);
             $snapshot = $snapshot->withConditionResult($passes);
+            $approvers = ($this->resolveApprovers)($level, $snapshot, $approvable, $submitter, $slug);
+
+            if ($passes && $approvers === []) {
+                throw InvalidWorkflowException::levelHasNoApprovers($slug, $snapshot->sequence);
+            }
+
+            $this->guardQuorum($slug, $snapshot, count($approvers));
 
             if (! $passes) {
                 $plan[] = ['snapshot' => $snapshot, 'approvers' => []];
 
                 continue;
             }
-
-            $approvers = ($this->resolveApprovers)($level, $snapshot, $approvable, $submitter, $slug);
-
-            if ($approvers === []) {
-                throw InvalidWorkflowException::levelHasNoApprovers($slug, $snapshot->sequence);
-            }
-
-            $this->guardQuorum($slug, $snapshot, count($approvers));
 
             $plan[] = ['snapshot' => $snapshot, 'approvers' => $approvers];
         }
@@ -233,11 +234,28 @@ final class SubmitForApproval
         }
 
         if ($required < 1) {
-            throw InvalidWorkflowException::quorumNotPositive($slug, $snapshot->sequence, $required);
+            throw InvalidWorkflowException::approvalRuleNotPositive($slug, $snapshot->sequence, $required);
         }
 
         if ($required > $available) {
-            throw InvalidWorkflowException::quorumUnreachable($slug, $snapshot->sequence, $required, $available);
+            throw InvalidWorkflowException::approvalRuleUnreachable($slug, $snapshot->sequence, $required, $available);
+        }
+    }
+
+    private function guardRejectionPolicy(string $slug, Model $stage): void
+    {
+        $policy = $stage->getRawOriginal('rejection_policy');
+
+        if ($policy === null) {
+            return;
+        }
+
+        if (! is_string($policy) || RejectionPolicy::tryFrom($policy) === null) {
+            throw InvalidWorkflowException::unknownRejectionPolicy(
+                $slug,
+                Attributes::int($stage, 'sequence'),
+                is_scalar($policy) ? (string) $policy : get_debug_type($policy),
+            );
         }
     }
 
@@ -246,7 +264,7 @@ final class SubmitForApproval
         /** @var ApprovalRequest|null $open */
         $open = ApprovalRequest::query()
             ->forApprovable($approvable)
-            ->pending()
+            ->unresolved()
             ->first();
 
         if ($open !== null) {

@@ -7,6 +7,7 @@ namespace ByRcsc\LaravelApproval\Actions;
 use ByRcsc\LaravelApproval\Data\Draft;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
+use ByRcsc\LaravelApproval\Events\ApprovalApproved;
 use ByRcsc\LaravelApproval\Events\DraftApplied;
 use ByRcsc\LaravelApproval\Events\DraftConflicted;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -45,7 +46,10 @@ final class ApplyDraft
         $draft = Draft::fromRequest($request);
 
         if ($draft === null) {
-            return $this->complete($request);
+            $this->complete($request);
+            Event::dispatch(new ApprovalApproved($request));
+
+            return $request;
         }
 
         $approvable = $request->approvable;
@@ -82,6 +86,7 @@ final class ApplyDraft
         $this->complete($request);
 
         Event::dispatch(new DraftApplied($request, $approvable, $draft));
+        Event::dispatch(new ApprovalApproved($request));
 
         return $request;
     }
@@ -103,7 +108,7 @@ final class ApplyDraft
     {
         $request->forceFill([
             'state' => RequestState::Conflicted,
-            'completed_at' => Date::now(),
+            'completed_at' => null,
         ])->save();
 
         ($this->recordAction)(

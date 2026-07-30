@@ -168,7 +168,7 @@ it('rolls back rather than stranding a level below its quorum', function (): voi
     HeadOfDepartmentResolver::$heads = [$one];
 
     expect(fn () => Approval::resync($request, null, prune: true))
-        ->toThrow(InvalidWorkflowException::class, 'requires 2 approvals but has only 1 approver');
+        ->toThrow(InvalidWorkflowException::class, 'approval rule requires 2 approvals but only 1 assignments were resolved');
 
     expect($request->steps()->sole()->approverSlots()->count())->toBe(2);
 });

@@ -6,6 +6,7 @@ namespace ByRcsc\LaravelApproval\Definitions;
 
 use ByRcsc\LaravelApproval\Contracts\LevelCondition;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowDefinitionException;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,6 +21,7 @@ final readonly class LevelDefinition
         public int $sequence,
         public string $name,
         public ?int $requiredApprovals,
+        public RejectionPolicy $rejectionPolicy,
         public ?int $slaMinutes,
         public ?EscalationAction $escalationStrategy,
         public ?array $escalationConfig,
@@ -33,7 +35,7 @@ final readonly class LevelDefinition
         }
 
         if ($requiredApprovals !== null && $requiredApprovals < 1) {
-            throw InvalidWorkflowDefinitionException::because("level {$sequence} has a non-positive quorum.");
+            throw InvalidWorkflowDefinitionException::because("stage {$sequence} has a non-positive minimum approvals rule.");
         }
 
         if ($slaMinutes !== null && $slaMinutes < 1) {
@@ -77,11 +79,22 @@ final readonly class LevelDefinition
 
         $condition = $value['condition'] ?? null;
         $condition = is_string($condition) && $condition !== '' ? $condition : null;
+        $rejectionPolicy = $value['rejection_policy'] ?? RejectionPolicy::ApprovalImpossible;
+        $rejectionPolicy = $rejectionPolicy instanceof RejectionPolicy
+            ? $rejectionPolicy
+            : (is_string($rejectionPolicy) ? RejectionPolicy::tryFrom($rejectionPolicy) : null);
+
+        if ($rejectionPolicy === null) {
+            throw InvalidWorkflowDefinitionException::because(
+                "stage {$defaultSequence} has an unknown rejection policy."
+            );
+        }
 
         return new self(
             sequence: self::integer($value['sequence'] ?? $defaultSequence, 'sequence'),
             name: self::text($value['name'] ?? "Level {$defaultSequence}", 'name'),
             requiredApprovals: self::nullableInteger($value['required_approvals'] ?? null, 'required_approvals'),
+            rejectionPolicy: $rejectionPolicy,
             slaMinutes: self::nullableInteger($value['sla_minutes'] ?? null, 'sla_minutes'),
             escalationStrategy: $strategy,
             escalationConfig: self::nullableArray($value['escalation_config'] ?? null, 'escalation_config'),
@@ -106,6 +119,7 @@ final readonly class LevelDefinition
             'sequence' => $this->sequence,
             'name' => $this->name,
             'required_approvals' => $this->requiredApprovals,
+            'rejection_policy' => $this->rejectionPolicy,
             'sla_minutes' => $this->slaMinutes,
             'escalation_strategy' => $this->escalationStrategy?->value,
             'escalation_config' => $this->escalationConfig,

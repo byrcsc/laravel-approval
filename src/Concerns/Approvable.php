@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Concerns;
 
+use ByRcsc\LaravelApproval\Actions\SystemCloseRequest;
 use ByRcsc\LaravelApproval\Contracts\AutoSubmitsForApproval;
 use ByRcsc\LaravelApproval\Data\AutoSubmission;
-use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\TimelineEntry;
+use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Enums\ApprovalMode;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalGuardException;
@@ -74,13 +75,16 @@ trait Approvable
                 && method_exists($model, 'isForceDeleting')
                 && $model->isForceDeleting();
 
-            if ($usesSoftDeletes && ! $forceDeleting && ! $model->cancelApprovalOnSoftDelete()) {
+            if ($usesSoftDeletes && ! $forceDeleting && ! $model->closeApprovalOnSoftDelete()) {
                 return;
             }
 
             Approval::requestsFor($model)
-                ->pending()
-                ->each(fn (ApprovalRequest $request): ApprovalRequest => Approval::cancel($request, force: true));
+                ->unresolved()
+                ->each(fn (ApprovalRequest $request): ApprovalRequest => app(SystemCloseRequest::class)(
+                    $request,
+                    'The approvable model was deleted.',
+                ));
         });
 
         static::created(function (self $model): void {
@@ -173,16 +177,16 @@ trait Approvable
         return $request === null ? null : Approval::eligibility($request, $user);
     }
 
-    public function cancellationEligibility(Model $user): ?CancellationEligibility
+    public function withdrawalEligibility(Model $user): ?WithdrawalEligibility
     {
         $request = $this->pendingApprovalRequest();
 
-        return $request === null ? null : Approval::cancellationEligibility($request, $user);
+        return $request === null ? null : Approval::withdrawalEligibility($request, $user);
     }
 
-    public function canCancelApproval(Model $user): bool
+    public function canWithdrawApproval(Model $user): bool
     {
-        return $this->cancellationEligibility($user)?->eligible === true;
+        return $this->withdrawalEligibility($user)?->eligible === true;
     }
 
     public function delegationEligibility(Model $user, ?Model $delegate = null): ?DelegationEligibility
@@ -236,7 +240,7 @@ trait Approvable
      * Withdraw the open request, if there is one. Returns false when there was
      * nothing to withdraw, so callers do not have to check first.
      */
-    public function cancelApproval(?Model $actor = null, ?string $comment = null, bool $force = false): bool
+    public function withdrawApproval(Model $actor, ?string $comment = null): bool
     {
         $request = $this->pendingApprovalRequest();
 
@@ -244,7 +248,7 @@ trait Approvable
             return false;
         }
 
-        Approval::cancel($request, $actor, $comment, $force);
+        Approval::withdraw($request, $actor, $comment);
 
         return true;
     }
@@ -297,7 +301,7 @@ trait Approvable
      * Soft-deleted records are recoverable by default, so their request stays
      * recoverable too. Hard deletes and force deletes always close it.
      */
-    public function cancelApprovalOnSoftDelete(): bool
+    public function closeApprovalOnSoftDelete(): bool
     {
         return false;
     }

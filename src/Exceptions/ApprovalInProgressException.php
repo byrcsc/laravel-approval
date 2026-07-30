@@ -23,7 +23,7 @@ final class ApprovalInProgressException extends ApprovalException
     {
         return new self(
             sprintf(
-                '[%s#%s] already has an approval request awaiting a decision (%s). Cancel it before submitting another.',
+                '[%s#%s] already has an unresolved approval request (%s). Resolve or close it before submitting another.',
                 $approvable::class,
                 self::describeKey($approvable),
                 Attributes::string($open, 'ulid'),

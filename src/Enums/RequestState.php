@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Enums;
 
 /**
- * `Pending` is the only open state; the rest are terminal. `Returned` may
+ * `Pending` and `Conflicted` are unresolved states. `Returned` may
  * produce a linked successor through resume. `Conflicted` means
  * the draft cleared every level but the record had changed underneath it, so
  * nothing was applied and a human has to decide what happens next.
@@ -17,5 +17,7 @@ enum RequestState: string
     case Rejected = 'rejected';
     case Returned = 'returned';
     case Conflicted = 'conflicted';
+    case Withdrawn = 'withdrawn';
     case Cancelled = 'cancelled';
+    case Superseded = 'superseded';
 }

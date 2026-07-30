@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Definitions;
 
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use Illuminate\Database\Eloquent\Model;
 
 final class LevelBuilder
@@ -17,14 +18,29 @@ final class LevelBuilder
         $this->definition = [
             'name' => $name,
             'sequence' => $sequence,
-            'required_approvals' => 1,
+            'required_approvals' => null,
+            'rejection_policy' => RejectionPolicy::ApprovalImpossible,
             'approvers' => [],
         ];
     }
 
-    public function quorum(?int $required): self
+    public function minimumApprovals(?int $required): self
     {
         $this->definition['required_approvals'] = $required;
+
+        return $this;
+    }
+
+    public function quorum(?int $required): self
+    {
+        $this->minimumApprovals($required);
+
+        return $this;
+    }
+
+    public function rejectionPolicy(RejectionPolicy $policy): self
+    {
+        $this->definition['rejection_policy'] = $policy;
 
         return $this;
     }

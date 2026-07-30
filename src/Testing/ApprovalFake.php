@@ -136,7 +136,12 @@ final class ApprovalFake extends ApprovalManager
         return new BulkDecisionResult($outcomes);
     }
 
-    public function cancel(ApprovalRequest $request, ?Model $actor = null, ?string $comment = null, bool $force = false): ApprovalRequest
+    public function withdraw(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
+    {
+        return $request;
+    }
+
+    public function cancel(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
     {
         return $request;
     }
