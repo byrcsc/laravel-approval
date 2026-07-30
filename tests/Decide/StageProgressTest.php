@@ -80,3 +80,41 @@ it('reports rejected stage progress', function (): void {
         ->and($progress?->status)->toBe(StageStatus::Rejected)
         ->and($progress?->isSatisfied())->toBeFalse();
 });
+
+it('excludes approvers who already responded from pending approvers', function (): void {
+    $one = user('One');
+    $two = user('Two');
+    $three = user('Three');
+    $order = purchaseOrder();
+    $request = $order->submitForApproval(
+        workflow([['required_approvals' => 2, 'approvers' => [$one, $two, $three]]]),
+        null,
+        user('Requester'),
+    );
+
+    Approval::approve($request, $one);
+    $request->refresh();
+
+    expect($request->pendingApprovers()->pluck('name')->sort()->values()->all())->toBe(['Three', 'Two'])
+        ->and($request->currentStageApprovers()->pluck('name')->sort()->values()->all())->toBe(['One', 'Three', 'Two'])
+        ->and($order->pendingApprovalApprovers()->pluck('name')->sort()->values()->all())->toBe(['Three', 'Two'])
+        ->and($order->currentStageApprovers()->pluck('name')->sort()->values()->all())->toBe(['One', 'Three', 'Two']);
+});
+
+it('treats a delegate who responded as a responded assignment', function (): void {
+    $one = user('One');
+    $two = user('Two');
+    $delegate = user('Delegate');
+    $request = post()->submitForApproval(
+        workflow([['required_approvals' => 2, 'approvers' => [$one, $two]]]),
+        null,
+        user('Requester'),
+    );
+
+    Approval::delegate($request, $one, $delegate);
+    Approval::approve($request, $delegate);
+    $request->refresh();
+
+    expect($request->pendingApprovers()->pluck('name')->all())->toBe(['Two'])
+        ->and($request->currentStageApprovers()->pluck('name')->sort()->values()->all())->toBe(['Delegate', 'Two']);
+});

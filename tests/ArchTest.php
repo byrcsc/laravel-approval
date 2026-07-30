@@ -126,7 +126,7 @@ arch('events carry a request and nothing else')
 // Audit entries can only be appended through an action, so stateful model code
 // cannot quietly create a second write path. This is what makes the hash chain
 // an invariant rather than a convention: RecordAction is the only maintainer,
-// and the exact consumers below cannot create entries themselves. A source-level
+// and the exact consumers below cannot create entries themselves. A source-stage
 // assertion later in this file separately pins RecordAction as the sole creator.
 arch('only actions write the audit trail')
     ->expect(ApprovalAction::class)

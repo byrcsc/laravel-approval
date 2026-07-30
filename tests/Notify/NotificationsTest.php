@@ -2,19 +2,29 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Events\ApprovalApproved;
 use ByRcsc\LaravelApproval\Events\ApprovalCompleted;
+use ByRcsc\LaravelApproval\Events\ApprovalDelegated;
 use ByRcsc\LaravelApproval\Events\ApprovalRejected;
+use ByRcsc\LaravelApproval\Events\ApprovalReturned;
 use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
+use ByRcsc\LaravelApproval\Events\ApproverReassigned;
+use ByRcsc\LaravelApproval\Events\ApproversEscalated;
+use ByRcsc\LaravelApproval\Events\ApproversResynced;
 use ByRcsc\LaravelApproval\Events\DraftConflicted;
-use ByRcsc\LaravelApproval\Events\LevelCompleted;
-use ByRcsc\LaravelApproval\Events\StepOverdue;
+use ByRcsc\LaravelApproval\Events\StageCompleted;
+use ByRcsc\LaravelApproval\Events\StageOverdue;
+use ByRcsc\LaravelApproval\Events\StageOverdueReminder;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Notifications\ApprovalApprovedNotification;
+use ByRcsc\LaravelApproval\Notifications\ApprovalAssignedNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalOverdueNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalRejectedNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalRequestedNotification;
+use ByRcsc\LaravelApproval\Notifications\ApprovalReturnedNotification;
 use ByRcsc\LaravelApproval\Support\NotificationMap;
+use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use ByRcsc\LaravelApproval\Tests\Stubs\User;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Notification;
@@ -79,7 +89,7 @@ describe('who gets told', function (): void {
         Notification::fake();
     });
 
-    it('asks the approvers of the level now waiting', function (): void {
+    it('asks the approvers of the stage now waiting', function (): void {
         $first = user('First');
         $second = user('Second');
 
@@ -98,7 +108,7 @@ describe('who gets told', function (): void {
         Notification::assertSentTo($second, ApprovalRequestedNotification::class);
     });
 
-    it('asks every seat on a level with a quorum', function (): void {
+    it('asks every assignment on a stage with a required approvals', function (): void {
         $one = user('One');
         $two = user('Two');
 
@@ -109,7 +119,7 @@ describe('who gets told', function (): void {
         Notification::assertSentTo($two, ApprovalRequestedNotification::class);
     });
 
-    it('asks the delegate rather than the approver who handed the seat over', function (): void {
+    it('asks the delegate rather than the approver who handed the assignment over', function (): void {
         $first = user('First');
         $approver = user('Approver');
         $delegate = user('Delegate');
@@ -121,9 +131,9 @@ describe('who gets told', function (): void {
 
         $request = post()->submitForApproval($workflow, null, user('Author'));
 
-        // Delegate the queued level, then let it become active.
-        $seat = $request->steps()->get()[1]->approverSlots()->sole();
-        $seat->forceFill([
+        // Delegate the queued stage, then let it become active.
+        $assignment = $request->stages()->get()[1]->assignments()->sole();
+        $assignment->forceFill([
             'delegated_to_type' => $delegate->getMorphClass(),
             'delegated_to_id' => $delegate->getKey(),
         ])->save();
@@ -166,11 +176,11 @@ describe('who gets told', function (): void {
         );
     });
 
-    it('tells the late approvers when a level goes overdue', function (): void {
+    it('tells the late approvers when a stage goes overdue', function (): void {
         Date::setTestNow('2026-07-28 09:00:00');
 
         $request = overdueRequest();
-        $approver = $request->steps()->sole()->approverSlots()->sole()->approver;
+        $approver = $request->stages()->sole()->assignments()->sole()->approver;
 
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
@@ -259,8 +269,8 @@ describe('transaction safety', function (): void {
 
         $workflow = workflow([
             ['approvers' => [user('Approver')]],
-            // A second level with no approvers makes the whole submit fail
-            // after the first level's events would otherwise have fired.
+            // A second stage with no approvers makes the whole submit fail
+            // after the first stage's events would otherwise have fired.
             ['approvers' => []],
         ]);
 
@@ -278,14 +288,120 @@ describe('the map', function (): void {
         expect(NotificationMap::resolved())->toBe([]);
     });
 
-    it('maps the six events it ships with', function (): void {
+    it('maps the events it ships with', function (): void {
         expect(array_keys(NotificationMap::defaults()))->toBe([
             ApprovalSubmitted::class,
-            LevelCompleted::class,
+            StageCompleted::class,
             ApprovalApproved::class,
             DraftConflicted::class,
             ApprovalRejected::class,
-            StepOverdue::class,
+            ApprovalReturned::class,
+            ApprovalDelegated::class,
+            ApproverReassigned::class,
+            ApproversResynced::class,
+            ApproversEscalated::class,
+            StageOverdue::class,
+            StageOverdueReminder::class,
         ]);
+    });
+});
+
+describe('assignment changes', function (): void {
+    beforeEach(function (): void {
+        withNotifications();
+        Notification::fake();
+    });
+
+    it('tells a delegate the assignment is now theirs', function (): void {
+        $approver = user('Approver');
+        $delegate = user('Delegate');
+        $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user('Author'));
+
+        Notification::fake();
+        Approval::delegate($request, $approver, $delegate);
+
+        Notification::assertSentTo($delegate, ApprovalAssignedNotification::class);
+        Notification::assertNotSentTo($approver, ApprovalAssignedNotification::class);
+    });
+
+    it('tells a reassigned replacement, never the replaced holder', function (): void {
+        $leaver = user('Leaver');
+        $successor = user('Successor');
+        $request = post()->submitForApproval(workflow([['approvers' => [$leaver]]]), null, user('Author'));
+
+        Notification::fake();
+        Approval::reassign($request, $request->stages()->sole()->assignments()->sole(), $successor, user('Admin'));
+
+        Notification::assertSentTo($successor, ApprovalAssignedNotification::class);
+        Notification::assertNotSentTo($leaver, ApprovalAssignedNotification::class);
+    });
+
+    it('tells the approvers a resync adds', function (): void {
+        $head = user('Head');
+        $deputy = user('Deputy');
+        HeadOfDepartmentResolver::$heads = [$head];
+
+        $workflow = workflow([['required_approvals' => 1, 'approvers' => [['resolver' => HeadOfDepartmentResolver::class]]]]);
+        $request = post()->submitForApproval($workflow, null, user('Author'));
+
+        HeadOfDepartmentResolver::$heads = [$head, $deputy];
+
+        Notification::fake();
+        Approval::resync($request, user('Operator'));
+
+        Notification::assertSentTo($deputy, ApprovalAssignedNotification::class);
+        Notification::assertNotSentTo($head, ApprovalAssignedNotification::class);
+    });
+
+    it('tells the approvers an escalation brings in', function (): void {
+        Date::setTestNow('2026-07-28 09:00:00');
+        $duty = user('Duty officer');
+        HeadOfDepartmentResolver::$heads = [$duty];
+
+        $request = overdueRequest(EscalationAction::Escalate, ['resolver' => HeadOfDepartmentResolver::class]);
+        $original = $request->stages()->sole()->assignments()->sole()->approver;
+
+        Date::setTestNow('2026-07-28 10:01:00');
+        Notification::fake();
+        Approval::escalateOverdue();
+
+        Notification::assertSentTo($duty, ApprovalAssignedNotification::class);
+        Notification::assertSentTo($original, ApprovalOverdueNotification::class);
+        Notification::assertNotSentTo($duty, ApprovalOverdueNotification::class);
+
+        Date::setTestNow();
+    });
+
+    it('tells the requester a return needs their revision', function (): void {
+        $author = user('Author');
+        $approver = user('Approver');
+        $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, $author);
+
+        Notification::fake();
+        Approval::returnToSubmitter($request, $approver, 'Fix the title.');
+
+        Notification::assertSentTo($author, ApprovalReturnedNotification::class);
+        Notification::assertNotSentTo($approver, ApprovalReturnedNotification::class);
+    });
+
+    it('sends the overdue notification again on each reminder', function (): void {
+        Date::setTestNow('2026-07-28 09:00:00');
+
+        $request = post()->submitForApproval(workflow([[
+            'sla_minutes' => 60,
+            'remind_every_minutes' => 30,
+            'approvers' => [user('Approver')],
+        ]]), null, user('Author'));
+        $approver = $request->stages()->sole()->assignments()->sole()->approver;
+
+        Date::setTestNow('2026-07-28 10:01:00');
+        Approval::escalateOverdue();
+
+        Date::setTestNow('2026-07-28 10:31:30');
+        Approval::escalateOverdue();
+
+        Notification::assertSentToTimes($approver, ApprovalOverdueNotification::class, 2);
+
+        Date::setTestNow();
     });
 });

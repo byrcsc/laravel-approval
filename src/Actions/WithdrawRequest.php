@@ -6,7 +6,7 @@ namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Enums\WithdrawalIneligibility;
 use ByRcsc\LaravelApproval\Events\ApprovalWithdrawn;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
@@ -46,9 +46,9 @@ final class WithdrawRequest
                 throw UnauthorizedApproverException::notTheSubmitter($actor, $request);
             }
 
-            $request->steps()
-                ->whereIn('state', [StepState::Queued->value, StepState::Active->value])
-                ->update(['state' => StepState::Skipped->value]);
+            $request->stages()
+                ->whereIn('state', [StageStatus::Queued->value, StageStatus::Active->value])
+                ->update(['state' => StageStatus::Skipped->value]);
 
             $request->forceFill([
                 'state' => RequestState::Withdrawn,

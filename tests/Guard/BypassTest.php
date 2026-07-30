@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalGuardException;
@@ -293,34 +294,34 @@ it('permits direct edits while a request sits returned', function (): void {
         ->and($request->refresh()->state)->toBe(RequestState::Returned);
 });
 
-it('resumes a returned request from a snapshot taken after the submitter edited', function (): void {
+it('revises a returned request from a snapshot taken after the submitter edited', function (): void {
     [$post, $request, $approver] = guardedPost();
 
     Approval::returnToSubmitter($request, $approver, 'Fix the title and send it back');
 
     $post->update(['title' => 'Fixed by the submitter']);
 
-    $replacement = Approval::resume($request->refresh());
+    $replacement = Approval::reviseAndResubmit($request->refresh(), RevisedDraft::inherit());
 
     Approval::approve($replacement, $approver);
 
     // Two halves of one decision. The fresh snapshot means the submitter's own
     // edit is not drift, so the draft applies rather than conflicting - and
     // because the draft is unchanged, applying it puts the *approved* value
-    // back over the fix. A submitter who edits directly resumes with
-    // `changes`; see the test below.
+    // back over the fix. A submitter who edited directly revises with the
+    // fixed value in the draft; see the test below.
     expect($replacement->refresh()->state)->toBe(RequestState::Approved)
         ->and($post->fresh()?->title)->toBe('Approved title');
 });
 
-it('carries a direct fix forward when the resume names it as a change', function (): void {
+it('carries a direct fix forward when the revision names it in the draft', function (): void {
     [$post, $request, $approver] = guardedPost();
 
     Approval::returnToSubmitter($request, $approver, 'Fix the title and send it back');
 
     $post->update(['title' => 'Fixed by the submitter']);
 
-    $replacement = Approval::resume($request->refresh(), ['title' => 'Fixed by the submitter']);
+    $replacement = Approval::reviseAndResubmit($request->refresh(), RevisedDraft::withAttributes(['title' => 'Fixed by the submitter']));
 
     Approval::approve($replacement, $approver);
 

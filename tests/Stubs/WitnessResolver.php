@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Tests\Stubs;
 
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
-use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\StageSnapshot;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -25,7 +25,7 @@ final class WitnessResolver implements ApproverResolver
      * @param  array<string, mixed>  $config
      * @return iterable<int, Model>
      */
-    public function resolve(LevelSnapshot $level, Model $approvable, Model $submitter, array $config): iterable
+    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
     {
         self::$sawAmount = $approvable->getAttributeValue('amount');
 

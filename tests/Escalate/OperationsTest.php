@@ -5,21 +5,22 @@ declare(strict_types=1);
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Events\StepOverdue;
-use ByRcsc\LaravelApproval\Events\StepStranded;
+use ByRcsc\LaravelApproval\Events\StageOverdue;
+use ByRcsc\LaravelApproval\Events\StageOverdueReminder;
+use ByRcsc\LaravelApproval\Events\StageStranded;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
 
 it('sends overdue reminders at the snapshotted cadence without re-escalating', function (): void {
-    Event::fake([StepOverdue::class]);
+    Event::fake([StageOverdue::class, StageOverdueReminder::class]);
     Date::setTestNow('2026-07-28 10:00:00');
 
     $request = post()->submitForApproval(workflow([[
         'sla_minutes' => 60,
         'remind_every_minutes' => 30,
-        'escalation_strategy' => EscalationAction::Notify,
+        'escalation_strategy' => EscalationAction::RecordOnly,
         'approvers' => [user('Approver')],
     ]]), null, user('Author'));
 
@@ -37,11 +38,12 @@ it('sends overdue reminders at the snapshotted cadence without re-escalating', f
         ->and($request->actions()->where('action', ActionType::Escalated->value)->count())->toBe(1)
         ->and($request->actions()->where('action', ActionType::Reminded->value)->count())->toBe(2);
 
-    Event::assertDispatchedTimes(StepOverdue::class, 3);
+    Event::assertDispatchedTimes(StageOverdue::class, 1);
+    Event::assertDispatchedTimes(StageOverdueReminder::class, 2);
 });
 
 it('flags a deleted sole approver in status, doctor, and the sweep event', function (): void {
-    Event::fake([StepStranded::class]);
+    Event::fake([StageStranded::class]);
     $approver = user('Departed approver');
     $request = post()->submitForApproval(
         workflow([['approvers' => [$approver]]]),
@@ -56,7 +58,7 @@ it('flags a deleted sole approver in status, doctor, and the sweep event', funct
         ->assertSuccessful();
 
     $this->artisan('approval:doctor')
-        ->expectsOutputToContain('Found 1 stranded approval level')
+        ->expectsOutputToContain('Found 1 stranded approval stage')
         ->assertFailed();
 
     $first = Approval::escalateOverdue();
@@ -64,12 +66,12 @@ it('flags a deleted sole approver in status, doctor, and the sweep event', funct
 
     expect($first['stranded'])->toHaveCount(1)
         ->and($second['stranded'])->toBe([])
-        ->and($request->steps()->sole()->stranded_at)->not->toBeNull();
+        ->and($request->stages()->sole()->stranded_at)->not->toBeNull();
 
-    Event::assertDispatchedTimes(StepStranded::class, 1);
+    Event::assertDispatchedTimes(StageStranded::class, 1);
 });
 
-it('clears the stranded marker when a dead seat is reassigned', function (): void {
+it('clears the stranded marker when a dead assignment is reassigned', function (): void {
     $departed = user('Departed');
     $replacement = user('Replacement');
     $request = post()->submitForApproval(
@@ -77,13 +79,13 @@ it('clears the stranded marker when a dead seat is reassigned', function (): voi
         null,
         user('Author'),
     );
-    $seat = $request->steps()->sole()->approverSlots()->sole();
+    $assignment = $request->stages()->sole()->assignments()->sole();
     $departed->delete();
     Approval::escalateOverdue();
 
-    Approval::reassign($request, $seat, $replacement, user('Administrator'));
+    Approval::reassign($request, $assignment, $replacement, user('Administrator'));
 
-    expect($request->steps()->sole()->stranded_at)->toBeNull();
+    expect($request->stages()->sole()->stranded_at)->toBeNull();
 });
 
 it('keeps the cadence the request was submitted under', function (): void {
@@ -98,7 +100,7 @@ it('keeps the cadence the request was submitted under', function (): void {
 
     // The workflow is edited while the request is in flight. Per the snapshot
     // rule, the request keeps the cadence it was submitted under.
-    $workflow->levels()->sole()->update(['remind_every_minutes' => 5]);
+    $workflow->stages()->sole()->update(['remind_every_minutes' => 5]);
 
     Date::setTestNow('2026-07-28 11:01:00');
     Approval::escalateOverdue();
@@ -110,7 +112,7 @@ it('keeps the cadence the request was submitted under', function (): void {
     expect(Approval::escalateOverdue()['reminded'])->toHaveCount(1);
 });
 
-it('stops reminding once the strategy has decided the level', function (): void {
+it('stops reminding once the strategy has decided the stage', function (): void {
     Date::setTestNow('2026-07-28 10:00:00');
     $request = post()->submitForApproval(workflow([[
         'sla_minutes' => 60,
@@ -152,11 +154,11 @@ it('never escalates a second time, however many reminders it sends', function ()
     Date::setTestNow('2026-07-28 12:01:00');
     Approval::escalateOverdue();
 
-    expect($request->steps()->sole()->approverSlots()->count())->toBe(2)
+    expect($request->stages()->sole()->assignments()->count())->toBe(2)
         ->and($request->actions()->where('action', ActionType::Reminded->value)->count())->toBe(2);
 });
 
-it('strands an all-of-them level the moment one holder goes', function (): void {
+it('strands an all-of-them stage the moment one holder goes', function (): void {
     $first = user('First');
     $second = user('Second');
     $request = post()->submitForApproval(
@@ -170,7 +172,7 @@ it('strands an all-of-them level the moment one holder goes', function (): void 
     $second->delete();
 
     expect(Approval::escalateOverdue()['stranded'])->toHaveCount(1)
-        ->and($request->steps()->sole()->stranded_at)->not->toBeNull();
+        ->and($request->stages()->sole()->stranded_at)->not->toBeNull();
 });
 
 it('caps what the doctor lists without hiding that it found more', function (): void {
@@ -183,7 +185,7 @@ it('caps what the doctor lists without hiding that it found more', function (): 
     }
 
     $this->artisan('approval:doctor --limit=2')
-        ->expectsOutputToContain('Found 2 stranded approval levels')
+        ->expectsOutputToContain('Found 2 stranded approval stages')
         ->assertFailed();
 });
 

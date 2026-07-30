@@ -11,41 +11,41 @@ use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use Illuminate\Support\Facades\Event;
 
-it('rewrites who a seat belongs to', function (): void {
+it('rewrites who an assignment belongs to', function (): void {
     $leaver = user('Leaver');
     $successor = user('Successor');
 
     $workflow = workflow([['approvers' => [$leaver]]]);
     $request = post()->submitForApproval($workflow, null, user());
-    $seat = $request->steps()->sole()->approverSlots()->sole();
+    $assignment = $request->stages()->sole()->assignments()->sole();
 
-    Approval::reassign($request, $seat, $successor, user('Admin'), 'Left in March.');
+    Approval::reassign($request, $assignment, $successor, user('Admin'), 'Left in March.');
 
-    expect($seat->refresh()->approver?->getKey())->toBe($successor->getKey())
-        ->and($seat->source)->toBe(ApproverSource::Reassigned)
-        ->and($seat->delegatedTo)->toBeNull();
+    expect($assignment->refresh()->approver?->getKey())->toBe($successor->getKey())
+        ->and($assignment->source)->toBe(ApproverSource::Reassigned)
+        ->and($assignment->delegatedTo)->toBeNull();
 });
 
-it('lets the successor carry the level', function (): void {
+it('lets the successor carry the stage', function (): void {
     $leaver = user('Leaver');
     $successor = user('Successor');
 
     $workflow = workflow([['approvers' => [$leaver]]]);
     $request = post()->submitForApproval($workflow, null, user());
 
-    Approval::reassign($request, $request->steps()->sole()->approverSlots()->sole(), $successor);
+    Approval::reassign($request, $request->stages()->sole()->assignments()->sole(), $successor, user('Admin'));
     Approval::approve($request, $successor);
 
     expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
 
-it('takes the seat away from whoever held it', function (): void {
+it('takes the assignment away from whoever held it', function (): void {
     $leaver = user('Leaver');
 
     $workflow = workflow([['approvers' => [$leaver]]]);
     $request = post()->submitForApproval($workflow, null, user());
 
-    Approval::reassign($request, $request->steps()->sole()->approverSlots()->sole(), user('Successor'));
+    Approval::reassign($request, $request->stages()->sole()->assignments()->sole(), user('Successor'), user('Admin'));
 
     expect(fn () => Approval::approve($request, $leaver))
         ->toThrow(UnauthorizedApproverException::class);
@@ -60,7 +60,7 @@ it('clears a delegation the departed approver had made', function (): void {
     $request = post()->submitForApproval($workflow, null, user());
 
     Approval::delegate($request, $leaver, $delegate);
-    Approval::reassign($request, $request->steps()->sole()->approverSlots()->sole(), $successor);
+    Approval::reassign($request, $request->stages()->sole()->assignments()->sole(), $successor, user('Admin'));
 
     expect(fn () => Approval::approve($request, $delegate))
         ->toThrow(UnauthorizedApproverException::class);
@@ -70,7 +70,7 @@ it('clears a delegation the departed approver had made', function (): void {
     expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
 
-it('works on a level the request has not reached yet', function (): void {
+it('works on a stage the request has not reached yet', function (): void {
     $first = user('First');
     $leaver = user('Leaver');
     $successor = user('Successor');
@@ -81,9 +81,9 @@ it('works on a level the request has not reached yet', function (): void {
     ]);
 
     $request = post()->submitForApproval($workflow, null, user());
-    $queued = $request->steps()->get()[1];
+    $queued = $request->stages()->get()[1];
 
-    Approval::reassign($request, $queued->approverSlots()->sole(), $successor);
+    Approval::reassign($request, $queued->assignments()->sole(), $successor, user('Admin'));
 
     Approval::approve($request, $first);
     Approval::approve($request, $successor);
@@ -101,7 +101,7 @@ it('records what it moved and announces it', function (): void {
     $workflow = workflow([['approvers' => [$leaver]]]);
     $request = post()->submitForApproval($workflow, null, user());
 
-    Approval::reassign($request, $request->steps()->sole()->approverSlots()->sole(), $successor, $admin, 'Left in March.');
+    Approval::reassign($request, $request->stages()->sole()->assignments()->sole(), $successor, $admin, 'Left in March.');
 
     $action = $request->actions()->where('action', 'reassigned')->sole();
 
@@ -119,20 +119,20 @@ it('records what it moved and announces it', function (): void {
 });
 
 describe('what reassignment refuses', function (): void {
-    it('refuses moving a seat that already voted', function (): void {
+    it('refuses moving an assignment that already decided', function (): void {
         $one = user('One');
         $workflow = workflow([['required_approvals' => 2, 'approvers' => [$one, user('Two')]]]);
         $request = post()->submitForApproval($workflow, null, user());
 
-        $seat = $request->steps()->sole()->approverSlots()->orderBy('id')->first();
+        $assignment = $request->stages()->sole()->assignments()->orderBy('id')->first();
 
         Approval::approve($request, $one);
 
-        expect(fn () => Approval::reassign($request, $seat, user('Successor')))
+        expect(fn () => Approval::reassign($request, $assignment, user('Successor'), user('Admin')))
             ->toThrow(AlreadyDecidedException::class, 'already has a decision and cannot be moved');
     });
 
-    it('refuses moving an unused seat on a completed level', function (): void {
+    it('refuses moving an unused assignment on a completed stage', function (): void {
         $one = user('One');
         $two = user('Two');
         $workflow = workflow([
@@ -141,29 +141,29 @@ describe('what reassignment refuses', function (): void {
         ]);
 
         $request = post()->submitForApproval($workflow, null, user('Author'));
-        $completedStep = $request->steps()->orderBy('sequence')->first();
-        $unusedSeat = $completedStep->approverSlots()->where('approver_id', $two->getKey())->sole();
+        $completedStep = $request->stages()->orderBy('sequence')->first();
+        $unusedSeat = $completedStep->assignments()->where('approver_id', $two->getKey())->sole();
 
         Approval::approve($request, $one);
 
-        expect(fn () => Approval::reassign($request, $unusedSeat, user('Replacement')))
+        expect(fn () => Approval::reassign($request, $unusedSeat, user('Replacement'), user('Admin')))
             ->toThrow(AlreadyDecidedException::class, 'stage is complete');
     });
 
-    it('refuses moving a seat onto somebody who already has one', function (): void {
+    it('refuses moving an assignment onto somebody who already has one', function (): void {
         $one = user('One');
         $two = user('Two');
 
         $workflow = workflow([['required_approvals' => 2, 'approvers' => [$one, $two]]]);
         $request = post()->submitForApproval($workflow, null, user());
 
-        $seat = $request->steps()->sole()->approverSlots()->orderBy('id')->first();
+        $assignment = $request->stages()->sole()->assignments()->orderBy('id')->first();
 
-        expect(fn () => Approval::reassign($request, $seat, $two))
+        expect(fn () => Approval::reassign($request, $assignment, $two, user('Admin')))
             ->toThrow(DelegationException::class, 'already has an assignment');
     });
 
-    it('refuses a seat that belongs to a different request', function (): void {
+    it('refuses an assignment that belongs to a different request', function (): void {
         $workflow = workflow([['approvers' => [user('A')]]]);
         $mine = post('Mine')->submitForApproval($workflow, null, user());
         $theirs = post('Theirs')->submitForApproval(
@@ -172,9 +172,9 @@ describe('what reassignment refuses', function (): void {
             user(),
         );
 
-        $foreign = $theirs->steps()->sole()->approverSlots()->sole();
+        $foreign = $theirs->stages()->sole()->assignments()->sole();
 
-        expect(fn () => Approval::reassign($mine, $foreign, user('Successor')))
+        expect(fn () => Approval::reassign($mine, $foreign, user('Successor'), user('Admin')))
             ->toThrow(AlreadyDecidedException::class, 'does not belong to approval request');
     });
 
@@ -182,11 +182,11 @@ describe('what reassignment refuses', function (): void {
         $approver = user('Approver');
         $workflow = workflow([['approvers' => [$approver]]]);
         $request = post()->submitForApproval($workflow, null, user());
-        $seat = $request->steps()->sole()->approverSlots()->sole();
+        $assignment = $request->stages()->sole()->assignments()->sole();
 
         Approval::approve($request, $approver);
 
-        expect(fn () => Approval::reassign($request, $seat, user('Successor')))
+        expect(fn () => Approval::reassign($request, $assignment, user('Successor'), user('Admin')))
             ->toThrow(AlreadyDecidedException::class, 'cannot be decided again');
     });
 });

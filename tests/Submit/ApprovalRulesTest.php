@@ -13,22 +13,22 @@ it('persists and snapshots the same unanimous default for fluent and array defin
     $second = user('Second');
 
     $fluent = WorkflowBuilder::make('fluent-default', 'Fluent default')
-        ->level('Review', fn ($stage) => $stage->approver($first)->approver($second));
+        ->stage('Review', fn ($stage) => $stage->approver($first)->approver($second));
 
     Approval::syncDefinitions([
         $fluent,
         [
             'slug' => 'array-default',
             'name' => 'Array default',
-            'levels' => [[
+            'stages' => [[
                 'name' => 'Review',
                 'approvers' => [$first, $second],
             ]],
         ],
     ]);
 
-    $fluentStage = Approval::workflow('fluent-default')->levels()->sole();
-    $arrayStage = Approval::workflow('array-default')->levels()->sole();
+    $fluentStage = Approval::workflow('fluent-default')->stages()->sole();
+    $arrayStage = Approval::workflow('array-default')->stages()->sole();
 
     expect($fluentStage->getAttributeValue('required_approvals'))->toBeNull()
         ->and($arrayStage->getAttributeValue('required_approvals'))->toBeNull()
@@ -43,8 +43,8 @@ it('persists and snapshots the same unanimous default for fluent and array defin
 
         Approval::approve($request, $second);
         expect($request->refresh()->state->value)->toBe('approved')
-            ->and($request->steps()->sole()->getAttributeValue('required_approvals'))->toBeNull()
-            ->and($request->steps()->sole()->rejection_policy)->toBe(RejectionPolicy::ApprovalImpossible);
+            ->and($request->stages()->sole()->getAttributeValue('required_approvals'))->toBeNull()
+            ->and($request->stages()->sole()->rejection_policy)->toBe(RejectionPolicy::ApprovalImpossible);
     }
 });
 
@@ -56,10 +56,10 @@ it('interprets omitted rules identically on directly persisted stages and snapsh
         'approvers' => [$first, $second],
     ]]);
 
-    $stage = $workflow->levels()->sole();
+    $stage = $workflow->stages()->sole();
 
     $request = post()->submitForApproval($workflow, null, user('Requester'));
-    $snapshot = $request->steps()->sole();
+    $snapshot = $request->stages()->sole();
 
     expect($snapshot->getAttributeValue('required_approvals'))->toBeNull()
         ->and($snapshot->getAttributeValue('rejection_policy'))->toBe(RejectionPolicy::ApprovalImpossible);
@@ -104,7 +104,7 @@ it('persists equivalent explicit approval and rejection rules from fluent and ar
 
     Approval::syncDefinitions([
         WorkflowBuilder::make('fluent-explicit', 'Fluent explicit')
-            ->level('Review', fn ($stage) => $stage
+            ->stage('Review', fn ($stage) => $stage
                 ->minimumApprovals(2)
                 ->rejectionPolicy(RejectionPolicy::AnyRejectionVetoes)
                 ->approver($first)
@@ -113,7 +113,7 @@ it('persists equivalent explicit approval and rejection rules from fluent and ar
         [
             'slug' => 'array-explicit',
             'name' => 'Array explicit',
-            'levels' => [[
+            'stages' => [[
                 'name' => 'Review',
                 'required_approvals' => 2,
                 'rejection_policy' => RejectionPolicy::AnyRejectionVetoes,
@@ -123,8 +123,8 @@ it('persists equivalent explicit approval and rejection rules from fluent and ar
     ]);
 
     foreach (['fluent-explicit', 'array-explicit'] as $slug) {
-        $stage = Approval::workflow($slug)->levels()->sole();
-        $snapshot = post()->submitForApproval($stage->workflow, null, user('Requester'))->steps()->sole();
+        $stage = Approval::workflow($slug)->stages()->sole();
+        $snapshot = post()->submitForApproval($stage->workflow, null, user('Requester'))->stages()->sole();
 
         expect($stage->required_approvals)->toBe(2)
             ->and($stage->rejection_policy)->toBe(RejectionPolicy::AnyRejectionVetoes)
@@ -167,7 +167,7 @@ it('rejects an invalid approval rule even when its conditional stage is skipped'
 
 it('rejects an invalid persisted rejection policy before writing a request', function (): void {
     $workflow = workflow([['approvers' => [user('Approver')]]], ['slug' => 'invalid-rejection-policy']);
-    $stage = $workflow->levels()->sole();
+    $stage = $workflow->stages()->sole();
     $stage->newQuery()->whereKey($stage->getKey())->update(['rejection_policy' => 'sometimes']);
 
     expect(fn () => post()->submitForApproval($workflow, null, user('Requester')))

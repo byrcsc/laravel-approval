@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Model;
  *
  * `CheckEligibility` does the thinking; this turns a refusal into the exception
  * that says so. Keeping them one calculation is deliberate - a package where
- * the button and the vote disagreed about who may act would be worse than one
+ * the button and the decision disagreed about who may act would be worse than one
  * that never offered to answer the question.
  */
 final class AuthorizeDecision

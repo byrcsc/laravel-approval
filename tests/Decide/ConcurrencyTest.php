@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
 use ByRcsc\LaravelApproval\Facades\Approval;
@@ -28,7 +28,7 @@ function staleCopyOf(ApprovalRequest $request): ApprovalRequest
     return ApprovalRequest::query()->findOrFail($request->getKey());
 }
 
-it('refuses a vote arriving through a copy loaded before the rejection', function (): void {
+it('refuses a decision arriving through a copy loaded before the rejection', function (): void {
     $approver = user('Approver');
     $rejector = user('Rejector');
 
@@ -48,7 +48,7 @@ it('refuses a vote arriving through a copy loaded before the rejection', functio
         ->and($stale->state)->toBe(RequestState::Rejected);
 });
 
-it('refuses a vote arriving through a copy loaded before the withdrawal', function (): void {
+it('refuses a decision arriving through a copy loaded before the withdrawal', function (): void {
     $approver = user('Approver');
     $submitter = user('Submitter');
 
@@ -63,7 +63,7 @@ it('refuses a vote arriving through a copy loaded before the withdrawal', functi
         ->toThrow(AlreadyDecidedException::class);
 });
 
-it('refuses a withdrawal arriving through a copy loaded before the final vote', function (): void {
+it('refuses a withdrawal arriving through a copy loaded before the final decision', function (): void {
     $approver = user('Approver');
     $submitter = user('Submitter');
 
@@ -79,7 +79,7 @@ it('refuses a withdrawal arriving through a copy loaded before the final vote', 
         ->and($stale->state)->toBe(RequestState::Approved);
 });
 
-it('refuses a duplicate vote arriving through a second copy', function (): void {
+it('refuses a duplicate decision arriving through a second copy', function (): void {
     $approver = user('Approver');
 
     $workflow = workflow([['required_approvals' => 2, 'approvers' => [$approver, user('Other')]]]);
@@ -94,7 +94,7 @@ it('refuses a duplicate vote arriving through a second copy', function (): void 
         ->and($request->refresh()->state)->toBe(RequestState::Pending);
 });
 
-it('applies the draft exactly once when the losing racer arrives after quorum', function (): void {
+it('applies the draft exactly once when the losing racer arrives after required approvals', function (): void {
     $one = user('One');
     $two = user('Two');
     $post = post('Original title');
@@ -102,7 +102,7 @@ it('applies the draft exactly once when the losing racer arrives after quorum', 
     $workflow = workflow([['required_approvals' => 1, 'approvers' => [$one, $two]]]);
     $request = $post->submitForApproval($workflow, ['title' => 'Revised title'], user());
 
-    // Both load the request while the quorum still stands at zero.
+    // Both load the request while the required approvals still stands at zero.
     $copyForOne = staleCopyOf($request);
     $copyForTwo = staleCopyOf($request);
 
@@ -115,7 +115,7 @@ it('applies the draft exactly once when the losing racer arrives after quorum', 
         ->and($request->actions()->where('action', 'approved')->count())->toBe(1);
 });
 
-it('counts both racers when the quorum has room for both', function (): void {
+it('counts both racers when the required approvals has room for both', function (): void {
     $one = user('One');
     $two = user('Two');
     $post = post('Original title');
@@ -129,12 +129,12 @@ it('counts both racers when the quorum has room for both', function (): void {
     Approval::approve($copyForOne, $one);
     Approval::approve($copyForTwo, $two);
 
-    // The second racer's reload sees the first vote, completes the quorum, and
-    // carries the level exactly once.
+    // The second racer's reload sees the first decision, completes the required approvals, and
+    // carries the stage exactly once.
     expect($request->refresh()->state)->toBe(RequestState::Approved)
         ->and($post->fresh()?->getAttributeValue('title'))->toBe('Revised title')
         ->and($request->actions()->where('action', 'applied')->count())->toBe(1)
-        ->and($request->steps()->sole()->state)->toBe(StepState::Approved);
+        ->and($request->stages()->sole()->state)->toBe(StageStatus::Approved);
 });
 
 it('refuses the second of two racing rejections', function (): void {
@@ -155,7 +155,7 @@ it('refuses the second of two racing rejections', function (): void {
         ->and($request->actions()->where('action', 'rejected')->count())->toBe(1);
 });
 
-it('refuses a stale vote against a level that has already advanced', function (): void {
+it('refuses a stale decision against a stage that has already advanced', function (): void {
     $first = user('First');
     $second = user('Second');
 
@@ -170,10 +170,10 @@ it('refuses a stale vote against a level that has already advanced', function ()
 
     Approval::approve($request, $first);
 
-    // First's copy still shows level one waiting; the reload knows the request
-    // has moved to a level First holds no seat on, which is the accurate
+    // First's copy still shows stage one waiting; the reload knows the request
+    // has moved to a stage First holds no assignment on, which is the accurate
     // refusal - "already decided" belongs to the request, not to them.
     expect(fn () => Approval::approve($stale, $first))
         ->toThrow(UnauthorizedApproverException::class)
-        ->and($request->refresh()->getAttributeValue('current_level_sequence'))->toBe(2);
+        ->and($request->refresh()->getAttributeValue('current_stage_sequence'))->toBe(2);
 });

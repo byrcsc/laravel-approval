@@ -5,11 +5,11 @@ declare(strict_types=1);
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevelApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStage;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStageApprover;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use ByRcsc\LaravelApproval\Tests\Stubs\User;
 use Illuminate\Database\Eloquent\Model;
@@ -29,66 +29,66 @@ it('gives every model a table that exists', function (string $model) {
     expect(Schema::hasTable($instance->getTable()))->toBeTrue();
 })->with([
     ApprovalWorkflow::class,
-    ApprovalWorkflowLevel::class,
-    ApprovalWorkflowLevelApprover::class,
+    ApprovalWorkflowStage::class,
+    ApprovalWorkflowStageApprover::class,
     ApprovalRequest::class,
-    ApprovalRequestStep::class,
-    ApprovalRequestStepApprover::class,
+    ApprovalRequestStage::class,
+    ApprovalRequestAssignment::class,
     ApprovalAction::class,
     ApprovalAttachment::class,
 ]);
 
-it('describes a workflow and its levels', function () {
+it('describes a workflow and its stages', function () {
     expect(Schema::hasColumns('approval_workflows', [
         'id', 'name', 'slug', 'description', 'active', 'settings',
         'created_at', 'updated_at', 'deleted_at',
     ]))->toBeTrue();
 
-    expect(Schema::hasColumns('approval_workflow_levels', [
+    expect(Schema::hasColumns('approval_workflow_stages', [
         'id', 'workflow_id', 'sequence', 'name', 'required_approvals', 'rejection_policy',
         'sla_minutes', 'escalation_strategy', 'escalation_config',
         'remind_every_minutes', 'condition', 'condition_config',
     ]))->toBeTrue();
 
-    expect(Schema::hasColumns('approval_workflow_level_approvers', [
-        'id', 'level_id', 'approver_type', 'approver_id', 'resolver', 'resolver_config',
+    expect(Schema::hasColumns('approval_workflow_stage_approvers', [
+        'id', 'stage_id', 'approver_type', 'approver_id', 'resolver', 'resolver_config',
     ]))->toBeTrue();
 });
 
-it('describes a request, its steps, and its approver slots', function () {
+it('describes a request, its steps, and its approver assignments', function () {
     expect(Schema::hasColumns('approval_requests', [
         'id', 'ulid', 'approvable_type', 'approvable_id', 'workflow_id', 'state',
-        'current_level_sequence', 'new_attributes', 'original_attributes',
+        'current_stage_sequence', 'new_attributes', 'original_attributes',
         'submitter_type', 'submitter_id', 'resubmitted_from_id',
         'submitted_at', 'completed_at', 'audit_head_hash',
     ]))->toBeTrue();
 
-    expect(Schema::hasColumns('approval_request_steps', [
+    expect(Schema::hasColumns('approval_request_stages', [
         'id', 'request_id', 'sequence', 'name', 'required_approvals', 'rejection_policy', 'sla_minutes',
         'escalation_strategy', 'escalation_config', 'remind_every_minutes',
         'condition', 'condition_config', 'condition_result',
         'deadline_at', 'escalated_at', 'last_reminded_at', 'stranded_at', 'state',
     ]))->toBeTrue();
 
-    expect(Schema::hasColumns('approval_request_step_approvers', [
-        'id', 'step_id', 'approver_type', 'approver_id',
+    expect(Schema::hasColumns('approval_request_assignments', [
+        'id', 'stage_id', 'approver_type', 'approver_id',
         'delegated_to_type', 'delegated_to_id', 'source',
     ]))->toBeTrue();
 });
 
 it('describes the audit trail without an updated_at', function () {
     expect(Schema::hasColumns('approval_actions', [
-        'id', 'request_id', 'step_id', 'actor_type', 'actor_id',
+        'id', 'request_id', 'stage_id', 'actor_type', 'actor_id',
         'action', 'comment', 'metadata', 'created_at',
     ]))->toBeTrue();
 
     expect(Schema::hasColumn('approval_actions', 'updated_at'))->toBeFalse();
 });
 
-it('keeps two levels from claiming the same position in a workflow', function () {
+it('keeps two stages from claiming the same position in a workflow', function () {
     $workflow = workflow([['name' => 'Manager']]);
 
-    expect(fn () => $workflow->levels()->create([
+    expect(fn () => $workflow->stages()->create([
         'sequence' => 1,
         'name' => 'Also first',
     ]))->toThrow(QueryException::class);
@@ -101,14 +101,14 @@ it('keeps two workflows from sharing a slug', function () {
         ->toThrow(QueryException::class);
 });
 
-it('takes the levels of a workflow down with it', function () {
+it('takes the stages of a workflow down with it', function () {
     $workflow = workflow([['name' => 'Manager'], ['name' => 'Finance']]);
 
-    expect(ApprovalWorkflowLevel::query()->count())->toBe(2);
+    expect(ApprovalWorkflowStage::query()->count())->toBe(2);
 
     $workflow->forceDelete();
 
-    expect(ApprovalWorkflowLevel::query()->count())->toBe(0);
+    expect(ApprovalWorkflowStage::query()->count())->toBe(0);
 });
 
 it('keeps a request when the workflow that produced it is deleted', function () {
@@ -125,8 +125,8 @@ it('keeps a request when the workflow that produced it is deleted', function () 
 
 it('refuses to take the audit trail down with a request', function () {
     $request = approvalRequest();
-    $step = $request->steps()->create(['sequence' => 1, 'name' => 'Manager']);
-    $step->approverSlots()->create([
+    $stage = $request->stages()->create(['sequence' => 1, 'name' => 'Manager']);
+    $stage->assignments()->create([
         'approver_type' => (new User)->getMorphClass(),
         'approver_id' => user()->getKey(),
     ]);
@@ -139,23 +139,23 @@ it('refuses to take the audit trail down with a request', function () {
 
     // Erasing history is done against the trail itself, on purpose, with a
     // query - the model refuses. Only then may the request go, taking its
-    // steps and seats with it.
+    // steps and assignments with it.
     ApprovalAction::query()->where('request_id', $request->getKey())->delete();
     $request->delete();
 
-    expect(ApprovalRequestStep::query()->count())->toBe(0)
-        ->and(ApprovalRequestStepApprover::query()->count())->toBe(0)
+    expect(ApprovalRequestStage::query()->count())->toBe(0)
+        ->and(ApprovalRequestAssignment::query()->count())->toBe(0)
         ->and(ApprovalAction::query()->count())->toBe(0);
 });
 
 it('creates its tables under whatever names the config gives them', function () {
     $renamed = [
         'workflows' => 'sign_off_flows',
-        'levels' => 'sign_off_flow_levels',
-        'level_approvers' => 'sign_off_flow_level_approvers',
+        'workflow_stages' => 'sign_off_flow_stages',
+        'workflow_stage_approvers' => 'sign_off_flow_stage_approvers',
         'requests' => 'sign_off_requests',
-        'steps' => 'sign_off_request_steps',
-        'step_approvers' => 'sign_off_request_step_approvers',
+        'request_stages' => 'sign_off_request_stages',
+        'assignments' => 'sign_off_request_assignments',
         'actions' => 'sign_off_actions',
         'attachments' => 'sign_off_attachments',
     ];

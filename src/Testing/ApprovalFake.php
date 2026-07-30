@@ -10,13 +10,14 @@ use ByRcsc\LaravelApproval\Data\ApprovalInteraction;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Data\BulkDecisionOutcome;
 use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
@@ -151,8 +152,8 @@ final class ApprovalFake extends ApprovalManager
         Model $approver,
         Model $delegate,
         ?string $comment = null,
-    ): ApprovalRequestStepApprover {
-        return new ApprovalRequestStepApprover([
+    ): ApprovalRequestAssignment {
+        return new ApprovalRequestAssignment([
             'approver_type' => $approver->getMorphClass(),
             'approver_id' => $approver->getKey(),
             'delegated_to_type' => $delegate->getMorphClass(),
@@ -162,15 +163,15 @@ final class ApprovalFake extends ApprovalManager
 
     public function reassign(
         ApprovalRequest $request,
-        ApprovalRequestStepApprover $seat,
+        ApprovalRequestAssignment $assignment,
         Model $to,
-        ?Model $actor = null,
+        Model $actor,
         ?string $comment = null,
-    ): ApprovalRequestStepApprover {
-        return $seat;
+    ): ApprovalRequestAssignment {
+        return $assignment;
     }
 
-    public function resync(ApprovalRequest $request, ?Model $actor = null, bool $prune = false): array
+    public function resync(ApprovalRequest $request, Model $actor, bool $prune = false): array
     {
         return [];
     }
@@ -184,18 +185,10 @@ final class ApprovalFake extends ApprovalManager
         return $request;
     }
 
-    public function resubmit(
+    public function reviseAndResubmit(
         ApprovalRequest $request,
-        ?array $newAttributes = null,
-        ?Model $submitter = null,
-        ApprovalWorkflow|string|null $workflow = null,
-    ): ApprovalRequest {
-        return $request;
-    }
-
-    public function resume(
-        ApprovalRequest $request,
-        ?array $changes = null,
+        RevisedDraft $draft,
+        ?Model $requester = null,
         ApprovalWorkflow|string|null $workflow = null,
     ): ApprovalRequest {
         return $request;

@@ -10,7 +10,7 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 /**
  * Raised when somebody tries to resolve a conflict that is not there.
  *
- * Note what does *not* throw: reaching the end of the levels and finding the
+ * Note what does *not* throw: reaching the end of the stages and finding the
  * record has moved. That is an ordinary outcome of an approval process running
  * over days, so the request turns `conflicted` and waits for a person - it does
  * not blow up in the last approver's face for something they did not do.

@@ -7,7 +7,7 @@ namespace ByRcsc\LaravelApproval\Actions;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Events\ApprovalReturned;
 use ByRcsc\LaravelApproval\Exceptions\CommentRequiredException;
@@ -41,17 +41,17 @@ final class ReturnRequest
                 request: $request,
                 action: ActionType::Returned,
                 actor: $decision->actor,
-                step: $context->stage,
+                stage: $context->stage,
                 comment: $comment,
                 metadata: $decision->metadata,
             );
 
-            $context->stage->forceFill(['state' => StepState::Returned])->save();
+            $context->stage->forceFill(['state' => StageStatus::Returned])->save();
 
-            $request->steps()
+            $request->stages()
                 ->whereKeyNot($context->stage->getKey())
-                ->whereIn('state', [StepState::Queued->value, StepState::Active->value])
-                ->update(['state' => StepState::Skipped->value]);
+                ->whereIn('state', [StageStatus::Queued->value, StageStatus::Active->value])
+                ->update(['state' => StageStatus::Skipped->value]);
 
             $request->forceFill([
                 'state' => RequestState::Returned,

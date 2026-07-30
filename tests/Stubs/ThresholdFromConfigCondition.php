@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Tests\Stubs;
 
-use ByRcsc\LaravelApproval\Contracts\LevelCondition;
-use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Contracts\StageCondition;
+use ByRcsc\LaravelApproval\Data\StageSnapshot;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\Eloquent\Model;
 
@@ -13,14 +13,14 @@ use Illuminate\Database\Eloquent\Model;
  * A condition with a constructor dependency, to prove conditions come out of
  * the container rather than out of `new`.
  */
-final class ThresholdFromConfigCondition implements LevelCondition
+final class ThresholdFromConfigCondition implements StageCondition
 {
     public function __construct(private readonly Repository $config) {}
 
     /**
      * @param  array<string, mixed>  $config
      */
-    public function passes(LevelSnapshot $level, Model $approvable, Model $submitter, array $config): bool
+    public function passes(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): bool
     {
         $amount = $approvable->getAttributeValue('amount');
         $threshold = $this->config->get('approval-tests.threshold', 0);

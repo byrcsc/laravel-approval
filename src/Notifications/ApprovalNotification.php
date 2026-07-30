@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Notifications;
 
 use ByRcsc\LaravelApproval\Data\StageProgress;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notification;
@@ -34,7 +34,7 @@ abstract class ApprovalNotification extends Notification
     /**
      * Who should hear about this.
      *
-     * Returning nothing is fine and means nobody is told - a level whose
+     * Returning nothing is fine and means nobody is told - a stage whose
      * approvers have all been deleted, say.
      *
      * @return iterable<int, Model>
@@ -97,27 +97,27 @@ abstract class ApprovalNotification extends Notification
     }
 
     /**
-     * Whoever the request's active level is currently waiting on.
+     * Whoever the request's active stage is currently waiting on.
      *
      * @return list<Model>
      */
     protected static function activeApprovers(ApprovalEvent $event): array
     {
-        /** @var ApprovalRequestStep|null $step */
-        $step = $event->request->steps()->where('state', StepState::Active->value)->first();
+        /** @var ApprovalRequestStage|null $stage */
+        $stage = $event->request->stages()->where('state', StageStatus::Active->value)->first();
 
-        return $step === null ? [] : self::approversOf($step);
+        return $stage === null ? [] : self::approversOf($stage);
     }
 
     /**
-     * The people who can act on a step: the delegate where a seat was handed
+     * The people who can act on a stage: the delegate where an assignment was handed
      * over, the original approver everywhere else.
      *
      * @return list<Model>
      */
-    protected static function approversOf(ApprovalRequestStep $step): array
+    protected static function approversOf(ApprovalRequestStage $stage): array
     {
-        return StageProgress::for($step)->assignmentHolders();
+        return StageProgress::for($stage)->assignmentHolders();
     }
 
     /**

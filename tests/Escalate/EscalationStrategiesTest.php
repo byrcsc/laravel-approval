@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 use Illuminate\Support\Facades\Date;
@@ -31,14 +32,14 @@ describe('escalate', function (): void {
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
 
-        $seats = $request->steps()->sole()->approverSlots()->get();
+        $assignments = $request->stages()->sole()->assignments()->get();
 
-        expect($seats)->toHaveCount(2)
-            ->and($seats->last()?->approver?->getKey())->toBe($duty->getKey())
-            ->and($seats->last()?->source)->toBe(ApproverSource::Escalated);
+        expect($assignments)->toHaveCount(2)
+            ->and($assignments->last()?->approver?->getKey())->toBe($duty->getKey())
+            ->and($assignments->last()?->source)->toBe(ApproverSource::Escalated);
     });
 
-    it('lets the escalated approver carry the level', function (): void {
+    it('lets the escalated approver carry the stage', function (): void {
         $duty = user('Duty Officer');
         HeadOfDepartmentResolver::$heads = [$duty];
 
@@ -62,7 +63,7 @@ describe('escalate', function (): void {
             ['resolver' => HeadOfDepartmentResolver::class],
         );
 
-        $original = $request->steps()->sole()->approverSlots()->sole()->approver;
+        $original = $request->stages()->sole()->assignments()->sole()->approver;
 
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
@@ -72,10 +73,10 @@ describe('escalate', function (): void {
     });
 
     /**
-     * The trap: on an all-of-them level, adding a seat would make an already
-     * late level harder to carry.
+     * The trap: on an all-of-them stage, adding an assignment would make an already
+     * late stage harder to carry.
      */
-    it('pins an all-of-them quorum before adding anybody', function (): void {
+    it('pins an all-of-them required approvals before adding anybody', function (): void {
         HeadOfDepartmentResolver::$heads = [user('Duty Officer')];
 
         $request = overdueRequest(
@@ -85,16 +86,16 @@ describe('escalate', function (): void {
             approvers: 2,
         );
 
-        $step = $request->steps()->sole();
+        $stage = $request->stages()->sole();
 
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
 
-        expect($step->refresh()->getAttributeValue('required_approvals'))->toBe(2)
-            ->and($step->approverSlots()->count())->toBe(3);
+        expect($stage->refresh()->getAttributeValue('required_approvals'))->toBe(2)
+            ->and($stage->assignments()->count())->toBe(3);
     });
 
-    it('leaves a numeric quorum alone', function (): void {
+    it('leaves a numeric required approvals alone', function (): void {
         HeadOfDepartmentResolver::$heads = [user('Duty Officer')];
 
         $request = overdueRequest(
@@ -107,10 +108,10 @@ describe('escalate', function (): void {
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
 
-        expect($request->steps()->sole()->getAttributeValue('required_approvals'))->toBe(2);
+        expect($request->stages()->sole()->getAttributeValue('required_approvals'))->toBe(2);
     });
 
-    it('takes an explicit quorum from the level config', function (): void {
+    it('takes an explicit required approvals from the stage config', function (): void {
         HeadOfDepartmentResolver::$heads = [user('Duty Officer')];
 
         $request = overdueRequest(
@@ -123,25 +124,25 @@ describe('escalate', function (): void {
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
 
-        expect($request->steps()->sole()->getAttributeValue('required_approvals'))->toBe(1);
+        expect($request->stages()->sole()->getAttributeValue('required_approvals'))->toBe(1);
     });
 
-    it('does not seat somebody who already holds a seat', function (): void {
+    it('does not assignment somebody who already holds an assignment', function (): void {
         $request = overdueRequest(
             EscalationAction::Escalate,
             ['resolver' => HeadOfDepartmentResolver::class],
         );
 
-        $seated = $request->steps()->sole()->approverSlots()->sole()->approver;
-        HeadOfDepartmentResolver::$heads = [$seated];
+        $represented = $request->stages()->sole()->assignments()->sole()->approver;
+        HeadOfDepartmentResolver::$heads = [$represented];
 
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
 
-        expect($request->steps()->sole()->approverSlots()->count())->toBe(1);
+        expect($request->stages()->sole()->assignments()->count())->toBe(1);
     });
 
-    it('does not rewrite the quorum when the resolver adds nobody', function (): void {
+    it('does not rewrite the required approvals when the resolver adds nobody', function (): void {
         HeadOfDepartmentResolver::$heads = [];
 
         $request = overdueRequest(
@@ -151,17 +152,17 @@ describe('escalate', function (): void {
             approvers: 2,
         );
 
-        $step = $request->steps()->sole();
+        $stage = $request->stages()->sole();
 
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
 
-        expect($step->refresh()->getAttributeValue('required_approvals'))->toBeNull();
+        expect($stage->refresh()->getAttributeValue('required_approvals'))->toBeNull();
     });
 });
 
 describe('auto-approve', function (): void {
-    it('carries the level with no actor behind it', function (): void {
+    it('carries the stage with no actor behind it', function (): void {
         $request = overdueRequest(EscalationAction::AutoApprove);
 
         Date::setTestNow('2026-07-28 10:01:00');
@@ -170,13 +171,13 @@ describe('auto-approve', function (): void {
         $action = $request->actions()->where('action', 'approved')->sole();
 
         expect($request->refresh()->state)->toBe(RequestState::Approved)
-            ->and($request->steps()->sole()->state)->toBe(StepState::Approved)
+            ->and($request->stages()->sole()->state)->toBe(StageStatus::Approved)
             ->and($action->getAttributeValue('actor_id'))->toBeNull()
             ->and($action->getAttributeValue('metadata'))->toBe(['automatic' => true])
             ->and($action->getAttributeValue('comment'))->toContain('passed its deadline');
     });
 
-    it('hands the request to the next level rather than finishing it', function (): void {
+    it('hands the request to the next stage rather than finishing it', function (): void {
         $second = user('Second');
 
         $workflow = workflow([
@@ -190,7 +191,7 @@ describe('auto-approve', function (): void {
         Approval::escalateOverdue();
 
         expect($request->refresh()->state)->toBe(RequestState::Pending)
-            ->and($request->getAttributeValue('current_level_sequence'))->toBe(2);
+            ->and($request->getAttributeValue('current_stage_sequence'))->toBe(2);
 
         Approval::approve($request, $second);
 
@@ -233,13 +234,13 @@ describe('auto-approve', function (): void {
             ->and($post->fresh()?->getAttributeValue('title'))->toBe('Edited by somebody else');
     });
 
-    it('counts as the whole level even when the quorum was several', function (): void {
+    it('counts as the whole stage even when the required approvals was several', function (): void {
         $request = overdueRequest(EscalationAction::AutoApprove, requiredApprovals: 2, approvers: 3);
 
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
 
-        // The deadline decided the level, not a vote count.
+        // The deadline decided the stage, not a decision count.
         expect($request->refresh()->state)->toBe(RequestState::Approved);
     });
 });
@@ -259,7 +260,7 @@ describe('auto-reject', function (): void {
             ->and($action->getAttributeValue('comment'))->toContain('passed its deadline');
     });
 
-    it('skips the levels that never ran', function (): void {
+    it('skips the stages that never ran', function (): void {
         $workflow = workflow([
             ['sla_minutes' => 60, 'escalation_strategy' => EscalationAction::AutoReject, 'approvers' => [user('First')]],
             ['approvers' => [user('Second')]],
@@ -270,8 +271,8 @@ describe('auto-reject', function (): void {
         Date::setTestNow('2026-07-28 10:01:00');
         Approval::escalateOverdue();
 
-        expect($request->steps()->get()->pluck('state')->all())
-            ->toBe([StepState::Rejected, StepState::Skipped]);
+        expect($request->stages()->get()->pluck('state')->all())
+            ->toBe([StageStatus::Rejected, StageStatus::Skipped]);
     });
 
     it('leaves the record untouched and free to resubmit', function (): void {
@@ -290,10 +291,10 @@ describe('auto-reject', function (): void {
 
         expect($post->fresh()?->getAttributeValue('title'))->toBe('Original title')
             ->and($post->isPendingApproval())->toBeFalse()
-            ->and(Approval::resubmit($request->refresh())->state)->toBe(RequestState::Pending);
+            ->and(Approval::reviseAndResubmit($request->refresh(), RevisedDraft::inherit())->state)->toBe(RequestState::Pending);
     });
 
-    it('takes the comment the level configured', function (): void {
+    it('takes the comment the stage configured', function (): void {
         $request = overdueRequest(EscalationAction::AutoReject, ['comment' => 'Nobody signed within the SLA.']);
 
         Date::setTestNow('2026-07-28 10:01:00');

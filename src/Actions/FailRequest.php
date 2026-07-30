@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\ApprovalRejected;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
@@ -16,11 +16,11 @@ use Illuminate\Support\Facades\Event;
 /**
  * Closes a request as rejected, from whichever direction the "no" came.
  *
- * The counterpart to {@see CarryStep}: a person rejecting and a deadline
- * expiring on an auto-reject level end the same way, and they end it here so
+ * The counterpart to {@see CompleteStage}: a person rejecting and a deadline
+ * expiring on an auto-reject stage end the same way, and they end it here so
  * there is only one description of what "rejected" does to a request.
  *
- * Levels that never ran are `skipped`. They did not decide anything, and
+ * Stages that never ran are `skipped`. They did not decide anything, and
  * recording that they had would be a lie the reports would repeat.
  *
  * Expects the caller to hold the request's row lock and to have already
@@ -30,22 +30,22 @@ final class FailRequest
 {
     public function __invoke(
         ApprovalRequest $request,
-        ApprovalRequestStep $step,
+        ApprovalRequestStage $stage,
         ?Model $actor,
         string $comment,
     ): void {
-        $step->forceFill(['state' => StepState::Rejected])->save();
+        $stage->forceFill(['state' => StageStatus::Rejected])->save();
 
-        $request->steps()
-            ->whereKeyNot($step->getKey())
-            ->whereIn('state', [StepState::Queued->value, StepState::Active->value])
-            ->update(['state' => StepState::Skipped->value]);
+        $request->stages()
+            ->whereKeyNot($stage->getKey())
+            ->whereIn('state', [StageStatus::Queued->value, StageStatus::Active->value])
+            ->update(['state' => StageStatus::Skipped->value]);
 
         $request->forceFill([
             'state' => RequestState::Rejected,
             'completed_at' => Date::now(),
         ])->save();
 
-        Event::dispatch(new ApprovalRejected($request, $step, $actor, $comment));
+        Event::dispatch(new ApprovalRejected($request, $stage, $actor, $comment));
     }
 }

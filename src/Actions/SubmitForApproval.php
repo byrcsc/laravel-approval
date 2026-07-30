@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
-use ByRcsc\LaravelApproval\Data\ApproverSlot;
-use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\AssignmentSnapshot;
+use ByRcsc\LaravelApproval\Data\StageSnapshot;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\ApprovalCompleted;
 use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalInProgressException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidDraftException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowException;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
@@ -29,21 +29,21 @@ use Illuminate\Support\Facades\Event;
  *
  * The order matters more than it looks. Everything that can fail - the
  * workflow's shape, the resolvers, the draft's keys - is settled before the
- * transaction opens, so a misconfigured level three cannot leave a half-built
+ * transaction opens, so a misconfigured stage three cannot leave a half-built
  * request behind. Once inside, the work is only writes.
  *
  * The resolvers run here and nowhere else. What they return is copied into
- * approver slots and never consulted again, so an org chart that changes
- * tomorrow does not change who was asked today. Getting a stale slot fixed is
+ * approver assignments and never consulted again, so an org chart that changes
+ * tomorrow does not change who was asked today. Getting a stale assignment fixed is
  * deliberate work: delegate it, reassign it, or resync the request.
  */
 final class SubmitForApproval
 {
     public function __construct(
-        private readonly ResolveLevelApprovers $resolveApprovers,
-        private readonly EvaluateLevelCondition $evaluateCondition,
+        private readonly ResolveStageApprovers $resolveApprovers,
+        private readonly EvaluateStageCondition $evaluateCondition,
         private readonly RecordAction $recordAction,
-        private readonly ActivateStep $activateStep,
+        private readonly ActivateStage $activateStage,
         private readonly ApplyDraft $applyDraft,
     ) {}
 
@@ -77,7 +77,7 @@ final class SubmitForApproval
                 'approvable_id' => $approvable->getKey(),
                 'workflow_id' => $workflow->getKey(),
                 'state' => RequestState::Pending,
-                'current_level_sequence' => $plan[0]['snapshot']->sequence,
+                'current_stage_sequence' => $plan[0]['snapshot']->sequence,
                 'new_attributes' => $draft['new'],
                 'original_attributes' => $draft['original'],
                 'submitter_type' => $submitter->getMorphClass(),
@@ -85,8 +85,8 @@ final class SubmitForApproval
                 'submitted_at' => Date::now(),
             ]);
 
-            $steps = array_map(
-                fn (array $level): ApprovalRequestStep => $this->writeStep($request, $level['snapshot'], $level['approvers']),
+            $stages = array_map(
+                fn (array $stage): ApprovalRequestStage => $this->writeStage($request, $stage['snapshot'], $stage['approvers']),
                 $plan,
             );
 
@@ -100,29 +100,29 @@ final class SubmitForApproval
                 metadata: array_merge($metadata, ['workflow' => Attributes::string($workflow, 'slug')]),
             );
 
-            foreach ($steps as $step) {
-                if (Attributes::enum($step, 'state', StepState::class) === StepState::Skipped) {
+            foreach ($stages as $stage) {
+                if (Attributes::enum($stage, 'state', StageStatus::class) === StageStatus::Skipped) {
                     ($this->recordAction)(
                         request: $request,
-                        action: ActionType::LevelSkipped,
-                        step: $step,
-                        metadata: ['condition' => Attributes::nullableString($step, 'condition')],
+                        action: ActionType::StageSkipped,
+                        stage: $stage,
+                        metadata: ['condition' => Attributes::nullableString($stage, 'condition')],
                     );
                 }
             }
 
-            /** @var ApprovalRequestStep|null $first */
-            $first = collect($steps)->first(
-                fn (ApprovalRequestStep $step): bool => Attributes::enum($step, 'state', StepState::class) === StepState::Queued,
+            /** @var ApprovalRequestStage|null $first */
+            $first = collect($stages)->first(
+                fn (ApprovalRequestStage $stage): bool => Attributes::enum($stage, 'state', StageStatus::class) === StageStatus::Queued,
             );
 
             if ($first !== null) {
-                ($this->activateStep)($first);
-                $request->forceFill(['current_level_sequence' => Attributes::int($first, 'sequence')])->save();
+                ($this->activateStage)($first);
+                $request->forceFill(['current_stage_sequence' => Attributes::int($first, 'sequence')])->save();
             } else {
-                // Every level was skipped. The pointer rests where a fully run
-                // chain would leave it: on the last level.
-                $request->forceFill(['current_level_sequence' => Attributes::int($steps[count($steps) - 1], 'sequence')])->save();
+                // Every stage was skipped. The pointer rests where a fully run
+                // chain would leave it: on the last stage.
+                $request->forceFill(['current_stage_sequence' => Attributes::int($stages[count($stages) - 1], 'sequence')])->save();
             }
 
             Event::dispatch(new ApprovalSubmitted($request, $first));
@@ -137,18 +137,18 @@ final class SubmitForApproval
     }
 
     /**
-     * @param  list<ApproverSlot>  $approvers
+     * @param  list<AssignmentSnapshot>  $approvers
      */
-    private function writeStep(ApprovalRequest $request, LevelSnapshot $snapshot, array $approvers): ApprovalRequestStep
+    private function writeStage(ApprovalRequest $request, StageSnapshot $snapshot, array $approvers): ApprovalRequestStage
     {
-        /** @var ApprovalRequestStep $step */
-        $step = $request->steps()->create($snapshot->toStepAttributes());
+        /** @var ApprovalRequestStage $stage */
+        $stage = $request->stages()->create($snapshot->toStageAttributes());
 
         foreach ($approvers as $approver) {
-            $step->approverSlots()->create($approver->toAttributes());
+            $stage->assignments()->create($approver->toAttributes());
         }
 
-        return $step;
+        return $stage;
     }
 
     /**
@@ -156,7 +156,7 @@ final class SubmitForApproval
      * written. A workflow that cannot reach a decision fails here.
      *
      * @param  array<string, mixed>|null  $newAttributes
-     * @return non-empty-list<array{snapshot: LevelSnapshot, approvers: list<ApproverSlot>}>
+     * @return non-empty-list<array{snapshot: StageSnapshot, approvers: list<AssignmentSnapshot>}>
      */
     private function plan(
         ApprovalWorkflow $workflow,
@@ -170,27 +170,27 @@ final class SubmitForApproval
             throw InvalidWorkflowException::inactive($slug);
         }
 
-        $levels = $workflow->levels()->with(ResolveLevelApprovers::ordered())->get();
+        $stages = $workflow->stages()->with(ResolveStageApprovers::ordered())->get();
 
-        if ($levels->isEmpty()) {
-            throw InvalidWorkflowException::hasNoLevels($slug);
+        if ($stages->isEmpty()) {
+            throw InvalidWorkflowException::hasNoStages($slug);
         }
 
         $plan = [];
         $proposed = $this->proposed($approvable, $newAttributes);
 
-        foreach ($levels as $level) {
-            $this->guardRejectionPolicy($slug, $level);
-            $snapshot = LevelSnapshot::fromLevel($level);
+        foreach ($stages as $stage) {
+            $this->guardRejectionPolicy($slug, $stage);
+            $snapshot = StageSnapshot::fromWorkflowStage($stage);
             $passes = ($this->evaluateCondition)($snapshot, $proposed, $submitter, $slug);
             $snapshot = $snapshot->withConditionResult($passes);
-            $approvers = ($this->resolveApprovers)($level, $snapshot, $approvable, $submitter, $slug);
+            $approvers = ($this->resolveApprovers)($stage, $snapshot, $approvable, $submitter, $slug);
 
             if ($passes && $approvers === []) {
-                throw InvalidWorkflowException::levelHasNoApprovers($slug, $snapshot->sequence);
+                throw InvalidWorkflowException::stageHasNoApprovers($slug, $snapshot->sequence);
             }
 
-            $this->guardQuorum($slug, $snapshot, count($approvers));
+            $this->guardApprovalRule($slug, $snapshot, count($approvers));
 
             if (! $passes) {
                 $plan[] = ['snapshot' => $snapshot, 'approvers' => []];
@@ -225,7 +225,7 @@ final class SubmitForApproval
         return $proposed;
     }
 
-    private function guardQuorum(string $slug, LevelSnapshot $snapshot, int $available): void
+    private function guardApprovalRule(string $slug, StageSnapshot $snapshot, int $available): void
     {
         $required = $snapshot->requiredApprovals;
 

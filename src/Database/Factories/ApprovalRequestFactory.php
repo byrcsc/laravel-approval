@@ -7,7 +7,7 @@ namespace ByRcsc\LaravelApproval\Database\Factories;
 use ByRcsc\LaravelApproval\Actions\RecordAction;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -30,7 +30,7 @@ final class ApprovalRequestFactory extends Factory
             'approvable_id' => ApprovalWorkflowFactory::new(),
             'workflow_id' => ApprovalWorkflowFactory::new(),
             'state' => RequestState::Pending,
-            'current_level_sequence' => 1,
+            'current_stage_sequence' => 1,
             'new_attributes' => null,
             'original_attributes' => null,
             'submitter_type' => ApprovalWorkflow::class,
@@ -87,18 +87,18 @@ final class ApprovalRequestFactory extends Factory
         return $this->closed(RequestState::Superseded);
     }
 
-    public function withSteps(int $count = 1): self
+    public function withStages(int $count = 1): self
     {
         return $this->has(
-            ApprovalRequestStepFactory::new()
+            ApprovalRequestStageFactory::new()
                 ->withApprovers()
                 ->count($count)
                 ->sequence(fn (Sequence $sequence): array => [
                     'sequence' => $sequence->index + 1,
-                    'name' => 'Level '.($sequence->index + 1),
-                    'state' => $sequence->index === 0 ? StepState::Active : StepState::Queued,
+                    'name' => 'Stage '.($sequence->index + 1),
+                    'state' => $sequence->index === 0 ? StageStatus::Active : StageStatus::Queued,
                 ]),
-            'steps',
+            'stages',
         );
     }
 

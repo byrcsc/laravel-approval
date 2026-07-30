@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Resolvers;
 
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
-use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\StageSnapshot;
 use ByRcsc\LaravelApproval\Support\Payload;
 use Illuminate\Database\Eloquent\Model;
 
@@ -16,9 +16,9 @@ use Illuminate\Database\Eloquent\Model;
  *     'resolver_config' => ['ids' => [4, 11], 'model' => Team::class],
  *
  * `model` is optional and defaults to `approval.user_model`. It exists mostly
- * so an admin UI has one resolver that can point at any table, but a level can
+ * so an admin UI has one resolver that can point at any table, but a stage can
  * just as well hold concrete approver rows - use this when the same list is
- * shared by several levels and you would rather edit it in one place.
+ * shared by several stages and you would rather edit it in one place.
  */
 final class StaticUsersResolver implements ApproverResolver
 {
@@ -26,7 +26,7 @@ final class StaticUsersResolver implements ApproverResolver
      * @param  array<string, mixed>  $config
      * @return iterable<int, Model>
      */
-    public function resolve(LevelSnapshot $level, Model $approvable, Model $submitter, array $config): iterable
+    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
     {
         $ids = array_values(array_filter(
             Payload::array($config, 'ids'),

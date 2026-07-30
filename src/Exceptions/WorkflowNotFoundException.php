@@ -20,7 +20,7 @@ final class WorkflowNotFoundException extends ApprovalException
 
     /**
      * The workflow a request ran under has been deleted, so a retry has nothing
-     * to run against. Name one explicitly to resubmit anyway.
+     * to run against. Name one explicitly to revise and resubmit anyway.
      */
     public static function forRequest(ApprovalRequest $request): self
     {

@@ -7,9 +7,8 @@ namespace ByRcsc\LaravelApproval\Data;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\StageStatus;
-use ByRcsc\LaravelApproval\Enums\StepState;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -20,7 +19,7 @@ use Illuminate\Support\Collection;
 final readonly class StageProgress
 {
     /**
-     * @param  Collection<int, ApprovalRequestStepApprover>  $assignments
+     * @param  Collection<int, ApprovalRequestAssignment>  $assignments
      * @param  array<string, true>  $decidingIdentities
      */
     private function __construct(
@@ -37,12 +36,12 @@ final readonly class StageProgress
         public StageStatus $status,
     ) {}
 
-    public static function for(ApprovalRequestStep $stage): self
+    public static function for(ApprovalRequestStage $stage): self
     {
-        /** @var Collection<int, ApprovalRequestStepApprover> $assignments */
-        $assignments = $stage->relationLoaded('approverSlots')
-            ? $stage->approverSlots->sortBy('id')->values()
-            : $stage->approverSlots()->orderBy('id')->get();
+        /** @var Collection<int, ApprovalRequestAssignment> $assignments */
+        $assignments = $stage->relationLoaded('assignments')
+            ? $stage->assignments->sortBy('id')->values()
+            : $stage->assignments()->orderBy('id')->get();
 
         $actions = $stage->relationLoaded('actions')
             ? $stage->actions
@@ -73,12 +72,12 @@ final readonly class StageProgress
         $approvalsRequired = Attributes::nullableInt($stage, 'required_approvals')
             ?? $assignments->count();
         $approvalsReceived = $assignments
-            ->filter(fn (ApprovalRequestStepApprover $assignment): bool => isset(
+            ->filter(fn (ApprovalRequestAssignment $assignment): bool => isset(
                 $approvingIdentities[self::holderOf($assignment)],
             ))
             ->count();
         $decisionsRecorded = $assignments
-            ->filter(fn (ApprovalRequestStepApprover $assignment): bool => isset(
+            ->filter(fn (ApprovalRequestAssignment $assignment): bool => isset(
                 $decidingIdentities[self::holderOf($assignment)],
             ))
             ->count();
@@ -99,7 +98,7 @@ final readonly class StageProgress
             possibleApprovals: $approvalsReceived + $assignments->count() - $decisionsRecorded,
             rejectionPolicy: $rejectionPolicy,
             status: StageStatus::from(
-                (Attributes::enum($stage, 'state', StepState::class) ?? StepState::Queued)->value,
+                (Attributes::enum($stage, 'state', StageStatus::class) ?? StageStatus::Queued)->value,
             ),
         );
     }
@@ -117,12 +116,12 @@ final readonly class StageProgress
         };
     }
 
-    public function assignmentFor(Model $actor): ?ApprovalRequestStepApprover
+    public function assignmentFor(Model $actor): ?ApprovalRequestAssignment
     {
         $key = $actor->getMorphClass().':'.self::stringKey($actor);
 
         return $this->assignments->first(
-            fn (ApprovalRequestStepApprover $assignment): bool => self::holderOf($assignment) === $key,
+            fn (ApprovalRequestAssignment $assignment): bool => self::holderOf($assignment) === $key,
         );
     }
 
@@ -130,18 +129,20 @@ final readonly class StageProgress
     {
         $key = $actor->getMorphClass().':'.self::stringKey($actor);
 
-        return $this->assignments->contains(function (ApprovalRequestStepApprover $assignment) use ($key): bool {
+        return $this->assignments->contains(function (ApprovalRequestAssignment $assignment) use ($key): bool {
             return self::originalApproverOf($assignment) === $key
                 && self::delegateOf($assignment) !== null;
         });
     }
 
-    public function hasDecision(ApprovalRequestStepApprover $assignment): bool
+    public function hasDecision(ApprovalRequestAssignment $assignment): bool
     {
         return isset($this->decidingIdentities[self::holderOf($assignment)]);
     }
 
     /**
+     * Every assignment holder, whether or not they have responded.
+     *
      * @return list<Model>
      */
     public function assignmentHolders(): array
@@ -149,12 +150,7 @@ final readonly class StageProgress
         $holders = [];
 
         foreach ($this->assignments as $assignment) {
-            $relation = $assignment->getAttributeValue('delegated_to_id') === null
-                ? 'approver'
-                : 'delegatedTo';
-            $holder = $assignment->relationLoaded($relation)
-                ? $assignment->getRelation($relation)
-                : $assignment->{$relation};
+            $holder = self::holderModelOf($assignment);
 
             if ($holder instanceof Model) {
                 $holders[] = $holder;
@@ -162,6 +158,43 @@ final readonly class StageProgress
         }
 
         return $holders;
+    }
+
+    /**
+     * The assignment holders who have not yet recorded a decision - the people
+     * the stage is still waiting on.
+     *
+     * @return list<Model>
+     */
+    public function pendingAssignmentHolders(): array
+    {
+        $holders = [];
+
+        foreach ($this->assignments as $assignment) {
+            if (isset($this->decidingIdentities[self::holderOf($assignment)])) {
+                continue;
+            }
+
+            $holder = self::holderModelOf($assignment);
+
+            if ($holder instanceof Model) {
+                $holders[] = $holder;
+            }
+        }
+
+        return $holders;
+    }
+
+    private static function holderModelOf(ApprovalRequestAssignment $assignment): ?Model
+    {
+        $relation = $assignment->getAttributeValue('delegated_to_id') === null
+            ? 'approver'
+            : 'delegatedTo';
+        $holder = $assignment->relationLoaded($relation)
+            ? $assignment->getRelation($relation)
+            : $assignment->{$relation};
+
+        return $holder instanceof Model ? $holder : null;
     }
 
     /**
@@ -184,18 +217,18 @@ final readonly class StageProgress
         return $represented;
     }
 
-    private static function holderOf(ApprovalRequestStepApprover $assignment): string
+    private static function holderOf(ApprovalRequestAssignment $assignment): string
     {
         return self::delegateOf($assignment) ?? self::originalApproverOf($assignment);
     }
 
-    private static function originalApproverOf(ApprovalRequestStepApprover $assignment): string
+    private static function originalApproverOf(ApprovalRequestAssignment $assignment): string
     {
         return Attributes::string($assignment, 'approver_type')
             .':'.Attributes::string($assignment, 'approver_id');
     }
 
-    private static function delegateOf(ApprovalRequestStepApprover $assignment): ?string
+    private static function delegateOf(ApprovalRequestAssignment $assignment): ?string
     {
         $type = Attributes::nullableString($assignment, 'delegated_to_type');
         $id = Attributes::nullableString($assignment, 'delegated_to_id');

@@ -8,6 +8,7 @@ use ByRcsc\LaravelApproval\Actions\SystemCloseRequest;
 use ByRcsc\LaravelApproval\Contracts\AutoSubmitsForApproval;
 use ByRcsc\LaravelApproval\Data\AutoSubmission;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
+use ByRcsc\LaravelApproval\Data\Draft;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\TimelineEntry;
 use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
@@ -16,7 +17,7 @@ use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalGuardException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Support\ApprovalGuard;
 use ByRcsc\LaravelApproval\Support\Attributes;
@@ -201,12 +202,16 @@ trait Approvable
         return $this->delegationEligibility($user, $delegate)?->eligible === true;
     }
 
-    public function currentApprovalStep(): ?ApprovalRequestStep
+    public function currentApprovalStage(): ?ApprovalRequestStage
     {
-        return $this->pendingApprovalRequest()?->currentStep();
+        return $this->pendingApprovalRequest()?->currentStage();
     }
 
     /**
+     * The approvers the open request's current stage is still waiting on.
+     * Holders who have already responded are excluded;
+     * {@see currentStageApprovers()} lists every holder.
+     *
      * @return Collection<int, Model>
      */
     public function pendingApprovalApprovers(): Collection
@@ -215,25 +220,38 @@ trait Approvable
     }
 
     /**
+     * Every assignment holder for the open request's current stage, whether or
+     * not they have already responded.
+     *
+     * @return Collection<int, Model>
+     */
+    public function currentStageApprovers(): Collection
+    {
+        return $this->pendingApprovalRequest()?->currentStageApprovers() ?? collect();
+    }
+
+    /**
+     * The timeline of the latest request only. Earlier requests in a linked
+     * chain keep their own timelines, reachable through each request's
+     * `resubmittedFrom()` relation.
+     *
      * @return Collection<int, TimelineEntry>
      */
-    public function approvalTimeline(): Collection
+    public function latestApprovalTimeline(): Collection
     {
         return $this->latestApprovalRequest()->first()?->timeline() ?? collect();
     }
 
     /**
-     * The edit waiting to be applied, if there is one. Empty both when nothing
-     * is pending and when what is pending is the record itself rather than a
-     * change to it.
-     *
-     * @return array<string, mixed>
+     * The draft waiting to be applied, or null when there is none. Null covers
+     * both "no unresolved request" and "the unresolved request gates the
+     * record itself"; use {@see pendingApprovalRequest()} to tell those apart.
      */
-    public function pendingDraft(): array
+    public function pendingDraft(): ?Draft
     {
         $request = $this->pendingApprovalRequest();
 
-        return $request === null ? [] : Attributes::object($request, 'new_attributes');
+        return $request === null ? null : Draft::fromRequest($request);
     }
 
     /**
@@ -320,14 +338,56 @@ trait Approvable
     }
 
     /**
+     * Models whose latest request is in one of the given states. This is the
+     * current-state question; {@see scopeEverInApprovalState()} searches the
+     * whole request history.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeApprovalState(Builder $query, RequestState|string ...$states): void
+    {
+        $query->whereHas(
+            'latestApprovalRequest',
+            fn (Builder $request) => $request->whereIn('state', self::approvalStateValues($states)),
+        );
+    }
+
+    /**
+     * Models that have ever had a request in one of the given states, however
+     * long ago and whatever came after it.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeEverInApprovalState(Builder $query, RequestState|string ...$states): void
+    {
+        $query->whereHas(
+            'approvalRequests',
+            fn (Builder $request) => $request->whereIn('state', self::approvalStateValues($states)),
+        );
+    }
+
+    /**
      * @param  Builder<static>  $query
      */
     public function scopePendingApproval(Builder $query): void
     {
-        $query->whereHas(
-            'approvalRequests',
-            fn (Builder $request) => $request->where('state', RequestState::Pending->value),
-        );
+        $query->approvalState(RequestState::Pending);
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeApprovalConflicted(Builder $query): void
+    {
+        $query->approvalState(RequestState::Conflicted);
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeApprovalApproved(Builder $query): void
+    {
+        $query->approvalState(RequestState::Approved);
     }
 
     /**
@@ -335,10 +395,7 @@ trait Approvable
      */
     public function scopeApprovalRejected(Builder $query): void
     {
-        $query->whereHas(
-            'approvalRequests',
-            fn (Builder $request) => $request->where('state', RequestState::Rejected->value),
-        );
+        $query->approvalState(RequestState::Rejected);
     }
 
     /**
@@ -346,21 +403,59 @@ trait Approvable
      */
     public function scopeApprovalReturned(Builder $query): void
     {
-        $query->whereHas(
-            'approvalRequests',
-            fn (Builder $request) => $request->where('state', RequestState::Returned->value),
-        );
+        $query->approvalState(RequestState::Returned);
     }
 
     /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeApprovalWithdrawn(Builder $query): void
+    {
+        $query->approvalState(RequestState::Withdrawn);
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeApprovalCancelled(Builder $query): void
+    {
+        $query->approvalState(RequestState::Cancelled);
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeApprovalSuperseded(Builder $query): void
+    {
+        $query->approvalState(RequestState::Superseded);
+    }
+
+    /**
+     * Models with no unresolved request - neither pending nor conflicted.
+     *
      * @param  Builder<static>  $query
      */
     public function scopeWithoutPendingApproval(Builder $query): void
     {
         $query->whereDoesntHave(
             'approvalRequests',
-            fn (Builder $request) => $request->where('state', RequestState::Pending->value),
+            fn (Builder $request) => $request->whereIn('state', [
+                RequestState::Pending->value,
+                RequestState::Conflicted->value,
+            ]),
         );
+    }
+
+    /**
+     * @param  array<array-key, RequestState|string>  $states
+     * @return list<string>
+     */
+    private static function approvalStateValues(array $states): array
+    {
+        return array_values(array_map(
+            fn (RequestState|string $state): string => $state instanceof RequestState ? $state->value : $state,
+            $states,
+        ));
     }
 
     /**

@@ -34,14 +34,14 @@ it('includes the stage progress and assignment a caller is about to render', fun
         ->and($eligibility->assignment)->not->toBeNull();
 });
 
-it('names the reason somebody holds no seat', function (): void {
+it('names the reason somebody holds no assignment', function (): void {
     $request = post()->submitForApproval(workflow([['approvers' => [user('Approver')]]]), null, user());
 
     expect(Approval::eligibility($request, user('Passer By'))->reason)
         ->toBe(Ineligibility::NotAnApprover);
 });
 
-it('names the reason an approver from a later level cannot act yet', function (): void {
+it('names the reason an approver from a later stage cannot act yet', function (): void {
     $second = user('Second');
     $request = post()->submitForApproval(
         workflow([['approvers' => [user('First')]], ['approvers' => [$second]]]),
@@ -52,7 +52,7 @@ it('names the reason an approver from a later level cannot act yet', function ()
     expect(Approval::eligibility($request, $second)->reason)->toBe(Ineligibility::NotAnApprover);
 });
 
-it('tells a delegator their seat is no longer theirs', function (): void {
+it('tells a delegator their assignment is no longer theirs', function (): void {
     $approver = user('Approver');
     $delegate = user('Delegate');
     $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user());
@@ -63,7 +63,7 @@ it('tells a delegator their seat is no longer theirs', function (): void {
         ->and(Approval::canApprove($request, $delegate))->toBeTrue();
 });
 
-it('tells an approver they have already voted', function (): void {
+it('tells an approver they have already decided', function (): void {
     $one = user('One');
     $request = post()->submitForApproval(
         workflow([['required_approvals' => 2, 'approvers' => [$one, user('Two')]]]),
@@ -88,7 +88,7 @@ it('tells a submitter that self-approval is the objection', function (): void {
     expect(Approval::canApprove($request, $submitter))->toBeTrue();
 });
 
-it('reports a closed request as closed rather than as a seat problem', function (): void {
+it('reports a closed request as closed rather than as an assignment problem', function (): void {
     $approver = user('Approver');
     $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user());
 
@@ -100,7 +100,7 @@ it('reports a closed request as closed rather than as a seat problem', function 
         ->and($eligibility->stage)->toBeNull();
 });
 
-it('reports a conflicted request as closed, since no level is waiting', function (): void {
+it('reports a conflicted request as closed, since no stage is waiting', function (): void {
     $approver = user('Approver');
     $order = purchaseOrder();
     $request = $order->submitForApproval(
@@ -122,7 +122,7 @@ it('never grants and refuses the same actor differently', function (): void {
     $stranger = user('Stranger');
     $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user());
 
-    // The refusal the read reports and the exception the vote throws are one
+    // The refusal the read reports and the exception the decision throws are one
     // calculation; this is the pin that keeps them from drifting apart.
     expect(Approval::canApprove($request, $stranger))->toBeFalse()
         ->and(fn () => Approval::approve($request, $stranger))->toThrow(UnauthorizedApproverException::class)
@@ -158,8 +158,8 @@ it('counts everybody named on the request as involved in it', function (): void 
         $submitter,
     );
 
-    // A later level's approver and a submitter both have standing, and a
-    // first-level approver keeps it after voting.
+    // A later stage's approver and a submitter both have standing, and a
+    // first-stage approver keeps it after deciding.
     Approval::approve($request, $first);
 
     expect($request->involves($submitter))->toBeTrue()

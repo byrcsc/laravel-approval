@@ -6,7 +6,7 @@ namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\ApprovalSystemClosed;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -34,9 +34,9 @@ final class SystemCloseRequest
                 throw AlreadyDecidedException::requestIsClosed($request, $state);
             }
 
-            $request->steps()
-                ->whereIn('state', [StepState::Queued->value, StepState::Active->value])
-                ->update(['state' => StepState::Skipped->value]);
+            $request->stages()
+                ->whereIn('state', [StageStatus::Queued->value, StageStatus::Active->value])
+                ->update(['state' => StageStatus::Skipped->value]);
 
             $request->forceFill([
                 'state' => RequestState::Cancelled,

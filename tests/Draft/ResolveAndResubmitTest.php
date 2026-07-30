@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\DraftApplied;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalInProgressException;
@@ -111,7 +112,7 @@ describe('resubmitting', function (): void {
         $first = $post->submitForApproval($workflow, ['title' => 'Take one'], $author);
         Approval::reject($first, $approver, 'Not quite.');
 
-        $second = Approval::resubmit($first);
+        $second = Approval::reviseAndResubmit($first, RevisedDraft::inherit());
 
         expect($second->is($first))->toBeFalse()
             ->and($second->state)->toBe(RequestState::Pending)
@@ -129,7 +130,7 @@ describe('resubmitting', function (): void {
         $first = $post->submitForApproval($workflow, ['title' => 'Take one'], $author);
         Approval::reject($first, $approver, 'No.');
 
-        $second = Approval::resubmit($first);
+        $second = Approval::reviseAndResubmit($first, RevisedDraft::inherit());
 
         expect($second->getAttributeValue('new_attributes'))->toBe(['title' => 'Take one'])
             ->and($second->submitter?->getKey())->toBe($author->getKey());
@@ -143,12 +144,12 @@ describe('resubmitting', function (): void {
         $first = $post->submitForApproval($workflow, ['title' => 'Take one'], user('Author'));
         Approval::reject($first, $approver, 'Try a better title.');
 
-        $second = Approval::resubmit($first, ['title' => 'Take two']);
+        $second = Approval::reviseAndResubmit($first, RevisedDraft::withAttributes(['title' => 'Take two']));
 
         expect($second->getAttributeValue('new_attributes'))->toBe(['title' => 'Take two']);
     });
 
-    it('starts again at level one', function (): void {
+    it('starts again at stage one', function (): void {
         $first = user('First');
         $second = user('Second');
         $post = post();
@@ -162,10 +163,10 @@ describe('resubmitting', function (): void {
         Approval::approve($request, $first);
         Approval::reject($request, $second, 'Finance says no.');
 
-        $retry = Approval::resubmit($request);
+        $retry = Approval::reviseAndResubmit($request, RevisedDraft::inherit());
 
-        expect($retry->getAttributeValue('current_level_sequence'))->toBe(1)
-            ->and($retry->steps()->get()->pluck('state')->all())->toBe([StepState::Active, StepState::Queued]);
+        expect($retry->getAttributeValue('current_stage_sequence'))->toBe(1)
+            ->and($retry->stages()->get()->pluck('state')->all())->toBe([StageStatus::Active, StageStatus::Queued]);
     });
 
     it('takes a fresh snapshot, picking up workflow edits', function (): void {
@@ -179,16 +180,16 @@ describe('resubmitting', function (): void {
         Approval::reject($first, $approver, 'No.');
 
         // The workflow is tightened in response to the rejection.
-        $level = $workflow->levels()->sole();
-        approverRow($level, $extra);
-        $level->forceFill(['required_approvals' => 2])->save();
+        $stage = $workflow->stages()->sole();
+        approverRow($stage, $extra);
+        $stage->forceFill(['required_approvals' => 2])->save();
 
-        $second = Approval::resubmit($first);
+        $second = Approval::reviseAndResubmit($first, RevisedDraft::inherit());
 
-        expect($second->steps()->sole()->getAttributeValue('required_approvals'))->toBe(2)
-            ->and($second->steps()->sole()->approverSlots()->count())->toBe(2)
+        expect($second->stages()->sole()->getAttributeValue('required_approvals'))->toBe(2)
+            ->and($second->stages()->sole()->assignments()->count())->toBe(2)
             // The first request kept the rules it was judged by.
-            ->and($first->refresh()->steps()->sole()->getAttributeValue('required_approvals'))->toBe(1);
+            ->and($first->refresh()->stages()->sole()->getAttributeValue('required_approvals'))->toBe(1);
     });
 
     it('notes in the audit trail what it was retrying', function (): void {
@@ -199,7 +200,7 @@ describe('resubmitting', function (): void {
         $first = $post->submitForApproval($workflow, null, user('Author'));
         Approval::reject($first, $approver, 'No.');
 
-        $second = Approval::resubmit($first);
+        $second = Approval::reviseAndResubmit($first, RevisedDraft::inherit());
 
         expect($second->actions()->where('action', 'resubmitted')->sole()->getAttributeValue('metadata'))
             ->toBe(['resubmitted_from' => $first->getAttributeValue('ulid')]);
@@ -213,13 +214,13 @@ describe('resubmitting', function (): void {
         $first = $post->submitForApproval($workflow, null, $author);
         Approval::withdraw($first, $author);
 
-        expect(Approval::resubmit($first)->state)->toBe(RequestState::Pending);
+        expect(Approval::reviseAndResubmit($first, RevisedDraft::inherit())->state)->toBe(RequestState::Pending);
     });
 
     it('retries a conflicted request against current values', function (): void {
         [$first, $post] = conflictedRequest();
 
-        $second = Approval::resubmit($first, ['title' => 'Third attempt']);
+        $second = Approval::reviseAndResubmit($first, RevisedDraft::withAttributes(['title' => 'Third attempt']));
 
         expect($second->state)->toBe(RequestState::Pending)
             ->and($second->getAttributeValue('original_attributes'))->toBe(['title' => 'Edited by somebody else']);
@@ -234,16 +235,16 @@ describe('resubmitting', function (): void {
 
         Approval::approve($request, $approver);
 
-        expect(fn () => Approval::resubmit($request))
-            ->toThrow(AlreadyDecidedException::class, 'is approved and cannot be resubmitted');
+        expect(fn () => Approval::reviseAndResubmit($request, RevisedDraft::inherit()))
+            ->toThrow(AlreadyDecidedException::class, 'is approved and cannot be revised and resubmitted');
     });
 
     it('refuses to retry one that is still open', function (): void {
         $workflow = workflow([['approvers' => [user()]]]);
         $request = post()->submitForApproval($workflow, null, user());
 
-        expect(fn () => Approval::resubmit($request))
-            ->toThrow(AlreadyDecidedException::class, 'is pending and cannot be resubmitted');
+        expect(fn () => Approval::reviseAndResubmit($request, RevisedDraft::inherit()))
+            ->toThrow(AlreadyDecidedException::class, 'is pending and cannot be revised and resubmitted');
     });
 
     it('refuses while another request for the record is open', function (): void {
@@ -254,8 +255,8 @@ describe('resubmitting', function (): void {
         $first = $post->submitForApproval($workflow, null, user('Author'));
         Approval::reject($first, $approver, 'No.');
 
-        Approval::resubmit($first);
+        Approval::reviseAndResubmit($first, RevisedDraft::inherit());
 
-        expect(fn () => Approval::resubmit($first))->toThrow(ApprovalInProgressException::class);
+        expect(fn () => Approval::reviseAndResubmit($first, RevisedDraft::inherit()))->toThrow(ApprovalInProgressException::class);
     });
 });

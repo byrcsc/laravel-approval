@@ -8,7 +8,7 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Every level approved, and then the draft could not be applied: the record had
+ * Every stage approved, and then the draft could not be applied: the record had
  * moved underneath it. Nothing was written.
  *
  * `$attributes` names what moved. `$approvable` is null when the record itself

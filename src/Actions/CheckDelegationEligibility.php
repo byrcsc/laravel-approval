@@ -29,13 +29,13 @@ final class CheckDelegationEligibility
             return DelegationEligibility::denied(DelegationIneligibility::CannotDelegateToSelf);
         }
 
-        $step = $request->currentStep();
+        $stage = $request->currentStage();
 
-        if ($step === null) {
+        if ($stage === null) {
             return DelegationEligibility::denied(DelegationIneligibility::NoActiveStage);
         }
 
-        $progress = StageProgress::for($step);
+        $progress = StageProgress::for($stage);
         $assignment = $progress->assignmentFor($actor);
 
         if ($assignment === null) {
@@ -43,7 +43,7 @@ final class CheckDelegationEligibility
                 $progress->hasDelegatedAssignment($actor)
                     ? DelegationIneligibility::AssignmentDelegated
                     : DelegationIneligibility::NotAnApprover,
-                $step,
+                $stage,
                 $progress,
             );
         }
@@ -51,28 +51,28 @@ final class CheckDelegationEligibility
         if ($progress->hasDecision($assignment)) {
             return DelegationEligibility::denied(
                 DelegationIneligibility::DecisionAlreadyRecorded,
-                $step,
+                $stage,
                 $progress,
             );
         }
 
         if (! $actor->exists) {
-            return DelegationEligibility::denied(DelegationIneligibility::ApproverMissing, $step, $progress);
+            return DelegationEligibility::denied(DelegationIneligibility::ApproverMissing, $stage, $progress);
         }
 
         if ($delegate !== null && $progress->assignmentFor($delegate) !== null) {
             return DelegationEligibility::denied(
                 DelegationIneligibility::DelegateAlreadyAssigned,
-                $step,
+                $stage,
                 $progress,
             );
         }
 
         if ($delegate !== null && ! $delegate->exists) {
-            return DelegationEligibility::denied(DelegationIneligibility::DelegateMissing, $step, $progress);
+            return DelegationEligibility::denied(DelegationIneligibility::DelegateMissing, $stage, $progress);
         }
 
-        return DelegationEligibility::granted($step, $progress, $assignment);
+        return DelegationEligibility::granted($stage, $progress, $assignment);
     }
 
     private function same(Model $left, Model $right): bool

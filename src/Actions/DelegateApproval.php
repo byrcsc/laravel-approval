@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
-use ByRcsc\LaravelApproval\Data\StepHealth;
+use ByRcsc\LaravelApproval\Data\StageHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\DelegationIneligibility;
@@ -15,8 +15,8 @@ use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\DelegationException;
 use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -25,14 +25,14 @@ use Illuminate\Support\Facades\Event;
 /**
  * "I am away this week - ask her instead."
  *
- * The seat stays where it is and keeps the original approver's name on it;
+ * The assignment stays where it is and keeps the original approver's name on it;
  * only `delegated_to` changes. Who was asked is part of the record, and a
  * delegation that erased that would leave an audit trail that could not answer
  * the one question audits ask.
  *
- * From that moment the seat is the delegate's alone. The original cannot vote
- * from it, and it leaves their inbox for the delegate's - one seat, one holder,
- * which is what keeps quorum arithmetic honest.
+ * From that moment the assignment is the delegate's alone. The original cannot decision
+ * from it, and it leaves their inbox for the delegate's - one assignment, one holder,
+ * which is what keeps the approval arithmetic honest.
  */
 final class DelegateApproval
 {
@@ -46,41 +46,41 @@ final class DelegateApproval
         Model $approver,
         Model $delegate,
         ?string $comment = null,
-    ): ApprovalRequestStepApprover {
-        return DB::transaction(function () use ($request, $approver, $delegate, $comment): ApprovalRequestStepApprover {
+    ): ApprovalRequestAssignment {
+        return DB::transaction(function () use ($request, $approver, $delegate, $comment): ApprovalRequestAssignment {
             $request->newQuery()->whereKey($request->getKey())->lockForUpdate()->get();
             $request->refresh();
 
             $eligibility = ($this->checkEligibility)($request, $approver, $delegate);
-            [$step, $seat] = $this->authorizedContext($request, $approver, $delegate, $eligibility);
+            [$stage, $assignment] = $this->authorizedContext($request, $approver, $delegate, $eligibility);
 
-            $health = StepHealth::inspect($step);
+            $health = StageHealth::inspect($stage);
 
-            $seat->forceFill([
+            $assignment->forceFill([
                 'delegated_to_type' => $delegate->getMorphClass(),
                 'delegated_to_id' => $delegate->getKey(),
                 'source' => ApproverSource::Delegated,
             ])->save();
 
-            StepHealth::assertNotWorsened($step, $request->workflowName(), $health);
+            StageHealth::assertNotWorsened($stage, $request->workflowSlug(), $health);
 
             ($this->recordAction)(
                 request: $request,
                 action: ActionType::Delegated,
                 actor: $approver,
-                step: $step,
+                stage: $stage,
                 comment: $comment,
                 metadata: ['delegated_to' => $delegate->getMorphClass().':'.$this->key($delegate)],
             );
 
-            Event::dispatch(new ApprovalDelegated($request, $seat, $approver, $delegate, $comment));
+            Event::dispatch(new ApprovalDelegated($request, $assignment, $approver, $delegate, $comment));
 
-            return $seat;
+            return $assignment;
         });
     }
 
     /**
-     * @return array{ApprovalRequestStep, ApprovalRequestStepApprover}
+     * @return array{ApprovalRequestStage, ApprovalRequestAssignment}
      */
     private function authorizedContext(
         ApprovalRequest $request,

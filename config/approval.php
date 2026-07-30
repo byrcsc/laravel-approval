@@ -3,7 +3,7 @@
 declare(strict_types=1);
 use ByRcsc\LaravelApproval\Escalation\AutoDecideStrategy;
 use ByRcsc\LaravelApproval\Escalation\EscalateStrategy;
-use ByRcsc\LaravelApproval\Escalation\NotifyStrategy;
+use ByRcsc\LaravelApproval\Escalation\RecordOnlyStrategy;
 use ByRcsc\LaravelApproval\Events;
 use ByRcsc\LaravelApproval\Notifications;
 
@@ -25,11 +25,11 @@ return [
 
     'table_names' => [
         'workflows' => 'approval_workflows',
-        'levels' => 'approval_workflow_levels',
-        'level_approvers' => 'approval_workflow_level_approvers',
+        'workflow_stages' => 'approval_workflow_stages',
+        'workflow_stage_approvers' => 'approval_workflow_stage_approvers',
         'requests' => 'approval_requests',
-        'steps' => 'approval_request_steps',
-        'step_approvers' => 'approval_request_step_approvers',
+        'request_stages' => 'approval_request_stages',
+        'assignments' => 'approval_request_assignments',
         'actions' => 'approval_actions',
         'attachments' => 'approval_attachments',
     ],
@@ -85,12 +85,12 @@ return [
     |
     | `php artisan approval:sync --dry-run` previews these definitions and
     | `php artisan approval:sync` applies additive and supported configuration
-    | changes. Removing or reordering existing levels or approvers is refused.
+    | changes. Removing or reordering existing stages or approvers is refused.
     |
     */
 
     'definitions' => [
-        // 'purchase-order' => ['name' => 'Purchase order', 'levels' => []],
+        // 'purchase-order' => ['name' => 'Purchase order', 'stages' => []],
     ],
 
     /*
@@ -137,8 +137,8 @@ return [
     | recipients, so the audience is not stranded in a listener you would have
     | to fork. Extend ByRcsc\LaravelApproval\Notifications\ApprovalNotification.
     |
-    | Only six of the events are mapped. The rest are there to be listened to;
-    | not every state change is worth an email.
+    | Not every event is mapped. The rest are there to be listened to; not
+    | every state change is worth an email.
     |
     */
 
@@ -150,11 +150,17 @@ return [
 
         'map' => [
             Events\ApprovalSubmitted::class => Notifications\ApprovalRequestedNotification::class,
-            Events\LevelCompleted::class => Notifications\ApprovalRequestedNotification::class,
+            Events\StageCompleted::class => Notifications\ApprovalRequestedNotification::class,
             Events\ApprovalApproved::class => Notifications\ApprovalApprovedNotification::class,
             Events\DraftConflicted::class => Notifications\ApprovalConflictNotification::class,
             Events\ApprovalRejected::class => Notifications\ApprovalRejectedNotification::class,
-            Events\StepOverdue::class => Notifications\ApprovalOverdueNotification::class,
+            Events\ApprovalReturned::class => Notifications\ApprovalReturnedNotification::class,
+            Events\ApprovalDelegated::class => Notifications\ApprovalAssignedNotification::class,
+            Events\ApproverReassigned::class => Notifications\ApprovalAssignedNotification::class,
+            Events\ApproversResynced::class => Notifications\ApprovalAssignedNotification::class,
+            Events\ApproversEscalated::class => Notifications\ApprovalAssignedNotification::class,
+            Events\StageOverdue::class => Notifications\ApprovalOverdueNotification::class,
+            Events\StageOverdueReminder::class => Notifications\ApprovalOverdueNotification::class,
         ],
 
     ],
@@ -164,7 +170,7 @@ return [
     | Escalation
     |--------------------------------------------------------------------------
     |
-    | What happens to a level that passes its deadline. Each level picks one of
+    | What happens to a stage that passes its deadline. Each stage picks one of
     | these by name in its `escalation_strategy` column; this map says which
     | class does the work, and swapping one for your own is the seam.
     |
@@ -173,8 +179,9 @@ return [
     |
     |     Schedule::command('approval:escalate')->everyFifteenMinutes();
     |
-    | `notify` does nothing beyond firing StepOverdue, which is the honest
-    | default: a late approval is late, and deciding it automatically is a
+    | `record_only` records the overdue state and fires StageOverdue, nothing
+    | more - delivery is not promised unless notifications are enabled. It is
+    | the default: a late approval is late, and deciding it automatically is a
     | policy an organization chooses rather than one this package assumes.
     |
     */
@@ -182,7 +189,7 @@ return [
     'escalation' => [
 
         'strategies' => [
-            'notify' => NotifyStrategy::class,
+            'record_only' => RecordOnlyStrategy::class,
             'escalate' => EscalateStrategy::class,
             'auto_approve' => AutoDecideStrategy::class,
             'auto_reject' => AutoDecideStrategy::class,

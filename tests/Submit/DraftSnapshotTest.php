@@ -100,20 +100,21 @@ it('reads the pending draft back off the model', function (): void {
     $order = purchaseOrder();
     workflow([['approvers' => [user()]]], ['slug' => 'purchase-order']);
 
-    expect($order->pendingDraft())->toBe([]);
+    expect($order->pendingDraft())->toBeNull();
 
     $order->submitForApproval(null, ['amount' => 900], user());
 
-    expect($order->pendingDraft())->toBe(['amount' => 900]);
+    expect($order->pendingDraft()?->new)->toBe(['amount' => 900])
+        ->and($order->pendingDraft()?->original)->toBe(['amount' => 500]);
 });
 
-it('reads an empty draft for a record gated as a whole', function (): void {
+it('reads a null draft for a record gated as a whole', function (): void {
     $order = purchaseOrder();
     workflow([['approvers' => [user()]]], ['slug' => 'purchase-order']);
 
     $order->submitForApproval(null, null, user());
 
-    expect($order->pendingDraft())->toBe([])
+    expect($order->pendingDraft())->toBeNull()
         ->and($order->isPendingApproval())->toBeTrue();
 });
 

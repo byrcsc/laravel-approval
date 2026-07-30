@@ -11,9 +11,9 @@ use Illuminate\Notifications\Messages\MailMessage;
 /**
  * "Something needs your approval."
  *
- * Mapped to both `ApprovalSubmitted` and `LevelCompleted`, because being asked
+ * Mapped to both `ApprovalSubmitted` and `StageCompleted`, because being asked
  * first and being asked next are the same thing from the approver's side. In
- * either case the recipients are whoever the now-active level is waiting on.
+ * either case the recipients are whoever the now-active stage is waiting on.
  */
 final class ApprovalRequestedNotification extends ApprovalNotification
 {

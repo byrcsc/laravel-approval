@@ -35,7 +35,7 @@ final class AlreadyDecidedException extends ApprovalException
     public static function decisionAlreadyRecorded(Model $actor, ApprovalRequest $request): self
     {
         return new self(sprintf(
-            '[%s] has already approved the active level of approval request %s.',
+            '[%s] has already approved the active stage of approval request %s.',
             $actor::class,
             self::ulid($request),
         ));
@@ -65,29 +65,20 @@ final class AlreadyDecidedException extends ApprovalException
         ));
     }
 
-    public static function notRetryable(ApprovalRequest $request, RequestState $state): self
+    public static function notRevisable(ApprovalRequest $request, RequestState $state): self
     {
         return new self(sprintf(
-            'Approval request %s is %s and cannot be resubmitted. Only rejected, withdrawn, cancelled, or conflicted requests can.',
+            'Approval request %s is %s and cannot be revised and resubmitted. Only returned, rejected, withdrawn, cancelled, or conflicted requests can.',
             self::ulid($request),
             $state->value,
         ));
     }
 
-    public static function retryHasNoSubject(ApprovalRequest $request): self
+    public static function hasNoSubject(ApprovalRequest $request): self
     {
         return new self(sprintf(
-            'Approval request %s cannot be resubmitted: the record or the submitter it points at no longer exists.',
+            'Approval request %s has lost its subject: the record or the requester it points at no longer exists.',
             self::ulid($request),
-        ));
-    }
-
-    public static function notReturned(ApprovalRequest $request, RequestState $state): self
-    {
-        return new self(sprintf(
-            'Approval request %s is %s and cannot be resumed. Only returned requests can.',
-            self::ulid($request),
-            $state->value,
         ));
     }
 

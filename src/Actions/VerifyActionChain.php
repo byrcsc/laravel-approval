@@ -78,7 +78,7 @@ final class VerifyActionChain
             actorType: Attributes::nullableString($action, 'actor_type'),
             actorId: is_scalar($actorId) ? (string) $actorId : null,
             actorLabel: Attributes::nullableString($action, 'actor_label'),
-            stepId: Attributes::nullableInt($action, 'step_id'),
+            stageId: Attributes::nullableInt($action, 'stage_id'),
             comment: Attributes::nullableString($action, 'comment'),
             metadata: $metadata,
             createdAt: Attributes::datetime($action, 'created_at')?->format('Y-m-d H:i:s') ?? '',

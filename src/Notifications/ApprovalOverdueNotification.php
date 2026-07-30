@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Notifications;
 
 use ByRcsc\LaravelApproval\Events\ApprovalEvent;
-use ByRcsc\LaravelApproval\Events\StepOverdue;
+use ByRcsc\LaravelApproval\Events\StageOverdue;
+use ByRcsc\LaravelApproval\Events\StageOverdueReminder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
  * "This has been sitting with you past its deadline."
  *
- * Goes to whoever the late level is waiting on - the point of the default
- * `notify` policy, which changes nothing about the request and relies on this
- * to do the actual telling.
+ * Goes to whoever the late stage is waiting on - the delivery the record-only
+ * policy deliberately leaves to the notification layer.
  *
- * Sent once at escalation by default. A level with `remind_every_minutes`
- * receives the same notification again at that snapshotted cadence.
+ * Sent once when the stage first goes overdue, and again for each
+ * `StageOverdueReminder` at the stage's snapshotted cadence.
  */
 final class ApprovalOverdueNotification extends ApprovalNotification
 {
@@ -26,8 +26,8 @@ final class ApprovalOverdueNotification extends ApprovalNotification
      */
     public static function recipients(ApprovalEvent $event): iterable
     {
-        return $event instanceof StepOverdue
-            ? self::approversOf($event->step)
+        return $event instanceof StageOverdue || $event instanceof StageOverdueReminder
+            ? self::approversOf($event->stage)
             : self::activeApprovers($event);
     }
 

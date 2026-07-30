@@ -73,13 +73,13 @@ final class ApprovalAction extends Model
 
     /**
      * Null for actions that belong to the request as a whole - submitting it,
-     * cancelling it - rather than to any one level.
+     * cancelling it - rather than to any one stage.
      *
-     * @return BelongsTo<ApprovalRequestStep, $this>
+     * @return BelongsTo<ApprovalRequestStage, $this>
      */
-    public function step(): BelongsTo
+    public function stage(): BelongsTo
     {
-        return $this->belongsTo(ApprovalRequestStep::class, 'step_id');
+        return $this->belongsTo(ApprovalRequestStage::class, 'stage_id');
     }
 
     /**

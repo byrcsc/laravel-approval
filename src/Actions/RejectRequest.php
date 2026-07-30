@@ -14,15 +14,15 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Record a rejection and close the request only when its rejection policy says
- * the level can no longer succeed.
+ * the stage can no longer succeed.
  *
- * There is no sending it back a level for rework: the request becomes history
- * and resubmitting starts a fresh one at level one, against a fresh snapshot of
+ * There is no sending it back a stage for rework: the request becomes history
+ * and resubmitting starts a fresh one at stage one, against a fresh snapshot of
  * the workflow. That keeps a rejected request a thing that happened rather than
- * a thing that is still being negotiated - and it means the levels that already
+ * a thing that is still being negotiated - and it means the stages that already
  * approved get asked again, which is the point.
  *
- * Levels that never ran are `skipped`, not `rejected`. They did not decide
+ * Stages that never ran are `skipped`, not `rejected`. They did not decide
  * anything, and recording that they had would be a lie the reports would repeat.
  */
 final class RejectRequest
@@ -51,7 +51,7 @@ final class RejectRequest
                 request: $request,
                 action: ActionType::Rejected,
                 actor: $decision->actor,
-                step: $context->stage,
+                stage: $context->stage,
                 comment: $comment,
                 metadata: $decision->metadata,
             );

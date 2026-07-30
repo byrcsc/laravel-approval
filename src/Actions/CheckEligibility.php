@@ -21,11 +21,11 @@ use Illuminate\Database\Eloquent\Model;
  * check. Host policies and gates layer on top; this is the floor.
  *
  * The four questions, in the order the answers are most useful: is the request
- * still open, is a level actually waiting, does this actor hold a seat on it,
+ * still open, is a stage actually waiting, does this actor hold an assignment on it,
  * and are they allowed to fill it.
  *
  * This is a read. It answers the same question for a disabled button as for a
- * vote about to be recorded - see `AuthorizeDecision` for the second, which is
+ * decision about to be recorded - see `AuthorizeDecision` for the second, which is
  * this plus a throw.
  */
 final class CheckEligibility
@@ -38,13 +38,13 @@ final class CheckEligibility
             return Eligibility::denied(Ineligibility::RequestClosed);
         }
 
-        $step = $request->currentStep();
+        $stage = $request->currentStage();
 
-        if ($step === null) {
+        if ($stage === null) {
             return Eligibility::denied(Ineligibility::NoActiveStage);
         }
 
-        $progress = StageProgress::for($step);
+        $progress = StageProgress::for($stage);
         $assignment = $progress->assignmentFor($actor);
 
         if ($assignment === null) {
@@ -52,20 +52,20 @@ final class CheckEligibility
                 $progress->hasDelegatedAssignment($actor)
                     ? Ineligibility::AssignmentDelegated
                     : Ineligibility::NotAnApprover,
-                $step,
+                $stage,
                 $progress,
             );
         }
 
         if ($progress->hasDecision($assignment)) {
-            return Eligibility::denied(Ineligibility::DecisionAlreadyRecorded, $step, $progress);
+            return Eligibility::denied(Ineligibility::DecisionAlreadyRecorded, $stage, $progress);
         }
 
         if ($this->isSubmitter($request, $actor) && ! $this->allowsSelfApproval($request)) {
-            return Eligibility::denied(Ineligibility::SelfApproval, $step, $progress);
+            return Eligibility::denied(Ineligibility::SelfApproval, $stage, $progress);
         }
 
-        return Eligibility::granted($step, $progress, $assignment);
+        return Eligibility::granted($stage, $progress, $assignment);
     }
 
     private function isSubmitter(ApprovalRequest $request, Model $actor): bool
@@ -74,7 +74,7 @@ final class CheckEligibility
     }
 
     /**
-     * Read live rather than snapshotted, unlike the level rules. Self-approval
+     * Read live rather than snapshotted, unlike the stage rules. Self-approval
      * is a control policy, not a rule about this request: an organization that
      * tightens it wants the tighter rule to apply to what is already in flight,
      * which is the opposite of what snapshotting would give them.

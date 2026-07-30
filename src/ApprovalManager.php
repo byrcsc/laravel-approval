@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval;
 
-use ByRcsc\LaravelApproval\Actions\ApproveStep;
+use ByRcsc\LaravelApproval\Actions\ApproveStage;
 use ByRcsc\LaravelApproval\Actions\AttachFile;
 use ByRcsc\LaravelApproval\Actions\BypassApprovalGuard;
 use ByRcsc\LaravelApproval\Actions\CancelRequest;
@@ -13,14 +13,13 @@ use ByRcsc\LaravelApproval\Actions\CheckEligibility;
 use ByRcsc\LaravelApproval\Actions\CheckWithdrawalEligibility;
 use ByRcsc\LaravelApproval\Actions\DecideInBulk;
 use ByRcsc\LaravelApproval\Actions\DelegateApproval;
-use ByRcsc\LaravelApproval\Actions\EscalateOverdueSteps;
+use ByRcsc\LaravelApproval\Actions\EscalateOverdueStages;
 use ByRcsc\LaravelApproval\Actions\ReassignApprover;
 use ByRcsc\LaravelApproval\Actions\RejectRequest;
 use ByRcsc\LaravelApproval\Actions\ResolveConflict;
-use ByRcsc\LaravelApproval\Actions\ResubmitRequest;
-use ByRcsc\LaravelApproval\Actions\ResumeReturnedRequest;
 use ByRcsc\LaravelApproval\Actions\ResyncRequestApprovers;
 use ByRcsc\LaravelApproval\Actions\ReturnRequest;
+use ByRcsc\LaravelApproval\Actions\ReviseAndResubmitRequest;
 use ByRcsc\LaravelApproval\Actions\SubmitForApproval;
 use ByRcsc\LaravelApproval\Actions\SyncWorkflowDefinitions;
 use ByRcsc\LaravelApproval\Actions\VerifyAuditTrail;
@@ -30,6 +29,7 @@ use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
@@ -39,7 +39,7 @@ use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
+use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Contracts\Container\Container;
@@ -129,9 +129,9 @@ class ApprovalManager
     /**
      * Whether this actor may decide this request, and if not, why not.
      *
-     * The same check the vote makes, minus the throwing. Ask this to render a
-     * button, name a reason next to a disabled one, or show where the level's
-     * vote stands - the answer carries the step and ballot it already loaded.
+     * The same check a decision makes, minus the throwing. Ask this to render a
+     * button, name a reason next to a disabled one, or show where the stage
+     * stands - the answer carries the stage and progress it already loaded.
      */
     public function eligibility(ApprovalRequest $request, Model $actor): Eligibility
     {
@@ -176,7 +176,7 @@ class ApprovalManager
     public function decide(ApprovalRequest $request, ApprovalDecision $decision): ApprovalRequest
     {
         return match ($decision->verdict) {
-            Verdict::Approve => $this->container->make(ApproveStep::class)($request, $decision),
+            Verdict::Approve => $this->container->make(ApproveStage::class)($request, $decision),
             Verdict::Reject => $this->container->make(RejectRequest::class)($request, $decision),
             Verdict::Return => $this->container->make(ReturnRequest::class)($request, $decision),
         };
@@ -294,6 +294,10 @@ class ApprovalManager
     }
 
     /**
+     * Operational escape hatch, not routine approval flow: run an exceptional
+     * correction while guard mode holds a pending draft. The bypass is always
+     * appended to the open request's audit trail.
+     *
      * @template TValue
      *
      * @param  callable(Model): TValue  $callback
@@ -318,7 +322,7 @@ class ApprovalManager
     }
 
     /**
-     * Hand an approver's seat to somebody else for the level now waiting. The
+     * Hand an approver's assignment to somebody else for the stage now waiting. The
      * approver does this themselves; see {@see self::reassign()} for the case
      * where they are not around to.
      */
@@ -327,7 +331,7 @@ class ApprovalManager
         Model $approver,
         Model $delegate,
         ?string $comment = null,
-    ): ApprovalRequestStepApprover {
+    ): ApprovalRequestAssignment {
         /** @var DelegateApproval $delegateApproval */
         $delegateApproval = $this->container->make(DelegateApproval::class);
 
@@ -335,28 +339,31 @@ class ApprovalManager
     }
 
     /**
-     * Rewrite who a seat belongs to. Works on any undecided level, not only the
+     * Rewrite who an assignment belongs to. Works on any undecided stage, not only the
      * active one.
      */
     public function reassign(
         ApprovalRequest $request,
-        ApprovalRequestStepApprover $seat,
+        ApprovalRequestAssignment $assignment,
         Model $to,
-        ?Model $actor = null,
+        Model $actor,
         ?string $comment = null,
-    ): ApprovalRequestStepApprover {
+    ): ApprovalRequestAssignment {
         /** @var ReassignApprover $reassign */
         $reassign = $this->container->make(ReassignApprover::class);
 
-        return $reassign($request, $seat, $to, $actor, $comment);
+        return $reassign($request, $assignment, $to, $actor, $comment);
     }
 
     /**
-     * Rebuild a live request's approver seats from the current workflow.
+     * Rebuild a live request's approver assignments from the current workflow.
+     *
+     * An administrative recovery operation, not routine approval flow, and it
+     * is attributed to the operator who runs it.
      *
      * @return array<int, array{added: list<string>, removed: list<string>}>
      */
-    public function resync(ApprovalRequest $request, ?Model $actor = null, bool $prune = false): array
+    public function resync(ApprovalRequest $request, Model $actor, bool $prune = false): array
     {
         /** @var ResyncRequestApprovers $resync */
         $resync = $this->container->make(ResyncRequestApprovers::class);
@@ -365,7 +372,8 @@ class ApprovalManager
     }
 
     /**
-     * Clear a conflicted request, one way or the other. See
+     * Clear a conflicted request, one way or the other - an administrative
+     * conflict resolution, not routine approval flow. See
      * {@see ConflictResolution} for what the two ways mean.
      */
     public function resolve(
@@ -381,38 +389,21 @@ class ApprovalManager
     }
 
     /**
-     * Try again after a rejection, a withdrawal, or a conflict. Everything
-     * omitted is inherited from the request being retried.
-     *
-     * @param  array<string, mixed>|null  $newAttributes
+     * Revise a closed request and resubmit it as a new linked request, started
+     * from the first applicable stage of a fresh workflow snapshot. The draft
+     * is the caller's explicit choice; the requester and workflow are
+     * inherited from the request being revised unless given.
      */
-    public function resubmit(
+    public function reviseAndResubmit(
         ApprovalRequest $request,
-        ?array $newAttributes = null,
-        ?Model $submitter = null,
+        RevisedDraft $draft,
+        ?Model $requester = null,
         ApprovalWorkflow|string|null $workflow = null,
     ): ApprovalRequest {
-        /** @var ResubmitRequest $resubmit */
-        $resubmit = $this->container->make(ResubmitRequest::class);
+        /** @var ReviseAndResubmitRequest $revise */
+        $revise = $this->container->make(ReviseAndResubmitRequest::class);
 
-        return $resubmit($request, $newAttributes, $submitter, $workflow);
-    }
-
-    /**
-     * Resume a returned proposal as a new request. Changes may only name keys
-     * that were already present in the returned draft.
-     *
-     * @param  array<string, mixed>|null  $changes
-     */
-    public function resume(
-        ApprovalRequest $request,
-        ?array $changes = null,
-        ApprovalWorkflow|string|null $workflow = null,
-    ): ApprovalRequest {
-        /** @var ResumeReturnedRequest $resume */
-        $resume = $this->container->make(ResumeReturnedRequest::class);
-
-        return $resume($request, $changes, $workflow);
+        return $revise($request, $draft, $requester, $workflow);
     }
 
     public function attach(AttachmentEvidence $evidence): ApprovalAttachment
@@ -424,9 +415,9 @@ class ApprovalManager
     }
 
     /**
-     * Walk the audit trail's hash chains. The `approval:verify` command is
-     * the usual caller; this is here for hosts wiring it into their own
-     * monitoring.
+     * Walk the audit trail's hash chains - an operational verification, not
+     * routine approval flow. The `approval:verify` command is the usual
+     * caller; this is here for hosts wiring it into their own monitoring.
      *
      * @return list<array{request: string, subject: string, problem: string}>
      */
@@ -439,22 +430,23 @@ class ApprovalManager
     }
 
     /**
-     * Apply each overdue level's escalation policy. The `approval:escalate`
-     * command is the usual caller; this is here for hosts who would rather
-     * drive it from their own job.
+     * Apply each overdue stage's escalation policy - scheduled overdue
+     * processing, not routine approval flow. The `approval:escalate` command
+     * is the usual caller; this is here for hosts who would rather drive it
+     * from their own job.
      *
      * @return array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>}
      */
     public function escalateOverdue(): array
     {
-        /** @var EscalateOverdueSteps $escalate */
-        $escalate = $this->container->make(EscalateOverdueSteps::class);
+        /** @var EscalateOverdueStages $escalate */
+        $escalate = $this->container->make(EscalateOverdueStages::class);
 
         return $escalate();
     }
 
     /**
-     * Open requests whose active level is past its deadline, escalated or not.
+     * Open requests whose active stage is past its deadline, escalated or not.
      *
      * @return Builder<ApprovalRequest>
      */
@@ -464,8 +456,8 @@ class ApprovalManager
     }
 
     /**
-     * The inbox query: open requests whose active level is waiting on this
-     * person and which they have not already voted on.
+     * The inbox query: open requests whose active stage is waiting on this
+     * person and which they have not already decided on.
      *
      * @return Builder<ApprovalRequest>
      */

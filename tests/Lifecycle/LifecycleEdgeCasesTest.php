@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowException;
@@ -25,9 +26,9 @@ it('refuses a resubmission against a workflow edited down to nothing', function 
 
     // Somebody gutted the workflow while the rejection sat in a backlog. The
     // fresh snapshot a resubmission takes has nothing to copy.
-    $workflow->levels()->delete();
+    $workflow->stages()->delete();
 
-    expect(fn () => Approval::resubmit($request))
+    expect(fn () => Approval::reviseAndResubmit($request, RevisedDraft::inherit()))
         ->toThrow(InvalidWorkflowException::class)
         ->and($request->refresh()->state)->toBe(RequestState::Rejected)
         ->and(ApprovalRequest::query()->count())->toBe(1);
@@ -70,10 +71,10 @@ it('holds a withdrawn request immutable except to resubmission', function (): vo
         ->and(fn () => Approval::reject($request, $approver, 'Too late.'))->toThrow(AlreadyDecidedException::class)
         ->and(fn () => Approval::delegate($request, $approver, user('Delegate')))->toThrow(AlreadyDecidedException::class)
         ->and(fn () => Approval::withdraw($request, $submitter))->toThrow(AlreadyDecidedException::class)
-        ->and(fn () => Approval::resync($request))->toThrow(AlreadyDecidedException::class);
+        ->and(fn () => Approval::resync($request, user('Operator')))->toThrow(AlreadyDecidedException::class);
 
     // Withdrawal is not a verdict; trying again is allowed.
-    $second = Approval::resubmit($request);
+    $second = Approval::reviseAndResubmit($request, RevisedDraft::inherit());
 
     expect($second->state)->toBe(RequestState::Pending)
         ->and($second->resubmittedFrom?->is($request))->toBeTrue();
@@ -83,11 +84,11 @@ it('runs end to end on renamed tables', function (): void {
     /** @var TestCase $this */
     $this->rebootWith(['approval.table_names' => [
         'workflows' => 'sign_off_workflows',
-        'levels' => 'sign_off_levels',
-        'level_approvers' => 'sign_off_level_approvers',
+        'workflow_stages' => 'sign_off_stages',
+        'workflow_stage_approvers' => 'sign_off_stage_approvers',
         'requests' => 'sign_off_requests',
-        'steps' => 'sign_off_steps',
-        'step_approvers' => 'sign_off_step_approvers',
+        'request_stages' => 'sign_off_request_stages',
+        'assignments' => 'sign_off_assignments',
         'actions' => 'sign_off_actions',
         'attachments' => 'sign_off_attachments',
     ]]);

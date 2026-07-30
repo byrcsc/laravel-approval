@@ -5,18 +5,26 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Support;
 
 use ByRcsc\LaravelApproval\Events\ApprovalApproved;
+use ByRcsc\LaravelApproval\Events\ApprovalDelegated;
 use ByRcsc\LaravelApproval\Events\ApprovalRejected;
+use ByRcsc\LaravelApproval\Events\ApprovalReturned;
 use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
+use ByRcsc\LaravelApproval\Events\ApproverReassigned;
+use ByRcsc\LaravelApproval\Events\ApproversEscalated;
+use ByRcsc\LaravelApproval\Events\ApproversResynced;
 use ByRcsc\LaravelApproval\Events\DraftConflicted;
-use ByRcsc\LaravelApproval\Events\LevelCompleted;
-use ByRcsc\LaravelApproval\Events\StepOverdue;
+use ByRcsc\LaravelApproval\Events\StageCompleted;
+use ByRcsc\LaravelApproval\Events\StageOverdue;
+use ByRcsc\LaravelApproval\Events\StageOverdueReminder;
 use ByRcsc\LaravelApproval\Exceptions\InvalidConfigurationException;
 use ByRcsc\LaravelApproval\Notifications\ApprovalApprovedNotification;
+use ByRcsc\LaravelApproval\Notifications\ApprovalAssignedNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalConflictNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalOverdueNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalRejectedNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalRequestedNotification;
+use ByRcsc\LaravelApproval\Notifications\ApprovalReturnedNotification;
 
 /**
  * Which event sends which notification.
@@ -25,13 +33,13 @@ use ByRcsc\LaravelApproval\Notifications\ApprovalRequestedNotification;
  * people the moment it is installed is a package that gets uninstalled, and
  * every application already has opinions about who hears what.
  *
- * Turning them on gets the five entries below. Setting any entry to null
- * silences that event; pointing it at your own class - anything extending
+ * Turning them on gets the entries below. Setting any entry to null silences
+ * that event; pointing it at your own class - anything extending
  * {@see ApprovalNotification} - changes both the message and its audience.
  *
- * Note that only five of the dozen events are mapped. The rest exist to be
- * listened to; not every state change is worth an email, and the ones chosen
- * here are the ones somebody is actually waiting on.
+ * Not every event is mapped. The rest exist to be listened to; not every
+ * state change is worth an email, and the ones chosen here are the ones
+ * somebody is actually waiting on.
  */
 final class NotificationMap
 {
@@ -40,11 +48,17 @@ final class NotificationMap
      */
     private const DEFAULTS = [
         ApprovalSubmitted::class => ApprovalRequestedNotification::class,
-        LevelCompleted::class => ApprovalRequestedNotification::class,
+        StageCompleted::class => ApprovalRequestedNotification::class,
         ApprovalApproved::class => ApprovalApprovedNotification::class,
         DraftConflicted::class => ApprovalConflictNotification::class,
         ApprovalRejected::class => ApprovalRejectedNotification::class,
-        StepOverdue::class => ApprovalOverdueNotification::class,
+        ApprovalReturned::class => ApprovalReturnedNotification::class,
+        ApprovalDelegated::class => ApprovalAssignedNotification::class,
+        ApproverReassigned::class => ApprovalAssignedNotification::class,
+        ApproversResynced::class => ApprovalAssignedNotification::class,
+        ApproversEscalated::class => ApprovalAssignedNotification::class,
+        StageOverdue::class => ApprovalOverdueNotification::class,
+        StageOverdueReminder::class => ApprovalOverdueNotification::class,
     ];
 
     /**
@@ -62,7 +76,7 @@ final class NotificationMap
 
     /**
      * The map as it actually stands: empty when notifications are off, and
-     * with null entries dropped rather than carried around as holes.
+     * with null entries dropped rather than kept around as holes.
      *
      * @return array<class-string, class-string<ApprovalNotification>>
      */

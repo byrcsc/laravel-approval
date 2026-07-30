@@ -27,8 +27,7 @@ enum ActionType: string
     case Resynced = 'resynced';
     case GuardBypassed = 'guard_bypassed';
     case Returned = 'returned';
-    case Resumed = 'resumed';
-    case LevelSkipped = 'level_skipped';
+    case StageSkipped = 'stage_skipped';
     case Reminded = 'reminded';
     case AttachmentAdded = 'attachment_added';
 }

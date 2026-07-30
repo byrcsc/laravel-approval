@@ -12,21 +12,21 @@ use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use Illuminate\Support\Facades\Event;
 
-it('hands the seat to the delegate without erasing who was asked', function (): void {
+it('hands the assignment to the delegate without erasing who was asked', function (): void {
     $approver = user('Approver');
     $delegate = user('Delegate');
 
     $workflow = workflow([['approvers' => [$approver]]]);
     $request = post()->submitForApproval($workflow, null, user());
 
-    $seat = Approval::delegate($request, $approver, $delegate, 'On leave until the 9th.');
+    $assignment = Approval::delegate($request, $approver, $delegate, 'On leave until the 9th.');
 
-    expect($seat->getAttributeValue('approver_id'))->toBe($approver->getKey())
-        ->and($seat->delegatedTo?->getKey())->toBe($delegate->getKey())
-        ->and($seat->source)->toBe(ApproverSource::Delegated);
+    expect($assignment->getAttributeValue('approver_id'))->toBe($approver->getKey())
+        ->and($assignment->delegatedTo?->getKey())->toBe($delegate->getKey())
+        ->and($assignment->source)->toBe(ApproverSource::Delegated);
 });
 
-it('lets the delegate carry the level', function (): void {
+it('lets the delegate carry the stage', function (): void {
     $approver = user('Approver');
     $delegate = user('Delegate');
 
@@ -39,7 +39,7 @@ it('lets the delegate carry the level', function (): void {
     expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
 
-it('takes the vote away from the original approver', function (): void {
+it('takes the decision away from the original approver', function (): void {
     $approver = user('Approver');
     $delegate = user('Delegate');
 
@@ -52,7 +52,7 @@ it('takes the vote away from the original approver', function (): void {
         ->toThrow(UnauthorizedApproverException::class, 'delegated their approval');
 });
 
-it('counts a delegate vote as exactly one seat', function (): void {
+it('counts a delegate decision as exactly one assignment', function (): void {
     $one = user('One');
     $two = user('Two');
     $delegate = user('Delegate');
@@ -70,7 +70,7 @@ it('counts a delegate vote as exactly one seat', function (): void {
     expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
 
-it('lets the delegate reject on the seat too', function (): void {
+it('lets the delegate reject on the assignment too', function (): void {
     $approver = user('Approver');
     $delegate = user('Delegate');
 
@@ -117,7 +117,7 @@ describe('what delegation refuses', function (): void {
             ->toThrow(DelegationException::class, 'cannot delegate their approval to themselves');
     });
 
-    it('refuses delegating to somebody who already holds a seat here', function (): void {
+    it('refuses delegating to somebody who already holds an assignment here', function (): void {
         $one = user('One');
         $two = user('Two');
 
@@ -128,7 +128,7 @@ describe('what delegation refuses', function (): void {
             ->toThrow(DelegationException::class, 'already has an assignment on this stage');
     });
 
-    it('refuses delegating a seat that has already voted', function (): void {
+    it('refuses delegating an assignment that has already decided', function (): void {
         $one = user('One');
         $workflow = workflow([['required_approvals' => 2, 'approvers' => [$one, user('Two')]]]);
         $request = post()->submitForApproval($workflow, null, user());
@@ -139,7 +139,7 @@ describe('what delegation refuses', function (): void {
             ->toThrow(AlreadyDecidedException::class, 'has already approved');
     });
 
-    it('refuses delegating a seat that is already lent out', function (): void {
+    it('refuses delegating an assignment that is already lent out', function (): void {
         $approver = user('Approver');
         $workflow = workflow([['approvers' => [$approver]]]);
         $request = post()->submitForApproval($workflow, null, user());
@@ -150,7 +150,7 @@ describe('what delegation refuses', function (): void {
             ->toThrow(DelegationException::class, 'already delegated');
     });
 
-    it('refuses delegating a seat on a level that is not this one', function (): void {
+    it('refuses delegating an assignment on a stage that is not this one', function (): void {
         $second = user('Second');
 
         $workflow = workflow([
@@ -177,7 +177,7 @@ describe('what delegation refuses', function (): void {
 });
 
 describe('delegation and self-approval', function (): void {
-    it('does not let the submitter approve through a delegated seat', function (): void {
+    it('does not let the submitter approve through a delegated assignment', function (): void {
         $author = user('Author');
         $approver = user('Approver');
 

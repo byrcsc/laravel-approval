@@ -11,7 +11,7 @@ use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalRequestFactory;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Enums\StepState;
+use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Enums\TimelineState;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Support\Attributes;
@@ -29,9 +29,9 @@ use Illuminate\Support\Str;
 /**
  * One run of a workflow against one record.
  *
- * `workflow_id` is a reference for reporting only - the steps hanging off the
+ * `workflow_id` is a reference for reporting only - the stages hanging off the
  * request are the snapshot that decides who approves what. Requests are never
- * reopened; resubmitting or resuming creates a fresh one that points back at
+ * reopened; revising and resubmitting creates a fresh one that points back at
  * this.
  */
 final class ApprovalRequest extends Model
@@ -85,11 +85,11 @@ final class ApprovalRequest extends Model
     }
 
     /**
-     * @return HasMany<ApprovalRequestStep, $this>
+     * @return HasMany<ApprovalRequestStage, $this>
      */
-    public function steps(): HasMany
+    public function stages(): HasMany
     {
-        return $this->hasMany(ApprovalRequestStep::class, 'request_id')
+        return $this->hasMany(ApprovalRequestStage::class, 'request_id')
             ->orderBy('sequence');
     }
 
@@ -134,7 +134,7 @@ final class ApprovalRequest extends Model
      * The workflow's slug, or a request-scoped placeholder when the workflow
      * row is gone. For messages, never for lookups.
      */
-    public function workflowName(): string
+    public function workflowSlug(): string
     {
         $workflow = $this->workflow;
 
@@ -151,17 +151,17 @@ final class ApprovalRequest extends Model
             && Attributes::nullableString($this, 'submitter_id') === (is_scalar($key) ? (string) $key : '');
     }
 
-    public function currentStep(): ?ApprovalRequestStep
+    public function currentStage(): ?ApprovalRequestStage
     {
-        if ($this->relationLoaded('steps')) {
-            /** @var ApprovalRequestStep|null */
-            return $this->steps->first(
-                fn (ApprovalRequestStep $step): bool => Attributes::enum($step, 'state', StepState::class) === StepState::Active,
+        if ($this->relationLoaded('stages')) {
+            /** @var ApprovalRequestStage|null */
+            return $this->stages->first(
+                fn (ApprovalRequestStage $stage): bool => Attributes::enum($stage, 'state', StageStatus::class) === StageStatus::Active,
             );
         }
 
-        /** @var ApprovalRequestStep|null */
-        return $this->steps()->where('state', StepState::Active->value)->first();
+        /** @var ApprovalRequestStage|null */
+        return $this->stages()->where('state', StageStatus::Active->value)->first();
     }
 
     /**
@@ -169,54 +169,76 @@ final class ApprovalRequest extends Model
      */
     public function stageProgress(): ?StageProgress
     {
-        $sequence = Attributes::nullableInt($this, 'current_level_sequence');
+        $sequence = Attributes::nullableInt($this, 'current_stage_sequence');
 
         if ($sequence === null) {
             return null;
         }
 
-        $stage = $this->relationLoaded('steps')
-            ? $this->steps->first(
-                fn (ApprovalRequestStep $candidate): bool => Attributes::int($candidate, 'sequence') === $sequence,
+        $stage = $this->relationLoaded('stages')
+            ? $this->stages->first(
+                fn (ApprovalRequestStage $candidate): bool => Attributes::int($candidate, 'sequence') === $sequence,
             )
-            : $this->steps()->where('sequence', $sequence)->first();
+            : $this->stages()->where('sequence', $sequence)->first();
 
-        return $stage instanceof ApprovalRequestStep ? StageProgress::for($stage) : null;
+        return $stage instanceof ApprovalRequestStage ? StageProgress::for($stage) : null;
     }
 
     /**
+     * The assignment holders the current stage is still waiting on. Holders
+     * who have already responded are excluded; {@see currentStageApprovers()}
+     * lists every holder.
+     *
      * @return Collection<int, Model>
      */
     public function pendingApprovers(): Collection
     {
-        $step = $this->currentStep();
-        $holders = $step === null ? [] : StageProgress::for($step)->assignmentHolders();
+        $stage = $this->currentStage();
+        $holders = $stage === null ? [] : StageProgress::for($stage)->pendingAssignmentHolders();
 
         return self::models($holders);
     }
 
     /**
+     * Every assignment holder for the current stage, whether or not they have
+     * already responded.
+     *
+     * @return Collection<int, Model>
+     */
+    public function currentStageApprovers(): Collection
+    {
+        $stage = $this->currentStage();
+        $holders = $stage === null ? [] : StageProgress::for($stage)->assignmentHolders();
+
+        return self::models($holders);
+    }
+
+    /**
+     * The stage-by-stage timeline of this request only. Earlier and later
+     * requests in a linked chain keep their own timelines, reachable through
+     * `resubmittedFrom()` and `resubmissions()`.
+     *
      * @return Collection<int, TimelineEntry>
      */
     public function timeline(): Collection
     {
         $this->loadMissing([
-            'steps.approverSlots.approver',
-            'steps.approverSlots.delegatedTo',
-            'steps.actions',
+            'stages.assignments.approver',
+            'stages.assignments.delegatedTo',
+            'stages.actions',
         ]);
 
-        return $this->steps->map(function (ApprovalRequestStep $step): TimelineEntry {
-            $stepState = Attributes::enum($step, 'state', StepState::class) ?? StepState::Queued;
-            $state = $stepState === StepState::Skipped && ! Attributes::bool($step, 'condition_result')
+        return $this->stages->map(function (ApprovalRequestStage $stage): TimelineEntry {
+            $stageState = Attributes::enum($stage, 'state', StageStatus::class) ?? StageStatus::Queued;
+            $state = $stageState === StageStatus::Skipped && ! Attributes::bool($stage, 'condition_result')
                 ? TimelineState::ConditionSkipped
-                : TimelineState::from($stepState->value);
+                : TimelineState::from($stageState->value);
 
             return new TimelineEntry(
-                $step,
+                $stage,
                 $state,
-                collect(StageProgress::for($step)->assignmentHolders()),
-                $step->actions,
+                collect(StageProgress::for($stage)->assignmentHolders()),
+                $stage->actions,
             );
         })->values();
     }
@@ -243,10 +265,10 @@ final class ApprovalRequest extends Model
 
     /**
      * Whether this actor has any standing in the request at all: they submitted
-     * it, or they are named on one of its seats.
+     * it, or they are named on one of its assignments.
      *
      * Deliberately wider than eligibility and deliberately not time-bound - a
-     * level-one approver who voted last week is still a participant in the
+     * stage-one approver who decided last week is still a participant in the
      * request, which is the question a "may they read this?" check is asking.
      * Hosts that want a wider audience still (an auditor, a department head)
      * should widen it in their own policy rather than here.
@@ -263,9 +285,9 @@ final class ApprovalRequest extends Model
             return true;
         }
 
-        return $this->steps()
-            ->whereHas('approverSlots', function (Builder $slot) use ($type, $id): void {
-                $slot
+        return $this->stages()
+            ->whereHas('assignments', function (Builder $assignment) use ($type, $id): void {
+                $assignment
                     ->where(function (Builder $named) use ($type, $id): void {
                         $named->where('approver_type', $type)->where('approver_id', $id);
                     })
@@ -308,18 +330,18 @@ final class ApprovalRequest extends Model
     }
 
     /**
-     * Open requests whose active level is past its deadline.
+     * Open requests whose active stage is past its deadline.
      *
      * Says nothing about whether the escalation policy has run - that is
-     * `escalated_at` on the step, and a level stays overdue for as long as
+     * `escalated_at` on the stage, and a stage stays overdue for as long as
      * nobody decides it.
      *
      * @param  Builder<self>  $query
      */
     public function scopeOverdue(Builder $query): void
     {
-        $query->pending()->whereHas('steps', function (Builder $step): void {
-            $step->where('state', StepState::Active->value)
+        $query->pending()->whereHas('stages', function (Builder $stage): void {
+            $stage->where('state', StageStatus::Active->value)
                 ->whereNotNull('deadline_at')
                 ->where('deadline_at', '<=', Date::now());
         });
@@ -328,10 +350,10 @@ final class ApprovalRequest extends Model
     /**
      * The inbox query.
      *
-     * A seat that has been delegated belongs to the delegate and not to the
+     * An assignment that has been delegated belongs to the delegate and not to the
      * person who delegated it, so it shows in exactly one inbox. The
-     * already-voted exclusion is what keeps a request off somebody's list once
-     * they have dealt with it, while the level waits on their colleagues.
+     * already-decided exclusion is what keeps a request off somebody's list once
+     * they have dealt with it, while the stage waits on their colleagues.
      *
      * @param  Builder<self>  $query
      */
@@ -350,11 +372,11 @@ final class ApprovalRequest extends Model
         $type = $user->getMorphClass();
         $id = $user->getKey();
 
-        $query->where('state', RequestState::Pending->value)->whereHas('steps', function (Builder $step) use ($type, $id): void {
-            $step
-                ->where('state', StepState::Active->value)
-                ->whereHas('approverSlots', function (Builder $slot) use ($type, $id): void {
-                    $slot->where(function (Builder $held) use ($type, $id): void {
+        $query->where('state', RequestState::Pending->value)->whereHas('stages', function (Builder $stage) use ($type, $id): void {
+            $stage
+                ->where('state', StageStatus::Active->value)
+                ->whereHas('assignments', function (Builder $assignment) use ($type, $id): void {
+                    $assignment->where(function (Builder $held) use ($type, $id): void {
                         $held
                             ->where(function (Builder $own) use ($type, $id): void {
                                 $own->whereNull('delegated_to_id')
@@ -376,16 +398,16 @@ final class ApprovalRequest extends Model
     }
 
     /**
-     * Eager-load everything used by current-step summaries and timelines.
+     * Eager-load everything used by current-stage summaries and timelines.
      *
      * @param  Builder<self>  $query
      */
     public function scopeWithProgress(Builder $query): void
     {
         $query->with([
-            'steps.approverSlots.approver',
-            'steps.approverSlots.delegatedTo',
-            'steps.actions',
+            'stages.assignments.approver',
+            'stages.assignments.delegatedTo',
+            'stages.actions',
         ]);
     }
 
@@ -396,7 +418,7 @@ final class ApprovalRequest extends Model
     {
         return [
             'state' => RequestState::class,
-            'current_level_sequence' => 'integer',
+            'current_stage_sequence' => 'integer',
             'new_attributes' => 'array',
             'original_attributes' => 'array',
             'submitted_at' => 'datetime',
