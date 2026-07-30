@@ -129,7 +129,7 @@ final class FinanceTeamMembers implements ApproverResolver
     public function resolve(
         StageSnapshot $stage,
         Model $approvable,
-        Model $submitter,
+        Model $requester,
         array $config,
     ): iterable {
         return Team::findOrFail($config['team'])->members;
@@ -169,12 +169,6 @@ Each value is either a concrete approver model or a resolver class-string. A
 resolver-backed entry cannot name its approvers from the workflow alone: it needs
 the approvable model, the requester, and the stage configuration. Its approvers
 are resolved and snapshotted when a request is submitted.
-
-> [!NOTE]
-> The requester reaches a resolver as its `$submitter` argument, and is stored in
-> the `submitter_type` / `submitter_id` columns. Those persisted names predate the
-> move to *requester* in the documented vocabulary and are kept to avoid a schema
-> and contract rename; they mean the same thing.
 
 ### Submitting and deciding
 

@@ -36,9 +36,7 @@ final readonly class AuditHashPayload
             'metadata' => CanonicalJson::normalize($this->metadata),
             'previous' => $this->previousHash,
             'request' => $this->requestUlid,
-            // The serialized key predates the stage rename and is frozen:
-            // changing it would invalidate every previously recorded chain.
-            'step' => $this->stageId,
+            'stage' => $this->stageId,
         ];
     }
 }

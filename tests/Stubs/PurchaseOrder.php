@@ -19,7 +19,7 @@ class PurchaseOrder extends Model
     /**
      * Set by tests to stand in for a request's authenticated user.
      */
-    public static ?Model $actingSubmitter = null;
+    public static ?Model $actingRequester = null;
 
     public static string $workflowSlug = 'purchase-order';
 
@@ -44,9 +44,9 @@ class PurchaseOrder extends Model
         return ['reference', 'amount'];
     }
 
-    public function approvalSubmitter(): ?Model
+    public function approvalRequester(): ?Model
     {
-        return self::$actingSubmitter;
+        return self::$actingRequester;
     }
 
     /**

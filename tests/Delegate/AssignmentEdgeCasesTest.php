@@ -40,22 +40,22 @@ it('lets a delegate hand the assignment on, locking out everyone before them', f
     expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
 
-it('reassigns an assignment onto the submitter but never lets them decision from it', function (): void {
-    $submitter = user('Submitter');
+it('reassigns an assignment onto the requester but never lets them decide it', function (): void {
+    $requester = user('Requester');
     $leaver = user('Leaver');
     $other = user('Other');
 
     $workflow = workflow([['required_approvals' => 1, 'approvers' => [$leaver, $other]]]);
-    $request = post()->submitForApproval($workflow, null, $submitter);
+    $request = post()->submitForApproval($workflow, null, $requester);
 
     $assignment = $request->stages()->sole()->assignments()->orderBy('id')->get()->first();
     assert($assignment !== null);
 
     // The reassign itself is an administrative rewrite and goes through; the
     // self-approval rule bites where it always does, at the decision.
-    Approval::reassign($request, $assignment, $submitter, user('Admin'));
+    Approval::reassign($request, $assignment, $requester, user('Admin'));
 
-    expect(fn () => Approval::approve($request, $submitter))
+    expect(fn () => Approval::approve($request, $requester))
         ->toThrow(SelfApprovalException::class);
 
     Approval::approve($request, $other);

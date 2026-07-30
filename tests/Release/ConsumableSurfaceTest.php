@@ -33,16 +33,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 it('exposes withdrawal and delegation eligibility through every public surface', function (): void {
-    $submitter = user('Submitter');
+    $requester = user('Requester');
     $approver = user('Approver');
-    $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, $submitter);
+    $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, $requester);
 
-    expect(Approval::withdrawalEligibility($request, $submitter)->eligible)->toBeTrue()
-        ->and($request->canBeWithdrawnBy($submitter))->toBeTrue()
+    expect(Approval::withdrawalEligibility($request, $requester)->eligible)->toBeTrue()
+        ->and($request->canBeWithdrawnBy($requester))->toBeTrue()
         ->and($request->withdrawalEligibility($approver)->reason)->toBe(WithdrawalIneligibility::NotRequester)
         ->and(Approval::delegationEligibility($request, $approver)->eligible)->toBeTrue()
         ->and($request->canBeDelegatedBy($approver))->toBeTrue()
-        ->and($request->delegationEligibility($submitter)->reason)->toBe(DelegationIneligibility::NotAnApprover);
+        ->and($request->delegationEligibility($requester)->reason)->toBe(DelegationIneligibility::NotAnApprover);
 });
 
 it('keeps stage progress public names in the approval domain', function (): void {
@@ -73,10 +73,10 @@ it('queries approvables by state and current approver without duplicates', funct
     $free = post('Free');
     $flow = workflow([['required_approvals' => 2, 'approvers' => [$approver, $other]]]);
 
-    $pendingRequest = $pending->submitForApproval($flow, null, user('Pending submitter'));
-    $rejectedRequest = $rejected->submitForApproval($flow, null, user('Rejected submitter'));
+    $pendingRequest = $pending->submitForApproval($flow, null, user('Pending requester'));
+    $rejectedRequest = $rejected->submitForApproval($flow, null, user('Rejected requester'));
     Approval::reject($rejectedRequest, $approver, 'No');
-    $returnedRequest = $returned->submitForApproval($flow, null, user('Returned submitter'));
+    $returnedRequest = $returned->submitForApproval($flow, null, user('Returned requester'));
     Approval::returnForRevision($returnedRequest, $approver, 'Fix it');
 
     expect(Post::query()->pendingApproval()->pluck('title')->all())->toBe(['Pending'])
@@ -95,7 +95,7 @@ it('returns an eager-loadable progress timeline and pending holders', function (
     $request = post()->submitForApproval(workflow([
         ['approvers' => [$one]],
         ['approvers' => [$two]],
-    ]), null, user('Submitter'));
+    ]), null, user('Requester'));
 
     expect($request->currentStage()?->sequence)->toBe(1)
         ->and($request->pendingApprovers()[0]->is($one))->toBeTrue()
@@ -115,15 +115,15 @@ it('closes hard deletes while leaving ordinary soft deletes model-configurable',
     $flow = workflow([['approvers' => [user('Approver')]]]);
 
     $hard = post('Hard');
-    $hardRequest = $hard->submitForApproval($flow, null, user('Hard submitter'));
+    $hardRequest = $hard->submitForApproval($flow, null, user('Hard requester'));
     $hard->delete();
 
     $soft = SoftPost::create(['title' => 'Soft']);
-    $softRequest = $soft->submitForApproval($flow, null, user('Soft submitter'));
+    $softRequest = $soft->submitForApproval($flow, null, user('Soft requester'));
     $soft->delete();
 
     $closing = ClosingSoftPost::create(['title' => 'Closing']);
-    $closingRequest = $closing->submitForApproval($flow, null, user('Closing submitter'));
+    $closingRequest = $closing->submitForApproval($flow, null, user('Closing requester'));
     $closing->delete();
 
     expect($hardRequest->refresh()->state)->toBe(RequestState::Cancelled)
@@ -159,7 +159,7 @@ it('previews, applies, updates, and refuses destructive workflow definition drif
     $inFlight = post('In flight')->submitForApproval(
         Approval::workflow('defined-flow'),
         null,
-        user('In-flight submitter'),
+        user('In-flight requester'),
     );
     $changed = $builder->description('Changed')->stage('Finance', fn ($stage) => $stage->approver(user('Finance')));
     $updated = Approval::syncDefinitions([$changed]);
@@ -188,10 +188,10 @@ it('previews, applies, updates, and refuses destructive workflow definition drif
 it('processes bulk outcomes independently and identifies each failure', function (): void {
     $approver = user('Approver');
     $flow = workflow([['approvers' => [$approver]]]);
-    $first = post('First')->submitForApproval($flow, null, user('First submitter'));
-    $secondSubmitter = user('Second submitter');
-    $second = post('Second')->submitForApproval($flow, null, $secondSubmitter);
-    Approval::withdraw($second, $secondSubmitter);
+    $first = post('First')->submitForApproval($flow, null, user('First requester'));
+    $secondRequester = user('Second requester');
+    $second = post('Second')->submitForApproval($flow, null, $secondRequester);
+    Approval::withdraw($second, $secondRequester);
 
     $result = Approval::approveMany([$first, $second], $approver);
 
@@ -207,7 +207,7 @@ it('fakes submissions and decisions without mutating workflow state and restores
     $approver = user('Approver');
     $request = approvalRequest($post);
 
-    $post->submitForApproval('missing-flow', null, user('Submitter'), 'Please', ['source' => 'test']);
+    $post->submitForApproval('missing-flow', null, user('Requester'), 'Please', ['source' => 'test']);
     Approval::approve($request, $approver, 'Fine');
 
     expect($fake)->toBeInstanceOf(ApprovalFake::class)
@@ -222,8 +222,8 @@ it('fakes submissions and decisions without mutating workflow state and restores
 });
 
 it('auto-submits opted-in approvables once after creation', function (): void {
-    $submitter = user('Submitter');
-    PurchaseOrder::$actingSubmitter = $submitter;
+    $requester = user('Requester');
+    PurchaseOrder::$actingRequester = $requester;
     workflow([['approvers' => [user('Approver')]]], ['slug' => PurchaseOrder::$workflowSlug]);
 
     $order = AutoPurchaseOrder::create(['reference' => 'AUTO-1', 'amount' => 100]);

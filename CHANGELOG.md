@@ -117,6 +117,32 @@ pre-release testing and compatibility review.
   `request_stages`, and `assignments`. Persisted `escalation_strategy` values
   of `notify` become `record_only`. The audit hash serialization is unchanged,
   so existing chains still verify after the rename.
+- Completed the requester vocabulary. The person who submits a request and may
+  later withdraw or revise it is now the **requester** everywhere, replacing the
+  mixture of `submitter` and `requester` the earlier steps left behind. The verb
+  is untouched: `submitForApproval()`, `Approval::submit()`, `submitted_at`,
+  `ActionType::Submitted`, `ApprovalSubmitted`, and `AutoSubmitsForApproval` all
+  keep their names, because they describe the act rather than the person.
+  Renamed: the `$submitter` argument of `Approval::submit()`,
+  `submitForApproval()`, `ApproverResolver::resolve()`, and
+  `StageCondition::passes()` → `$requester`; `submitterFor()` →
+  `requesterFor()`; `approvalSubmitter()` → `approvalRequester()`;
+  `ApprovalRequest::submitter()` → `requester()`; `wasSubmittedBy()` →
+  `wasRequestedBy()`; `AutoSubmission::$submitter` → `$requester`;
+  `ApprovalNotification::submitterOf()` → `requesterOf()`;
+  `SelfApprovalException::forSubmitter()` → `forRequester()`;
+  `UnauthorizedApproverException::notTheSubmitter()` → `notTheRequester()`; and
+  `MissingSubmitterException` → `MissingRequesterException`.
+- Renamed the requester columns to match. For pre-release installs:
+  `approval_requests.submitter_type` → `requester_type` and
+  `approval_requests.submitter_id` → `requester_id`. `submitted_at` is
+  unchanged. Both names are nine characters, so no generated index name
+  changes length.
+- Renamed the audit hash payload's stage key from `step` to `stage`, which had
+  been left frozen to preserve development chains. **This invalidates every
+  previously recorded hash chain**, so `approval:verify` will report findings
+  against actions recorded before this change. Pre-release installs should
+  migrate fresh. No legacy terminology now remains in the shipped package.
 - Consolidated the public API around the facade. `returnToSubmitter()` is now
   `returnForRevision()` on the facade, the manager, and the shipped policy; the
   `bulkApprove()` and `bulkReject()` aliases are gone in favour of

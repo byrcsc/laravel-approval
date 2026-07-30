@@ -288,27 +288,27 @@ it('permits direct edits while a request sits returned', function (): void {
     // A returned request is closed, and the guard only ever claimed to hold
     // while one is in flight. Going and fixing the record is the whole point
     // of returning it.
-    $post->update(['title' => 'Fixed by the submitter']);
+    $post->update(['title' => 'Fixed by the requester']);
 
-    expect($post->fresh()?->title)->toBe('Fixed by the submitter')
+    expect($post->fresh()?->title)->toBe('Fixed by the requester')
         ->and($request->refresh()->state)->toBe(RequestState::Returned);
 });
 
-it('revises a returned request from a snapshot taken after the submitter edited', function (): void {
+it('revises a returned request from a snapshot taken after the requester edited', function (): void {
     [$post, $request, $approver] = guardedPost();
 
     Approval::returnForRevision($request, $approver, 'Fix the title and send it back');
 
-    $post->update(['title' => 'Fixed by the submitter']);
+    $post->update(['title' => 'Fixed by the requester']);
 
     $replacement = Approval::reviseAndResubmit($request->refresh(), RevisedDraft::inherit());
 
     Approval::approve($replacement, $approver);
 
-    // Two halves of one decision. The fresh snapshot means the submitter's own
+    // Two halves of one decision. The fresh snapshot means the requester's own
     // edit is not drift, so the draft applies rather than conflicting - and
     // because the draft is unchanged, applying it puts the *approved* value
-    // back over the fix. A submitter who edited directly revises with the
+    // back over the fix. A requester who edited directly revises with the
     // fixed value in the draft; see the test below.
     expect($replacement->refresh()->state)->toBe(RequestState::Approved)
         ->and($post->fresh()?->title)->toBe('Approved title');
@@ -319,12 +319,12 @@ it('carries a direct fix forward when the revision names it in the draft', funct
 
     Approval::returnForRevision($request, $approver, 'Fix the title and send it back');
 
-    $post->update(['title' => 'Fixed by the submitter']);
+    $post->update(['title' => 'Fixed by the requester']);
 
-    $replacement = Approval::reviseAndResubmit($request->refresh(), RevisedDraft::withAttributes(['title' => 'Fixed by the submitter']));
+    $replacement = Approval::reviseAndResubmit($request->refresh(), RevisedDraft::withAttributes(['title' => 'Fixed by the requester']));
 
     Approval::approve($replacement, $approver);
 
     expect($replacement->refresh()->state)->toBe(RequestState::Approved)
-        ->and($post->fresh()?->title)->toBe('Fixed by the submitter');
+        ->and($post->fresh()?->title)->toBe('Fixed by the requester');
 });

@@ -60,17 +60,17 @@ it('carries an in-flight request whose workflow was soft-deleted', function (): 
 
 it('holds a withdrawn request immutable except to resubmission', function (): void {
     $approver = user('Approver');
-    $submitter = user('Submitter');
+    $requester = user('Requester');
 
     $workflow = workflow([['approvers' => [$approver]]]);
-    $request = post()->submitForApproval($workflow, null, $submitter);
+    $request = post()->submitForApproval($workflow, null, $requester);
 
-    Approval::withdraw($request, $submitter);
+    Approval::withdraw($request, $requester);
 
     expect(fn () => Approval::approve($request, $approver))->toThrow(AlreadyDecidedException::class)
         ->and(fn () => Approval::reject($request, $approver, 'Too late.'))->toThrow(AlreadyDecidedException::class)
         ->and(fn () => Approval::delegate($request, $approver, user('Delegate')))->toThrow(AlreadyDecidedException::class)
-        ->and(fn () => Approval::withdraw($request, $submitter))->toThrow(AlreadyDecidedException::class)
+        ->and(fn () => Approval::withdraw($request, $requester))->toThrow(AlreadyDecidedException::class)
         ->and(fn () => Approval::resync($request, user('Operator')))->toThrow(AlreadyDecidedException::class);
 
     // Withdrawal is not a verdict; trying again is allowed.

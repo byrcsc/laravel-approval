@@ -68,9 +68,9 @@ final class ResyncRequestApprovers
 
             $workflow = $request->workflow ?? throw WorkflowNotFoundException::forRequest($request);
             $approvable = $request->approvable;
-            $submitter = $request->submitter;
+            $requester = $request->requester;
 
-            if (! $approvable instanceof Model || ! $submitter instanceof Model) {
+            if (! $approvable instanceof Model || ! $requester instanceof Model) {
                 throw AlreadyDecidedException::hasNoSubject($request);
             }
 
@@ -97,7 +97,7 @@ final class ResyncRequestApprovers
                     continue;
                 }
 
-                $change = $this->resyncStage($stage, $workflowStage, $slug, $approvable, $submitter, $prune, $created);
+                $change = $this->resyncStage($stage, $workflowStage, $slug, $approvable, $requester, $prune, $created);
 
                 if ($change['added'] !== [] || $change['removed'] !== []) {
                     $changes[$sequence] = $change;
@@ -130,12 +130,12 @@ final class ResyncRequestApprovers
         ApprovalWorkflowStage $workflowStage,
         string $slug,
         Model $approvable,
-        Model $submitter,
+        Model $requester,
         bool $prune,
         array &$created,
     ): array {
         $snapshot = StageSnapshot::fromRequestStage($stage);
-        $wanted = ($this->resolveApprovers)($workflowStage, $snapshot, $approvable, $submitter, $slug);
+        $wanted = ($this->resolveApprovers)($workflowStage, $snapshot, $approvable, $requester, $slug);
 
         $health = StageHealth::inspect($stage);
         $progress = StageProgress::for($stage);

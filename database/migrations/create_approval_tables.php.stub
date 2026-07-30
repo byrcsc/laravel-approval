@@ -112,7 +112,7 @@ return new class extends Migration
             $table->json('new_attributes')->nullable();
             $table->json('original_attributes')->nullable();
 
-            $this->identityMorphs($table, 'submitter');
+            $this->identityMorphs($table, 'requester');
 
             // Set on the replacement when a rejected request is resubmitted;
             // the only link between the two. Indexed explicitly: MySQL indexes

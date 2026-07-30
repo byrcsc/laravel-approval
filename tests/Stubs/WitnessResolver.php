@@ -25,7 +25,7 @@ final class WitnessResolver implements ApproverResolver
      * @param  array<string, mixed>  $config
      * @return iterable<int, Model>
      */
-    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
+    public function resolve(StageSnapshot $stage, Model $approvable, Model $requester, array $config): iterable
     {
         self::$sawAmount = $approvable->getAttributeValue('amount');
 

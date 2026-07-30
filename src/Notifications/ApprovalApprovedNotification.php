@@ -21,7 +21,7 @@ final class ApprovalApprovedNotification extends ApprovalNotification
      */
     public static function recipients(ApprovalEvent $event): iterable
     {
-        return self::submitterOf($event);
+        return self::requesterOf($event);
     }
 
     public function toMail(object $notifiable): MailMessage

@@ -79,19 +79,19 @@ final class ApprovalFake extends ApprovalManager
         Model $approvable,
         ApprovalWorkflow|string|null $workflow = null,
         ?array $newAttributes = null,
-        ?Model $submitter = null,
+        ?Model $requester = null,
         ?string $comment = null,
         array $metadata = [],
     ): ApprovalRequest {
-        // Resolved the way the real manager resolves it, so an omitted submitter
+        // Resolved the way the real manager resolves it, so an omitted requester
         // records the actor a real submission would attribute the request to -
         // and fails the same way when there is nobody to attribute it to.
-        $submitter ??= $this->submitterFor($approvable);
+        $requester ??= $this->requesterFor($approvable);
 
         $this->interactions[] = new ApprovalInteraction(
             InteractionType::Submitted,
             $approvable,
-            $submitter,
+            $requester,
             workflow: $workflow,
             comment: $comment,
             metadata: ['new_attributes' => $newAttributes, ...$metadata],
@@ -101,11 +101,11 @@ final class ApprovalFake extends ApprovalManager
             'approvable_type' => $approvable->getMorphClass(),
             'approvable_id' => $approvable->getKey(),
             'new_attributes' => $newAttributes,
-            'submitter_type' => $submitter->getMorphClass(),
-            'submitter_id' => $submitter->getKey(),
+            'requester_type' => $requester->getMorphClass(),
+            'requester_id' => $requester->getKey(),
         ]);
         $request->setRelation('approvable', $approvable);
-        $request->setRelation('submitter', $submitter);
+        $request->setRelation('requester', $requester);
 
         return $request;
     }

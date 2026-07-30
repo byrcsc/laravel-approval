@@ -59,7 +59,7 @@ it('describes a request, its steps, and its approver assignments', function () {
     expect(Schema::hasColumns('approval_requests', [
         'id', 'ulid', 'approvable_type', 'approvable_id', 'workflow_id', 'state',
         'current_stage_sequence', 'new_attributes', 'original_attributes',
-        'submitter_type', 'submitter_id', 'resubmitted_from_id',
+        'requester_type', 'requester_id', 'resubmitted_from_id',
         'submitted_at', 'completed_at', 'audit_head_hash',
     ]))->toBeTrue();
 

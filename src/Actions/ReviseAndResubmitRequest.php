@@ -70,7 +70,7 @@ final class ReviseAndResubmitRequest
             }
 
             $approvable = $request->approvable;
-            $original = $request->submitter;
+            $original = $request->requester;
 
             if (! $approvable instanceof Model || ! $original instanceof Model) {
                 throw AlreadyDecidedException::hasNoSubject($request);

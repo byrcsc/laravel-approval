@@ -7,7 +7,7 @@ namespace ByRcsc\LaravelApproval\Tests\Stubs;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
 /**
- * Stands in for the host app's user: submitter, approver, actor.
+ * Stands in for the host app's user: requester, approver, actor.
  */
 class User extends Authenticatable
 {

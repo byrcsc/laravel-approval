@@ -43,7 +43,7 @@ final class WithdrawRequest
             $eligibility = ($this->checkEligibility)($request, $actor);
 
             if ($eligibility->reason === WithdrawalIneligibility::NotRequester) {
-                throw UnauthorizedApproverException::notTheSubmitter($actor, $request);
+                throw UnauthorizedApproverException::notTheRequester($actor, $request);
             }
 
             $request->stages()

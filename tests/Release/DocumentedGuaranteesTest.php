@@ -64,8 +64,8 @@ it('holds drafted attributes until the final approval and then applies them', fu
 });
 
 it('creates the request after the record is persisted rather than gating creation', function (): void {
-    $submitter = user('Requester');
-    PurchaseOrder::$actingSubmitter = $submitter;
+    $requester = user('Requester');
+    PurchaseOrder::$actingRequester = $requester;
     workflow([['approvers' => [user('Approver')]]], ['slug' => PurchaseOrder::$workflowSlug]);
 
     $order = AutoPurchaseOrder::create(['reference' => 'AUTO-1', 'amount' => 100]);

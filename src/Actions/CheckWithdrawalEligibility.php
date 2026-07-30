@@ -21,7 +21,7 @@ final class CheckWithdrawalEligibility
             return WithdrawalEligibility::denied(WithdrawalIneligibility::RequestClosed);
         }
 
-        if (! $request->wasSubmittedBy($actor)) {
+        if (! $request->wasRequestedBy($actor)) {
             return WithdrawalEligibility::denied(WithdrawalIneligibility::NotRequester);
         }
 

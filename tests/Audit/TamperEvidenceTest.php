@@ -150,7 +150,7 @@ it('names the actor in words that outlive the account', function (): void {
 });
 
 it('captures an actor label once for both the row and its hash', function (): void {
-    $submitter = FlickeringLabelUser::query()->create([
+    $requester = FlickeringLabelUser::query()->create([
         'name' => 'Changing',
         'email' => 'changing@example.com',
     ]);
@@ -158,7 +158,7 @@ it('captures an actor label once for both the row and its hash', function (): vo
     $request = purchaseOrder()->submitForApproval(
         workflow([['approvers' => [user('Approver')]]]),
         ['amount' => 900],
-        $submitter,
+        $requester,
     );
 
     expect($request->actions()->where('action', ActionType::Submitted->value)->sole()->actor_label)

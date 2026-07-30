@@ -28,7 +28,7 @@ uses()->beforeEach(function (): void {
     Relation::requireMorphMap(false);
     Relation::morphMap([], false);
     HeadOfDepartmentResolver::$heads = [];
-    PurchaseOrder::$actingSubmitter = null;
+    PurchaseOrder::$actingRequester = null;
     PurchaseOrder::$workflowSlug = 'purchase-order';
     ScriptedCondition::reset();
     WitnessResolver::$sawAmount = null;
@@ -220,22 +220,22 @@ function approveInvoiceDraft(array $attributes, ?callable $meddle = null): array
 }
 
 /**
- * A minimal request against `$post`, submitted by `$submitter`. Written
+ * A minimal request against `$post`, submitted by `$requester`. Written
  * directly rather than through the engine: tests that are about the schema
  * should not go through the thing being tested on top of it.
  *
  * @param  array<string, mixed>  $attributes
  */
-function approvalRequest(?Post $post = null, ?User $submitter = null, array $attributes = []): ApprovalRequest
+function approvalRequest(?Post $post = null, ?User $requester = null, array $attributes = []): ApprovalRequest
 {
     $post ??= post();
-    $submitter ??= user();
+    $requester ??= user();
 
     return ApprovalRequest::create(array_merge([
         'approvable_type' => $post->getMorphClass(),
         'approvable_id' => $post->getKey(),
-        'submitter_type' => $submitter->getMorphClass(),
-        'submitter_id' => $submitter->getKey(),
+        'requester_type' => $requester->getMorphClass(),
+        'requester_id' => $requester->getKey(),
         'submitted_at' => now(),
     ], $attributes));
 }

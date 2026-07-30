@@ -34,7 +34,7 @@ use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
-use ByRcsc\LaravelApproval\Exceptions\MissingSubmitterException;
+use ByRcsc\LaravelApproval\Exceptions\MissingRequesterException;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
@@ -102,7 +102,7 @@ class ApprovalManager
         Model $approvable,
         ApprovalWorkflow|string|null $workflow = null,
         ?array $newAttributes = null,
-        ?Model $submitter = null,
+        ?Model $requester = null,
         ?string $comment = null,
         array $metadata = [],
     ): ApprovalRequest {
@@ -113,7 +113,7 @@ class ApprovalManager
             $approvable,
             $this->workflowFor($approvable, $workflow),
             $newAttributes,
-            $submitter ?? $this->submitterFor($approvable),
+            $requester ?? $this->requesterFor($approvable),
             $comment,
             $metadata,
         );
@@ -341,22 +341,22 @@ class ApprovalManager
 
     /**
      * Resolves the requester the same way as the workflow: the argument, then
-     * the model's `approvalSubmitter()`, then the authenticated user. Throws
+     * the model's `approvalRequester()`, then the authenticated user. Throws
      * when none of the three answers, because an unattributed request cannot be
      * withdrawn by its requester or audited.
      */
-    public function submitterFor(Model $approvable): Model
+    public function requesterFor(Model $approvable): Model
     {
-        if (method_exists($approvable, 'approvalSubmitter')) {
+        if (method_exists($approvable, 'approvalRequester')) {
             /** @var mixed $declared */
-            $declared = $approvable->approvalSubmitter();
+            $declared = $approvable->approvalRequester();
 
             if ($declared instanceof Model) {
                 return $declared;
             }
         }
 
-        return $this->authenticated() ?? throw MissingSubmitterException::forApprovable($approvable);
+        return $this->authenticated() ?? throw MissingRequesterException::forApprovable($approvable);
     }
 
     // Administrative and operational operations. Each is labelled as such in its

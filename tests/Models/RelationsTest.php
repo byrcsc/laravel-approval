@@ -50,14 +50,14 @@ it('reads a stage back to its workflow', function () {
 
 it('points a request at what it is approving and who asked', function () {
     $post = post('Quarterly report');
-    $submitter = user('Alan Turing');
+    $requester = user('Alan Turing');
 
-    $request = approvalRequest($post, $submitter);
+    $request = approvalRequest($post, $requester);
 
     expect($request->approvable)->toBeInstanceOf(Post::class)
         ->and($request->approvable?->getKey())->toBe($post->getKey())
-        ->and($request->submitter)->toBeInstanceOf(User::class)
-        ->and($request->submitter?->getKey())->toBe($submitter->getKey());
+        ->and($request->requester)->toBeInstanceOf(User::class)
+        ->and($request->requester?->getKey())->toBe($requester->getKey());
 });
 
 it('walks a request down to its steps and approver assignments', function () {

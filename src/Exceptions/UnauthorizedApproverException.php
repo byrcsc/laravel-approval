@@ -38,7 +38,7 @@ final class UnauthorizedApproverException extends ApprovalException
         ));
     }
 
-    public static function notTheSubmitter(Model $actor, ApprovalRequest $request): self
+    public static function notTheRequester(Model $actor, ApprovalRequest $request): self
     {
         return new self(sprintf(
             '[%s] did not submit approval request %s and cannot withdraw it.',

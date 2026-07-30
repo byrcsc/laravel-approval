@@ -56,9 +56,9 @@ final class EscalateStrategy implements EscalationStrategy
     ): void {
         $resolver = $this->resolver($config, $stage);
         $approvable = $request->approvable;
-        $submitter = $request->submitter;
+        $requester = $request->requester;
 
-        if (! $approvable instanceof Model || ! $submitter instanceof Model) {
+        if (! $approvable instanceof Model || ! $requester instanceof Model) {
             return;
         }
 
@@ -70,7 +70,7 @@ final class EscalateStrategy implements EscalationStrategy
         $created = [];
 
         /** @var mixed $approver */
-        foreach ($resolver->resolve(StageSnapshot::fromRequestStage($stage), $approvable, $submitter, Payload::object($config, 'resolver_config') ?? []) as $approver) {
+        foreach ($resolver->resolve(StageSnapshot::fromRequestStage($stage), $approvable, $requester, Payload::object($config, 'resolver_config') ?? []) as $approver) {
             if (! $approver instanceof Model || ! $approver->exists) {
                 continue;
             }

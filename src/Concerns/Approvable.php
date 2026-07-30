@@ -114,7 +114,7 @@ trait Approvable
                 $model,
                 $submission->workflow,
                 $submission->newAttributes,
-                $submission->submitter,
+                $submission->requester,
                 $submission->comment,
                 $submission->metadata,
             );
@@ -154,11 +154,11 @@ trait Approvable
     public function submitForApproval(
         ApprovalWorkflow|string|null $workflow = null,
         ?array $newAttributes = null,
-        ?Model $submitter = null,
+        ?Model $requester = null,
         ?string $comment = null,
         array $metadata = [],
     ): ApprovalRequest {
-        return Approval::submit($this, $workflow, $newAttributes, $submitter, $comment, $metadata);
+        return Approval::submit($this, $workflow, $newAttributes, $requester, $comment, $metadata);
     }
 
     /**
@@ -321,7 +321,7 @@ trait Approvable
     {
         return new AutoSubmission(
             workflow: $this->approvalWorkflow(),
-            submitter: $this->approvalSubmitter(),
+            requester: $this->approvalRequester(),
         );
     }
 
@@ -481,7 +481,7 @@ trait Approvable
      * Who is submitting, when it is not the authenticated user. Return null to
      * fall through to the authenticated user.
      */
-    public function approvalSubmitter(): ?Model
+    public function approvalRequester(): ?Model
     {
         return null;
     }

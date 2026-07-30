@@ -50,14 +50,14 @@ it('refuses a decision arriving through a copy loaded before the rejection', fun
 
 it('refuses a decision arriving through a copy loaded before the withdrawal', function (): void {
     $approver = user('Approver');
-    $submitter = user('Submitter');
+    $requester = user('Requester');
 
     $workflow = workflow([['approvers' => [$approver]]]);
-    $request = post()->submitForApproval($workflow, null, $submitter);
+    $request = post()->submitForApproval($workflow, null, $requester);
 
     $stale = staleCopyOf($request);
 
-    Approval::withdraw($request, $submitter);
+    Approval::withdraw($request, $requester);
 
     expect(fn () => Approval::approve($stale, $approver))
         ->toThrow(AlreadyDecidedException::class);
@@ -65,16 +65,16 @@ it('refuses a decision arriving through a copy loaded before the withdrawal', fu
 
 it('refuses a withdrawal arriving through a copy loaded before the final decision', function (): void {
     $approver = user('Approver');
-    $submitter = user('Submitter');
+    $requester = user('Requester');
 
     $workflow = workflow([['approvers' => [$approver]]]);
-    $request = post()->submitForApproval($workflow, null, $submitter);
+    $request = post()->submitForApproval($workflow, null, $requester);
 
     $stale = staleCopyOf($request);
 
     Approval::approve($request, $approver);
 
-    expect(fn () => Approval::withdraw($stale, $submitter))
+    expect(fn () => Approval::withdraw($stale, $requester))
         ->toThrow(AlreadyDecidedException::class)
         ->and($stale->state)->toBe(RequestState::Approved);
 });

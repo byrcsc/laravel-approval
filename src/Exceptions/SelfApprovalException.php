@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class SelfApprovalException extends ApprovalException
 {
-    public static function forSubmitter(Model $actor, ApprovalRequest $request): self
+    public static function forRequester(Model $actor, ApprovalRequest $request): self
     {
         $ulid = $request->getAttributeValue('ulid');
 

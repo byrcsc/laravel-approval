@@ -76,19 +76,19 @@ it('keeps election and parliamentary terminology out of the shipped package', fu
 });
 
 it('keeps the superseded stage vocabulary out of the shipped package', function (): void {
+    // No allowlist: the last exception, the audit hash payload's `step` key,
+    // was renamed to `stage` once a fresh migration was accepted.
     expect(offenders(
         // The lookbehind lets through compounds such as record-level and
         // application-level, which are not the stage vocabulary.
         '/(?<![-\w])(levels?|steps?)\b/i',
-        [
-            // The serialized hash-payload key predates the stage rename and is
-            // frozen: changing it would invalidate every recorded chain,
-            // including development history the cleanup preserves.
-            'src/Support/AuditHashPayload.php:step',
-            // PHPStan's analysis level, not a workflow stage.
-            'config/approval.php:level',
-        ],
     ))->toBe([]);
+});
+
+it('keeps the superseded submitter vocabulary out of the shipped package', function (): void {
+    // The verb stays - submitForApproval(), submitted_at, ApprovalSubmitted -
+    // because it names the act. Only the noun for the person is `requester`.
+    expect(offenders('/[Ss]ubmitter/'))->toBe([]);
 });
 
 it('does not claim the audit history is immutable or tamper-proof', function (): void {

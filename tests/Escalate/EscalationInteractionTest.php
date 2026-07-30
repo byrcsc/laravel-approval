@@ -202,17 +202,17 @@ it('lets an escalated assignment be delegated onward like any other', function (
     expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
 
-it('assignments the submitter when escalation names them, but the decision rule still holds', function (): void {
+it('assigns the requester when escalation names them, but the decision rule still holds', function (): void {
     $request = overdueRequest(
         EscalationAction::Escalate,
         ['resolver' => HeadOfDepartmentResolver::class],
     );
 
-    $submitter = $request->submitter;
-    assert($submitter !== null);
+    $requester = $request->requester;
+    assert($requester !== null);
 
     // The org chart says escalations go to the author of this very request.
-    HeadOfDepartmentResolver::$heads = [$submitter];
+    HeadOfDepartmentResolver::$heads = [$requester];
 
     Date::setTestNow('2026-07-28 10:01:00');
     Approval::escalateOverdue();
@@ -220,7 +220,7 @@ it('assignments the submitter when escalation names them, but the decision rule 
     expect($request->stages()->sole()->assignments()->count())->toBe(2);
 
     // The assignment exists; the self-approval rule bites at the decision, as always.
-    expect(fn () => Approval::approve($request, $submitter))
+    expect(fn () => Approval::approve($request, $requester))
         ->toThrow(SelfApprovalException::class);
 
     $original = $request->stages()->sole()->assignments()->orderBy('id')->first()->approver;

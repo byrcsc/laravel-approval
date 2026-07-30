@@ -18,7 +18,7 @@ class TeamMembersResolver implements ApproverResolver
      * @param  array<string, mixed>  $config
      * @return iterable<int, Model>
      */
-    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
+    public function resolve(StageSnapshot $stage, Model $approvable, Model $requester, array $config): iterable
     {
         /** @var Team $team */
         $team = Team::query()->findOrFail($config['team']);

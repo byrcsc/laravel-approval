@@ -44,14 +44,14 @@ final class ResolveStageApprovers
         ApprovalWorkflowStage $stage,
         StageSnapshot $snapshot,
         Model $approvable,
-        Model $submitter,
+        Model $requester,
         string $slug,
     ): array {
         $assignments = [];
         $seen = [];
 
         foreach ($this->entries($stage) as $entry) {
-            foreach ($this->expand($slug, $entry, $snapshot, $approvable, $submitter) as $assignment) {
+            foreach ($this->expand($slug, $entry, $snapshot, $approvable, $requester) as $assignment) {
                 if (isset($seen[$assignment->key()])) {
                     continue;
                 }
@@ -92,7 +92,7 @@ final class ResolveStageApprovers
         ApprovalWorkflowStageApprover $entry,
         StageSnapshot $snapshot,
         Model $approvable,
-        Model $submitter,
+        Model $requester,
     ): array {
         $type = Attributes::nullableString($entry, 'approver_type');
         $id = $entry->getAttributeValue('approver_id');
@@ -116,7 +116,7 @@ final class ResolveStageApprovers
         }
 
         /** @var string $resolver */
-        return $this->runResolver($slug, $resolver, $entry, $snapshot, $approvable, $submitter);
+        return $this->runResolver($slug, $resolver, $entry, $snapshot, $approvable, $requester);
     }
 
     private function concreteApprover(string $slug, int $sequence, string $type, int|string $id): AssignmentSnapshot
@@ -145,7 +145,7 @@ final class ResolveStageApprovers
         ApprovalWorkflowStageApprover $entry,
         StageSnapshot $snapshot,
         Model $approvable,
-        Model $submitter,
+        Model $requester,
     ): array {
         if (! class_exists($resolver)) {
             throw InvalidWorkflowException::unknownResolver($slug, $snapshot->sequence, $resolver);
@@ -161,7 +161,7 @@ final class ResolveStageApprovers
         $assignments = [];
 
         /** @var mixed $approver */
-        foreach ($instance->resolve($snapshot, $approvable, $submitter, Attributes::object($entry, 'resolver_config')) as $approver) {
+        foreach ($instance->resolve($snapshot, $approvable, $requester, Attributes::object($entry, 'resolver_config')) as $approver) {
             if (! $approver instanceof Model) {
                 throw InvalidWorkflowException::resolverReturnedNonModel($resolver);
             }

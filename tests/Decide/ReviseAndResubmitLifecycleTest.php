@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Notification;
 // scopes, and the notification map.
 
 /**
- * A one-approver request over `amount`, already returned to its submitter.
+ * A one-approver request over `amount`, already returned to its requester.
  *
  * @return array{ApprovalRequest, PurchaseOrder, User}
  */

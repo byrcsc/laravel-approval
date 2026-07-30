@@ -32,5 +32,5 @@ interface ApproverResolver
      * @param  array<string, mixed>  $config  the stage approver's `resolver_config` column
      * @return iterable<int, Model> may be empty; the engine decides whether that is fatal
      */
-    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable;
+    public function resolve(StageSnapshot $stage, Model $approvable, Model $requester, array $config): iterable;
 }

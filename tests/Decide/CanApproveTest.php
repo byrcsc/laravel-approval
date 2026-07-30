@@ -77,15 +77,15 @@ it('tells an approver they have already decided', function (): void {
         ->toBe(Ineligibility::DecisionAlreadyRecorded);
 });
 
-it('tells a submitter that self-approval is the objection', function (): void {
-    $submitter = user('Submitter');
-    $request = post()->submitForApproval(workflow([['approvers' => [$submitter]]]), null, $submitter);
+it('tells a requester that self-approval is the objection', function (): void {
+    $requester = user('Requester');
+    $request = post()->submitForApproval(workflow([['approvers' => [$requester]]]), null, $requester);
 
-    expect(Approval::eligibility($request, $submitter)->reason)->toBe(Ineligibility::SelfApproval);
+    expect(Approval::eligibility($request, $requester)->reason)->toBe(Ineligibility::SelfApproval);
 
     config()->set('approval.allow_self_approval', true);
 
-    expect(Approval::canApprove($request, $submitter))->toBeTrue();
+    expect(Approval::canApprove($request, $requester))->toBeTrue();
 });
 
 it('reports a closed request as closed rather than as an assignment problem', function (): void {
@@ -150,19 +150,19 @@ it('answers from the model for the record under approval', function (): void {
 it('counts everybody named on the request as involved in it', function (): void {
     $first = user('First');
     $second = user('Second');
-    $submitter = user('Submitter');
+    $requester = user('Requester');
 
     $request = post()->submitForApproval(
         workflow([['approvers' => [$first]], ['approvers' => [$second]]]),
         null,
-        $submitter,
+        $requester,
     );
 
-    // A later stage's approver and a submitter both have standing, and a
+    // A later stage's approver and a requester both have standing, and a
     // first-stage approver keeps it after deciding.
     Approval::approve($request, $first);
 
-    expect($request->involves($submitter))->toBeTrue()
+    expect($request->involves($requester))->toBeTrue()
         ->and($request->involves($first))->toBeTrue()
         ->and($request->involves($second))->toBeTrue()
         ->and($request->involves(user('Passer By')))->toBeFalse();

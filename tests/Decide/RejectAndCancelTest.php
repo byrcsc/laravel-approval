@@ -104,7 +104,7 @@ describe('rejection', function (): void {
 });
 
 describe('withdrawal', function (): void {
-    it('lets the submitter withdraw their own request', function (): void {
+    it('lets the requester withdraw their own request', function (): void {
         $author = user('Author');
         $workflow = workflow([['approvers' => [user('Approver')]]]);
         $request = post()->submitForApproval($workflow, null, $author);

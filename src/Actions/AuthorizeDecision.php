@@ -46,7 +46,7 @@ final class AuthorizeDecision
             Ineligibility::NoActiveStage => AlreadyDecidedException::noActiveStage($request),
             Ineligibility::AssignmentDelegated => UnauthorizedApproverException::assignmentWasDelegated($actor, $request),
             Ineligibility::DecisionAlreadyRecorded => AlreadyDecidedException::decisionAlreadyRecorded($actor, $request),
-            Ineligibility::SelfApproval => SelfApprovalException::forSubmitter($actor, $request),
+            Ineligibility::SelfApproval => SelfApprovalException::forRequester($actor, $request),
             default => UnauthorizedApproverException::notAnApprover($actor, $request),
         };
     }

@@ -72,7 +72,7 @@ final class ApprovalRequest extends Model
     /**
      * @return MorphTo<Model, $this>
      */
-    public function submitter(): MorphTo
+    public function requester(): MorphTo
     {
         return $this->morphTo();
     }
@@ -146,12 +146,12 @@ final class ApprovalRequest extends Model
             : Attributes::string($workflow, 'slug');
     }
 
-    public function wasSubmittedBy(Model $actor): bool
+    public function wasRequestedBy(Model $actor): bool
     {
         $key = $actor->getKey();
 
-        return Attributes::nullableString($this, 'submitter_type') === $actor->getMorphClass()
-            && Attributes::nullableString($this, 'submitter_id') === (is_scalar($key) ? (string) $key : '');
+        return Attributes::nullableString($this, 'requester_type') === $actor->getMorphClass()
+            && Attributes::nullableString($this, 'requester_id') === (is_scalar($key) ? (string) $key : '');
     }
 
     public function currentStage(): ?ApprovalRequestStage
@@ -297,10 +297,10 @@ final class ApprovalRequest extends Model
         $type = $actor->getMorphClass();
         $id = $actor->getKey();
 
-        $isSubmitter = Attributes::nullableString($this, 'submitter_type') === $type
-            && Attributes::nullableString($this, 'submitter_id') === (is_scalar($id) ? (string) $id : '');
+        $isRequester = Attributes::nullableString($this, 'requester_type') === $type
+            && Attributes::nullableString($this, 'requester_id') === (is_scalar($id) ? (string) $id : '');
 
-        if ($isSubmitter) {
+        if ($isRequester) {
             return true;
         }
 

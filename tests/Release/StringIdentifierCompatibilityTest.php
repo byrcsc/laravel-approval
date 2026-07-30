@@ -21,15 +21,15 @@ it('runs the complete decision path with UUID and ULID users and morph maps', fu
         $alias => $class,
     ]);
 
-    /** @var Model $submitter */
-    $submitter = $class::create(['name' => 'Submitter']);
+    /** @var Model $requester */
+    $requester = $class::create(['name' => 'Requester']);
     /** @var Model $approver */
     $approver = $class::create(['name' => 'Approver']);
     /** @var Model $delegate */
     $delegate = $class::create(['name' => 'Delegate']);
 
     $flow = workflow([['approvers' => [$approver]]]);
-    $request = post()->submitForApproval($flow, null, $submitter);
+    $request = post()->submitForApproval($flow, null, $requester);
 
     expect(Approval::eligibility($request, $approver)->eligible)->toBeTrue()
         ->and(Approval::delegationEligibility($request, $approver)->eligible)->toBeTrue()
@@ -45,7 +45,7 @@ it('runs the complete decision path with UUID and ULID users and morph maps', fu
         ->and($request->actions()->where('action', 'approved')->sole()->actor_id)
         ->toBe((string) $delegate->getKey());
 
-    $rejected = post('Rejected')->submitForApproval($flow, null, $submitter);
+    $rejected = post('Rejected')->submitForApproval($flow, null, $requester);
     Approval::reject($rejected, $approver, 'Not acceptable');
 
     expect($rejected->refresh()->state)->toBe(RequestState::Rejected)

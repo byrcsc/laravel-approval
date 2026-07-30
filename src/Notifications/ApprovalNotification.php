@@ -121,11 +121,11 @@ abstract class ApprovalNotification extends Notification
     /**
      * @return list<Model>
      */
-    protected static function submitterOf(ApprovalEvent $event): array
+    protected static function requesterOf(ApprovalEvent $event): array
     {
-        $submitter = $event->request->submitter;
+        $requester = $event->request->requester;
 
-        return $submitter instanceof Model ? [$submitter] : [];
+        return $requester instanceof Model ? [$requester] : [];
     }
 
     protected function requestUlid(): string
