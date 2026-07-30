@@ -280,7 +280,7 @@ it('re-evaluates conditions on revision against the amended draft', function ():
 
     expect($returned->stages()->where('sequence', 2)->sole()->state)->toBe(StageStatus::Queued);
 
-    Approval::returnToSubmitter($returned, $first, 'Trim the total.');
+    Approval::returnForRevision($returned, $first, 'Trim the total.');
 
     $replacement = Approval::reviseAndResubmit($returned, RevisedDraft::withAttributes(['amount' => 300]));
 
@@ -299,7 +299,7 @@ it('wakes a previously skipped stage when the revised draft crosses its rule', f
 
     expect($returned->stages()->where('sequence', 2)->sole()->state)->toBe(StageStatus::Skipped);
 
-    Approval::returnToSubmitter($returned, $first, 'This needs to cover the full order.');
+    Approval::returnForRevision($returned, $first, 'This needs to cover the full order.');
 
     $replacement = Approval::reviseAndResubmit($returned, RevisedDraft::withAttributes(['amount' => 900]));
     $woken = $replacement->stages()->where('sequence', 2)->sole();
@@ -318,7 +318,7 @@ it('revises straight to approval when the amended draft skips every stage', func
         'approvers' => [$cfo],
     ]]), ['amount' => 900], user('Author'));
 
-    Approval::returnToSubmitter($returned, $cfo, 'Take it under the threshold and it can go through.');
+    Approval::returnForRevision($returned, $cfo, 'Take it under the threshold and it can go through.');
 
     $replacement = Approval::reviseAndResubmit($returned, RevisedDraft::withAttributes(['amount' => 300]));
 
@@ -336,7 +336,7 @@ it('rolls back a revision whole when a condition throws', function (): void {
         'approvers' => [$approver],
     ]]), ['amount' => 900], user('Author'));
 
-    Approval::returnToSubmitter($returned, $approver, 'Fix it.');
+    Approval::returnForRevision($returned, $approver, 'Fix it.');
 
     ScriptedCondition::$throwMessage = 'The org chart service is down.';
 

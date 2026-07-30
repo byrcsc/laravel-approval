@@ -45,7 +45,7 @@ it('scopes returned, withdrawn, cancelled, and superseded models by their latest
     $flow = workflow([['approvers' => [$approver]]]);
 
     $returned = post('Returned');
-    Approval::returnToSubmitter($returned->submitForApproval($flow, null, user('Author')), $approver, 'Fix it.');
+    Approval::returnForRevision($returned->submitForApproval($flow, null, user('Author')), $approver, 'Fix it.');
 
     $withdrawn = post('Withdrawn');
     $author = user('Withdrawing author');

@@ -22,7 +22,7 @@ it('returns a request to its requester without rewriting prior approvals', funct
     ]), ['amount' => 900], $author);
 
     Approval::approve($request, $first);
-    Approval::returnToSubmitter($request, $second, 'Correct the total.');
+    Approval::returnForRevision($request, $second, 'Correct the total.');
 
     expect($request->refresh()->state)->toBe(RequestState::Returned)
         ->and($request->stages()->pluck('state')->all())->toBe([
@@ -38,7 +38,7 @@ it('requires a reason and an eligible active approver to return', function (): v
     $approver = user('Approver');
     $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user('Author'));
 
-    expect(fn () => Approval::returnToSubmitter($request, $approver, ''))
+    expect(fn () => Approval::returnForRevision($request, $approver, ''))
         ->toThrow(CommentRequiredException::class);
 });
 
@@ -54,7 +54,7 @@ it('revises a returned request into a linked replacement at the first stage', fu
     $returned = $order->submitForApproval($workflow, ['reference' => 'PO-NEW', 'amount' => 900], $author);
 
     Approval::approve($returned, $first);
-    Approval::returnToSubmitter($returned, $second, 'Correct the total.');
+    Approval::returnForRevision($returned, $second, 'Correct the total.');
 
     $replacement = Approval::reviseAndResubmit(
         $returned,
@@ -76,7 +76,7 @@ it('lets a revised draft add attributes the model allows', function (): void {
         ['amount' => 900],
         user('Author'),
     );
-    Approval::returnToSubmitter($request, $approver, 'Name the purchase order.');
+    Approval::returnForRevision($request, $approver, 'Name the purchase order.');
 
     $replacement = Approval::reviseAndResubmit(
         $request,
@@ -94,7 +94,7 @@ it('rejects revised attributes outside the model allow-list without touching the
         ['amount' => 900],
         user('Author'),
     );
-    Approval::returnToSubmitter($request, $approver, 'Correct it.');
+    Approval::returnForRevision($request, $approver, 'Correct it.');
 
     expect(fn () => Approval::reviseAndResubmit($request, RevisedDraft::withAttributes(['status' => 'paid'])))
         ->toThrow(InvalidDraftException::class, 'status')

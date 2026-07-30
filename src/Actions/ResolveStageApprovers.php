@@ -18,16 +18,20 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
 /**
- * Turns one stage's approver rules into the assignments they describe, right now.
+ * Turns one stage's approver rules into the assignments they describe, as of now.
  *
- * Submitting is the usual caller; resyncing a live request is the other, which
- * is the whole reason this is not buried inside {@see SubmitForApproval}.
- * Asking the same question twice has to get the same kind of answer, or a
- * resync would quietly build a different stage than a submission would.
+ * Submission is the usual caller and resynchronizing a live request is the other,
+ * which is why this is a separate action rather than part of
+ * {@see SubmitForApproval}: both must resolve assignments the same way, or a
+ * resync would build a different stage than a submission would.
  *
- * Duplicates collapse: two rules reaching the same person describe one assignment.
- * Definition order wins, so a concrete approver listed before a resolver that
- * also yields them keeps its `assigned` provenance.
+ * A concrete approver rule resolves to exactly the actor identity it names. A
+ * container model such as a Team or Role is not expanded into its members; a
+ * resolver is the mechanism for that, and it must return persisted models.
+ *
+ * Duplicates collapse: two rules naming the same identity produce one
+ * assignment. Definition order wins, so a concrete approver listed before a
+ * resolver that also yields them keeps its `assigned` provenance.
  */
 final class ResolveStageApprovers
 {
@@ -77,9 +81,9 @@ final class ResolveStageApprovers
     }
 
     /**
-     * One approver entry, which is either a record or a rule that produces
-     * records. Never both, never neither - no portable database constraint says
-     * so, so this does.
+     * One approver entry, which is either a concrete approver or a resolver that
+     * produces them: never both and never neither. No portable database
+     * constraint can express that, so it is enforced here.
      *
      * @return list<AssignmentSnapshot>
      */

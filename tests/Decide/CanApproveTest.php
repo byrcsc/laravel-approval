@@ -186,7 +186,7 @@ it('registers the shipped policy against the request model', function (): void {
 
     expect($approver->can('approve', $request))->toBeTrue()
         ->and($approver->can('reject', $request))->toBeTrue()
-        ->and($approver->can('returnToSubmitter', $request))->toBeTrue()
+        ->and($approver->can('returnForRevision', $request))->toBeTrue()
         ->and($approver->can('view', $request))->toBeTrue()
         ->and($stranger->can('approve', $request))->toBeFalse()
         ->and($stranger->can('view', $request))->toBeFalse();

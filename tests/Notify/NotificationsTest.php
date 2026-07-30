@@ -378,7 +378,7 @@ describe('assignment changes', function (): void {
         $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, $author);
 
         Notification::fake();
-        Approval::returnToSubmitter($request, $approver, 'Fix the title.');
+        Approval::returnForRevision($request, $approver, 'Fix the title.');
 
         Notification::assertSentTo($author, ApprovalReturnedNotification::class);
         Notification::assertNotSentTo($approver, ApprovalReturnedNotification::class);

@@ -283,7 +283,7 @@ it('keeps an object id from colliding with a real key of the same class', functi
 it('permits direct edits while a request sits returned', function (): void {
     [$post, $request, $approver] = guardedPost();
 
-    Approval::returnToSubmitter($request, $approver, 'Fix the title and send it back');
+    Approval::returnForRevision($request, $approver, 'Fix the title and send it back');
 
     // A returned request is closed, and the guard only ever claimed to hold
     // while one is in flight. Going and fixing the record is the whole point
@@ -297,7 +297,7 @@ it('permits direct edits while a request sits returned', function (): void {
 it('revises a returned request from a snapshot taken after the submitter edited', function (): void {
     [$post, $request, $approver] = guardedPost();
 
-    Approval::returnToSubmitter($request, $approver, 'Fix the title and send it back');
+    Approval::returnForRevision($request, $approver, 'Fix the title and send it back');
 
     $post->update(['title' => 'Fixed by the submitter']);
 
@@ -317,7 +317,7 @@ it('revises a returned request from a snapshot taken after the submitter edited'
 it('carries a direct fix forward when the revision names it in the draft', function (): void {
     [$post, $request, $approver] = guardedPost();
 
-    Approval::returnToSubmitter($request, $approver, 'Fix the title and send it back');
+    Approval::returnForRevision($request, $approver, 'Fix the title and send it back');
 
     $post->update(['title' => 'Fixed by the submitter']);
 

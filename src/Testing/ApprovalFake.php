@@ -23,8 +23,48 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\Assert;
 
+/**
+ * Records approval operations instead of performing them, so application tests
+ * can assert approval behavior without writing approval state.
+ *
+ * Every public mutation on {@see ApprovalManager} is overridden here: it records
+ * an {@see ApprovalInteraction} and returns an unsaved model or empty result of
+ * the shape the real operation returns. Each recorded operation has a matching
+ * assertion below, and {@see self::assertNothingRecorded()} covers all of them.
+ *
+ * Queries are not faked. Reads such as `awaiting()`, `pendingFor()`, and
+ * `verifyTrail()` run against the database as usual.
+ */
 final class ApprovalFake extends ApprovalManager
 {
+    public const SUBMITTED = 'submitted';
+
+    public const DECISION = 'decision';
+
+    public const DECISIONS_MANY = 'decisions_many';
+
+    public const WITHDRAWN = 'withdrawn';
+
+    public const CANCELLED = 'cancelled';
+
+    public const DELEGATED = 'delegated';
+
+    public const REASSIGNED = 'reassigned';
+
+    public const RESYNCED = 'resynced';
+
+    public const CONFLICT_RESOLVED = 'conflict_resolved';
+
+    public const RESUBMITTED = 'resubmitted';
+
+    public const ATTACHED = 'attached';
+
+    public const GUARD_BYPASSED = 'guard_bypassed';
+
+    public const OVERDUE_PROCESSED = 'overdue_processed';
+
+    public const DEFINITIONS_SYNCED = 'definitions_synced';
+
     /** @var list<ApprovalInteraction> */
     private array $interactions = [];
 
@@ -70,11 +110,11 @@ final class ApprovalFake extends ApprovalManager
         ?string $comment = null,
         array $metadata = [],
     ): ApprovalRequest {
-        $this->interactions[] = new ApprovalInteraction(
-            'submitted',
+        $this->record(
+            self::SUBMITTED,
             $approvable,
             $submitter,
-            $workflow,
+            workflow: $workflow,
             comment: $comment,
             metadata: ['new_attributes' => $newAttributes, ...$metadata],
         );
@@ -97,8 +137,8 @@ final class ApprovalFake extends ApprovalManager
 
     public function decide(ApprovalRequest $request, ApprovalDecision $decision): ApprovalRequest
     {
-        $this->interactions[] = new ApprovalInteraction(
-            'decision',
+        $this->record(
+            self::DECISION,
             $request,
             $decision->actor,
             verdict: $decision->verdict,
@@ -125,8 +165,8 @@ final class ApprovalFake extends ApprovalManager
             $outcomes[] = BulkDecisionOutcome::succeeded($request, $request);
         }
 
-        $this->interactions[] = new ApprovalInteraction(
-            'bulk_decision',
+        $this->record(
+            self::DECISIONS_MANY,
             $targets,
             $first?->actor,
             verdict: $first?->verdict,
@@ -139,11 +179,8 @@ final class ApprovalFake extends ApprovalManager
 
     public function withdraw(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
     {
-        return $request;
-    }
+        $this->record(self::WITHDRAWN, $request, $actor, comment: $comment);
 
-    public function cancel(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
-    {
         return $request;
     }
 
@@ -153,12 +190,60 @@ final class ApprovalFake extends ApprovalManager
         Model $delegate,
         ?string $comment = null,
     ): ApprovalRequestAssignment {
+        $this->record(self::DELEGATED, $request, $approver, comment: $comment, recipient: $delegate);
+
         return new ApprovalRequestAssignment([
             'approver_type' => $approver->getMorphClass(),
             'approver_id' => $approver->getKey(),
             'delegated_to_type' => $delegate->getMorphClass(),
             'delegated_to_id' => $delegate->getKey(),
         ]);
+    }
+
+    public function reviseAndResubmit(
+        ApprovalRequest $request,
+        RevisedDraft $draft,
+        ?Model $requester = null,
+        ApprovalWorkflow|string|null $workflow = null,
+    ): ApprovalRequest {
+        $this->record(
+            self::RESUBMITTED,
+            $request,
+            $requester,
+            workflow: $workflow,
+            metadata: ['draft' => $draft],
+        );
+
+        return $request;
+    }
+
+    public function attach(AttachmentEvidence $evidence): ApprovalAttachment
+    {
+        $this->record(
+            self::ATTACHED,
+            $evidence->request,
+            $evidence->uploader,
+            metadata: [
+                'disk' => $evidence->disk,
+                'path' => $evidence->path,
+                'checksum' => $evidence->checksum,
+                'name' => $evidence->name,
+            ],
+        );
+
+        return new ApprovalAttachment([
+            'request_id' => $evidence->request->getKey(),
+            'disk' => $evidence->disk,
+            'path' => $evidence->path,
+            'checksum' => $evidence->checksum,
+        ]);
+    }
+
+    public function cancel(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
+    {
+        $this->record(self::CANCELLED, $request, $actor, comment: $comment);
+
+        return $request;
     }
 
     public function reassign(
@@ -168,11 +253,25 @@ final class ApprovalFake extends ApprovalManager
         Model $actor,
         ?string $comment = null,
     ): ApprovalRequestAssignment {
+        $this->record(
+            self::REASSIGNED,
+            $request,
+            $actor,
+            comment: $comment,
+            metadata: ['assignment' => $assignment],
+            recipient: $to,
+        );
+
         return $assignment;
     }
 
+    /**
+     * @return array<int, array{added: list<string>, removed: list<string>}>
+     */
     public function resync(ApprovalRequest $request, Model $actor, bool $prune = false): array
     {
+        $this->record(self::RESYNCED, $request, $actor, metadata: ['prune' => $prune]);
+
         return [];
     }
 
@@ -182,26 +281,15 @@ final class ApprovalFake extends ApprovalManager
         ?Model $actor = null,
         ?string $comment = null,
     ): ApprovalRequest {
-        return $request;
-    }
+        $this->record(
+            self::CONFLICT_RESOLVED,
+            $request,
+            $actor,
+            comment: $comment,
+            metadata: ['resolution' => $resolution],
+        );
 
-    public function reviseAndResubmit(
-        ApprovalRequest $request,
-        RevisedDraft $draft,
-        ?Model $requester = null,
-        ApprovalWorkflow|string|null $workflow = null,
-    ): ApprovalRequest {
         return $request;
-    }
-
-    public function attach(AttachmentEvidence $evidence): ApprovalAttachment
-    {
-        return new ApprovalAttachment([
-            'request_id' => $evidence->request->getKey(),
-            'disk' => $evidence->disk,
-            'path' => $evidence->path,
-            'checksum' => $evidence->checksum,
-        ]);
     }
 
     /**
@@ -216,11 +304,35 @@ final class ApprovalFake extends ApprovalManager
         ?Model $actor = null,
         ?string $comment = null,
     ): mixed {
+        $this->record(self::GUARD_BYPASSED, $approvable, $actor, comment: $comment);
+
         return $callback($approvable);
     }
 
+    /**
+     * @param  iterable<int|string, mixed>  $definitions
+     */
+    public function syncDefinitions(iterable $definitions, bool $dryRun = false): WorkflowSyncResult
+    {
+        $this->record(
+            self::DEFINITIONS_SYNCED,
+            [],
+            metadata: [
+                'definitions' => is_array($definitions) ? $definitions : iterator_to_array($definitions),
+                'dry_run' => $dryRun,
+            ],
+        );
+
+        return new WorkflowSyncResult([], [], [], [], $dryRun);
+    }
+
+    /**
+     * @return array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>}
+     */
     public function escalateOverdue(): array
     {
+        $this->record(self::OVERDUE_PROCESSED, []);
+
         return [
             'escalated' => [],
             'reminded' => [],
@@ -229,116 +341,211 @@ final class ApprovalFake extends ApprovalManager
         ];
     }
 
-    /**
-     * @param  iterable<int|string, mixed>  $definitions
-     */
-    public function syncDefinitions(iterable $definitions, bool $dryRun = false): WorkflowSyncResult
-    {
-        return new WorkflowSyncResult([], [], [], [], $dryRun);
-    }
-
     public function assertSubmitted(Model $approvable, ?callable $callback = null): void
     {
-        $this->assertInteraction('submitted', $approvable, null, $callback);
+        $this->assertRecorded(self::SUBMITTED, $approvable, $callback);
     }
 
     public function assertNotSubmitted(Model $approvable): void
     {
-        Assert::assertCount(0, $this->matching('submitted', $approvable), 'Unexpected approval submission was recorded.');
+        $this->assertNotRecorded(self::SUBMITTED, $approvable);
     }
 
     public function assertSubmittedTimes(int $count, ?Model $approvable = null): void
     {
-        Assert::assertCount($count, $this->matching('submitted', $approvable), "Expected {$count} approval submissions.");
+        $this->assertRecordedTimes(self::SUBMITTED, $count, $approvable);
     }
 
     public function assertApproved(ApprovalRequest $request, ?callable $callback = null): void
     {
-        $this->assertInteraction('decision', $request, Verdict::Approve, $callback);
+        $this->assertRecorded(self::DECISION, $request, $callback, Verdict::Approve);
     }
 
     public function assertRejected(ApprovalRequest $request, ?callable $callback = null): void
     {
-        $this->assertInteraction('decision', $request, Verdict::Reject, $callback);
+        $this->assertRecorded(self::DECISION, $request, $callback, Verdict::Reject);
     }
 
-    public function assertReturned(ApprovalRequest $request, ?callable $callback = null): void
+    public function assertReturnedForRevision(ApprovalRequest $request, ?callable $callback = null): void
     {
-        $this->assertInteraction('decision', $request, Verdict::Return, $callback);
+        $this->assertRecorded(self::DECISION, $request, $callback, Verdict::Return);
     }
 
     public function assertNotApproved(ApprovalRequest $request): void
     {
-        Assert::assertCount(
-            0,
-            $this->decisions(Verdict::Approve, $request),
-            'Unexpected approval decision was recorded.',
-        );
+        $this->assertNotRecorded(self::DECISION, $request, Verdict::Approve);
     }
 
     public function assertApprovedTimes(int $count, ?ApprovalRequest $request = null): void
     {
-        Assert::assertCount(
-            $count,
-            $this->decisions(Verdict::Approve, $request),
-            "Expected {$count} approval decisions.",
-        );
+        $this->assertRecordedTimes(self::DECISION, $count, $request, Verdict::Approve);
     }
 
     public function assertRejectedTimes(int $count, ?ApprovalRequest $request = null): void
     {
-        Assert::assertCount(
-            $count,
-            $this->decisions(Verdict::Reject, $request),
-            "Expected {$count} rejection decisions.",
-        );
+        $this->assertRecordedTimes(self::DECISION, $count, $request, Verdict::Reject);
     }
 
-    public function assertBulkApproved(?callable $callback = null): void
+    public function assertApprovedMany(?callable $callback = null): void
     {
-        $this->assertBulk(Verdict::Approve, $callback);
+        $this->assertRecorded(self::DECISIONS_MANY, null, $callback, Verdict::Approve);
     }
 
-    public function assertBulkRejected(?callable $callback = null): void
+    public function assertRejectedMany(?callable $callback = null): void
     {
-        $this->assertBulk(Verdict::Reject, $callback);
+        $this->assertRecorded(self::DECISIONS_MANY, null, $callback, Verdict::Reject);
     }
 
+    public function assertWithdrawn(ApprovalRequest $request, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::WITHDRAWN, $request, $callback);
+    }
+
+    public function assertCancelled(ApprovalRequest $request, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::CANCELLED, $request, $callback);
+    }
+
+    public function assertDelegated(ApprovalRequest $request, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::DELEGATED, $request, $callback);
+    }
+
+    public function assertReassigned(ApprovalRequest $request, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::REASSIGNED, $request, $callback);
+    }
+
+    public function assertResynced(ApprovalRequest $request, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::RESYNCED, $request, $callback);
+    }
+
+    public function assertConflictResolved(ApprovalRequest $request, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::CONFLICT_RESOLVED, $request, $callback);
+    }
+
+    public function assertResubmitted(ApprovalRequest $request, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::RESUBMITTED, $request, $callback);
+    }
+
+    public function assertAttached(ApprovalRequest $request, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::ATTACHED, $request, $callback);
+    }
+
+    public function assertGuardBypassed(Model $approvable, ?callable $callback = null): void
+    {
+        $this->assertRecorded(self::GUARD_BYPASSED, $approvable, $callback);
+    }
+
+    public function assertOverdueProcessed(?callable $callback = null): void
+    {
+        $this->assertRecorded(self::OVERDUE_PROCESSED, null, $callback);
+    }
+
+    public function assertDefinitionsSynced(?callable $callback = null): void
+    {
+        $this->assertRecorded(self::DEFINITIONS_SYNCED, null, $callback);
+    }
+
+    /**
+     * Every interaction category the fake records, so the name of this assertion
+     * stays truthful as the surface changes.
+     */
     public function assertNothingRecorded(): void
     {
-        Assert::assertCount(0, $this->interactions, 'Unexpected approval interactions were recorded.');
+        Assert::assertSame(
+            [],
+            array_map(
+                fn (ApprovalInteraction $interaction): string => $interaction->type,
+                $this->interactions,
+            ),
+            'Unexpected approval interactions were recorded.',
+        );
     }
 
-    private function assertInteraction(
+    /**
+     * @param  Model|list<ApprovalRequest>  $target
+     * @param  array<string, mixed>  $metadata
+     */
+    private function record(
         string $type,
-        Model $target,
-        ?Verdict $verdict,
-        ?callable $callback,
+        Model|array $target,
+        ?Model $actor = null,
+        ApprovalWorkflow|string|null $workflow = null,
+        ?Verdict $verdict = null,
+        ?string $comment = null,
+        array $metadata = [],
+        ?Model $recipient = null,
     ): void {
-        $matching = array_filter(
-            $this->matching($type, $target),
-            fn (ApprovalInteraction $interaction): bool => $verdict === null || $interaction->verdict === $verdict,
+        $this->interactions[] = new ApprovalInteraction(
+            $type,
+            $target,
+            $actor,
+            $workflow,
+            $verdict,
+            $comment,
+            $metadata,
+            $recipient,
         );
+    }
+
+    private function assertRecorded(
+        string $type,
+        ?Model $target,
+        ?callable $callback,
+        ?Verdict $verdict = null,
+    ): void {
+        $matching = $this->matching($type, $target, $verdict);
 
         if ($callback !== null) {
-            $matching = array_filter(
+            $matching = array_values(array_filter(
                 $matching,
                 fn (ApprovalInteraction $interaction): bool => $callback($interaction) === true,
-            );
+            ));
         }
 
         Assert::assertNotEmpty($matching, "Expected approval interaction [{$type}] was not recorded.");
     }
 
+    private function assertNotRecorded(string $type, ?Model $target, ?Verdict $verdict = null): void
+    {
+        Assert::assertCount(
+            0,
+            $this->matching($type, $target, $verdict),
+            "Unexpected approval interaction [{$type}] was recorded.",
+        );
+    }
+
+    private function assertRecordedTimes(
+        string $type,
+        int $count,
+        ?Model $target,
+        ?Verdict $verdict = null,
+    ): void {
+        Assert::assertCount(
+            $count,
+            $this->matching($type, $target, $verdict),
+            "Expected {$count} approval interactions of type [{$type}].",
+        );
+    }
+
     /**
      * @return list<ApprovalInteraction>
      */
-    private function matching(string $type, ?Model $target): array
+    private function matching(string $type, ?Model $target, ?Verdict $verdict = null): array
     {
         return array_values(array_filter(
             $this->interactions,
-            function (ApprovalInteraction $interaction) use ($type, $target): bool {
+            function (ApprovalInteraction $interaction) use ($type, $target, $verdict): bool {
                 if ($interaction->type !== $type) {
+                    return false;
+                }
+
+                if ($verdict !== null && $interaction->verdict !== $verdict) {
                     return false;
                 }
 
@@ -349,28 +556,5 @@ final class ApprovalFake extends ApprovalManager
                 return $interaction->target instanceof Model && $interaction->target->is($target);
             },
         ));
-    }
-
-    /**
-     * @return list<ApprovalInteraction>
-     */
-    private function decisions(Verdict $verdict, ?ApprovalRequest $request): array
-    {
-        return array_values(array_filter(
-            $this->matching('decision', $request),
-            fn (ApprovalInteraction $interaction): bool => $interaction->verdict === $verdict,
-        ));
-    }
-
-    private function assertBulk(Verdict $verdict, ?callable $callback): void
-    {
-        $matching = array_filter(
-            $this->interactions,
-            fn (ApprovalInteraction $interaction): bool => $interaction->type === 'bulk_decision'
-                && $interaction->verdict === $verdict
-                && ($callback === null || $callback($interaction) === true),
-        );
-
-        Assert::assertNotEmpty($matching, "Expected bulk {$verdict->value} interaction was not recorded.");
     }
 }

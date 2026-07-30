@@ -87,7 +87,7 @@ it('queries approvables by state and current approver without duplicates', funct
     $rejectedRequest = $rejected->submitForApproval($flow, null, user('Rejected submitter'));
     Approval::reject($rejectedRequest, $approver, 'No');
     $returnedRequest = $returned->submitForApproval($flow, null, user('Returned submitter'));
-    Approval::returnToSubmitter($returnedRequest, $approver, 'Fix it');
+    Approval::returnForRevision($returnedRequest, $approver, 'Fix it');
 
     expect(Post::query()->pendingApproval()->pluck('title')->all())->toBe(['Pending'])
         ->and(Post::query()->approvalRejected()->pluck('title')->all())->toBe(['Rejected'])

@@ -24,10 +24,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static ApprovalWorkflow|null findWorkflow(string $slug)
+ * The package's primary command and query surface.
+ *
+ * Members are listed in the order the manager declares them: workflow lookup,
+ * routine approval commands and queries, then the administrative and
+ * operational operations, which a host application should keep behind
+ * administrative authorization, a console command, or a scheduled job.
+ *
  * @method static ApprovalFake fake()
+ * @method static ApprovalWorkflow|null findWorkflow(string $slug)
  * @method static ApprovalWorkflow workflow(string $slug)
- * @method static WorkflowSyncResult syncDefinitions(iterable<int|string, mixed> $definitions, bool $dryRun = false)
  * @method static ApprovalWorkflow workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null)
  * @method static ApprovalRequest submit(Model $approvable, ApprovalWorkflow|string|null $workflow = null, array<string, mixed>|null $newAttributes = null, Model|null $submitter = null, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static Eligibility eligibility(ApprovalRequest $request, Model $actor)
@@ -39,28 +45,27 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalRequest decide(ApprovalRequest $request, ApprovalDecision $decision)
  * @method static ApprovalRequest approve(ApprovalRequest $request, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static ApprovalRequest reject(ApprovalRequest $request, Model $actor, string $comment, array<string, mixed> $metadata = [])
- * @method static ApprovalRequest returnToSubmitter(ApprovalRequest $request, Model $actor, string $comment, array<string, mixed> $metadata = [])
+ * @method static ApprovalRequest returnForRevision(ApprovalRequest $request, Model $actor, string $comment, array<string, mixed> $metadata = [])
  * @method static BulkDecisionResult decideMany(iterable<int, ApprovalRequest> $requests, callable(ApprovalRequest): ApprovalDecision $decision)
  * @method static BulkDecisionResult approveMany(iterable<int, ApprovalRequest> $requests, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static BulkDecisionResult rejectMany(iterable<int, ApprovalRequest> $requests, Model $actor, string $comment, array<string, mixed> $metadata = [])
- * @method static BulkDecisionResult bulkApprove(iterable<int, ApprovalRequest> $requests, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
- * @method static BulkDecisionResult bulkReject(iterable<int, ApprovalRequest> $requests, Model $actor, string $comment, array<string, mixed> $metadata = [])
  * @method static ApprovalRequest withdraw(ApprovalRequest $request, Model $actor, string|null $comment = null)
- * @method static ApprovalRequest cancel(ApprovalRequest $request, Model $actor, string|null $comment = null)
- * @method static mixed withoutGuard(Model $approvable, callable $callback, Model|null $actor = null, string|null $comment = null)
  * @method static ApprovalRequestAssignment delegate(ApprovalRequest $request, Model $approver, Model $delegate, string|null $comment = null)
- * @method static ApprovalRequestAssignment reassign(ApprovalRequest $request, ApprovalRequestAssignment $assignment, Model $to, Model $actor, string|null $comment = null)
- * @method static array<int, array{added: list<string>, removed: list<string>}> resync(ApprovalRequest $request, Model $actor, bool $prune = false)
- * @method static ApprovalRequest resolve(ApprovalRequest $request, ConflictResolution $resolution, Model|null $actor = null, string|null $comment = null)
  * @method static ApprovalRequest reviseAndResubmit(ApprovalRequest $request, RevisedDraft $draft, Model|null $requester = null, ApprovalWorkflow|string|null $workflow = null)
  * @method static ApprovalAttachment attach(AttachmentEvidence $evidence)
- * @method static list<array{request: string, subject: string, problem: string}> verifyTrail(ApprovalRequest|null $only = null)
- * @method static array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>} escalateOverdue()
  * @method static Builder<ApprovalRequest> overdue()
  * @method static Builder<ApprovalRequest> awaiting(Model $user)
  * @method static Builder<ApprovalRequest> requestsFor(Model $approvable)
  * @method static ApprovalRequest|null pendingFor(Model $approvable)
  * @method static Model submitterFor(Model $approvable)
+ * @method static ApprovalRequest cancel(ApprovalRequest $request, Model $actor, string|null $comment = null)
+ * @method static ApprovalRequestAssignment reassign(ApprovalRequest $request, ApprovalRequestAssignment $assignment, Model $to, Model $actor, string|null $comment = null)
+ * @method static array<int, array{added: list<string>, removed: list<string>}> resync(ApprovalRequest $request, Model $actor, bool $prune = false)
+ * @method static ApprovalRequest resolve(ApprovalRequest $request, ConflictResolution $resolution, Model|null $actor = null, string|null $comment = null)
+ * @method static mixed withoutGuard(Model $approvable, callable $callback, Model|null $actor = null, string|null $comment = null)
+ * @method static WorkflowSyncResult syncDefinitions(iterable<int|string, mixed> $definitions, bool $dryRun = false)
+ * @method static list<array{request: string, subject: string, problem: string}> verifyTrail(ApprovalRequest|null $only = null)
+ * @method static array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>} escalateOverdue()
  *
  * @see ApprovalManager
  */

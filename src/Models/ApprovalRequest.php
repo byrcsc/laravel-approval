@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Models;
 
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
+use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Data\TimelineEntry;
 use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
@@ -27,12 +28,12 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 
 /**
- * One run of a workflow against one record.
+ * One execution of an approval workflow for one approvable record.
  *
- * `workflow_id` is a reference for reporting only - the stages hanging off the
- * request are the snapshot that decides who approves what. Requests are never
- * reopened; revising and resubmitting creates a fresh one that points back at
- * this.
+ * `workflow_id` is a reporting reference only. The request's own stages are the
+ * snapshot taken at submission, and they determine who approves what for the
+ * lifetime of the request. Requests are never reopened: revising and
+ * resubmitting creates a new request linked back to this one.
  */
 final class ApprovalRequest extends Model
 {
@@ -120,8 +121,9 @@ final class ApprovalRequest extends Model
     }
 
     /**
-     * A list rather than one record: nothing stops a replacement being rejected
-     * too.
+     * Requests created by revising this one. A list rather than a single record,
+     * because a replacement can itself be returned or rejected and revised
+     * again.
      *
      * @return HasMany<self, $this>
      */
@@ -131,8 +133,9 @@ final class ApprovalRequest extends Model
     }
 
     /**
-     * The workflow's slug, or a request-scoped placeholder when the workflow
-     * row is gone. For messages, never for lookups.
+     * The workflow's slug, or a request-scoped placeholder when the workflow row
+     * has been deleted. Intended for display and log messages; not a valid
+     * argument to workflow lookup.
      */
     public function workflowSlug(): string
     {
@@ -243,6 +246,23 @@ final class ApprovalRequest extends Model
         })->values();
     }
 
+    /**
+     * Whether this actor may decide this request, and if not, why not.
+     *
+     * This and the two eligibility questions below are the request's
+     * authorization surface. Recording a decision, withdrawing, and delegating
+     * are commands, and live on the `Approval` facade.
+     */
+    public function approvalEligibility(Model $actor): Eligibility
+    {
+        return Approval::eligibility($this, $actor);
+    }
+
+    public function canBeApprovedBy(Model $actor): bool
+    {
+        return $this->approvalEligibility($actor)->eligible;
+    }
+
     public function withdrawalEligibility(Model $actor): WithdrawalEligibility
     {
         return Approval::withdrawalEligibility($this, $actor);
@@ -264,14 +284,13 @@ final class ApprovalRequest extends Model
     }
 
     /**
-     * Whether this actor has any standing in the request at all: they submitted
-     * it, or they are named on one of its assignments.
+     * Whether this actor has standing in the request: they requested it, or they
+     * are named on one of its assignments.
      *
-     * Deliberately wider than eligibility and deliberately not time-bound - a
-     * stage-one approver who decided last week is still a participant in the
-     * request, which is the question a "may they read this?" check is asking.
-     * Hosts that want a wider audience still (an auditor, a department head)
-     * should widen it in their own policy rather than here.
+     * Wider than eligibility and not time-bound. An approver who decided a
+     * first stage last week is still a participant, which is what a read
+     * authorization check needs to know. Applications needing a wider audience,
+     * such as auditors or department heads, should widen it in their own policy.
      */
     public function involves(Model $actor): bool
     {
@@ -332,9 +351,8 @@ final class ApprovalRequest extends Model
     /**
      * Open requests whose active stage is past its deadline.
      *
-     * Says nothing about whether the escalation policy has run - that is
-     * `escalated_at` on the stage, and a stage stays overdue for as long as
-     * nobody decides it.
+     * Independent of whether the escalation policy has run, which is recorded as
+     * `escalated_at` on the stage. A stage remains overdue until it is decided.
      *
      * @param  Builder<self>  $query
      */
@@ -348,12 +366,13 @@ final class ApprovalRequest extends Model
     }
 
     /**
-     * The inbox query.
+     * The inbox query: pending requests whose active stage is waiting on this
+     * user and which the user has not already approved.
      *
-     * An assignment that has been delegated belongs to the delegate and not to the
-     * person who delegated it, so it shows in exactly one inbox. The
-     * already-decided exclusion is what keeps a request off somebody's list once
-     * they have dealt with it, while the stage waits on their colleagues.
+     * A delegated assignment belongs to the delegate rather than the delegating
+     * approver, so it appears in exactly one inbox. Excluding assignments the
+     * user has already approved keeps a request out of their inbox while the
+     * stage waits on the remaining approvers.
      *
      * @param  Builder<self>  $query
      */
