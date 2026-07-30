@@ -34,9 +34,9 @@ final class BypassApprovalGuard
 
             $result = ApprovalGuard::without($approvable, fn (): mixed => $callback($approvable));
 
-            // Read back from the database rather than refreshing the instance
-            // in hand: the callback may have deleted the record, and a bypass
-            // that removed it is the one most worth an honest audit line.
+            // Read back from the database rather than refreshing the instance in
+            // hand: the callback may have deleted the record, and that outcome
+            // still has to reach the audit history.
             $fresh = $this->fresh($approvable);
 
             ($this->recordAction)(

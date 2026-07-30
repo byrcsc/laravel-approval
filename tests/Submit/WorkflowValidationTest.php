@@ -86,7 +86,7 @@ it('refuses an approver entry that is both a record and a rule', function (): vo
     $workflow = workflow([], ['slug' => 'ambiguous']);
     $approver = user();
 
-    $workflow->stages()->create(['sequence' => 1, 'name' => 'Level 1', 'required_approvals' => 1]);
+    $workflow->stages()->create(['sequence' => 1, 'name' => 'Stage 1', 'required_approvals' => 1]);
 
     approverRow($workflow->stages()->sole(), [
         'approver_type' => $approver->getMorphClass(),

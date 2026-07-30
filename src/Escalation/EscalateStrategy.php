@@ -23,23 +23,23 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 
 /**
- * Bring somebody else in - the approver's manager, the duty officer, whoever
- * the stage's config names.
+ * Adds further approvers to an overdue stage - the approver's manager, a duty
+ * officer, or whoever the stage's configuration resolves.
  *
  * Configured on the stage, in `escalation_config`:
  *
  *     ['resolver' => App\Org\ManagerOf::class, 'resolver_config' => [...]]
  *
- * There is a trap here worth knowing about. A stage with a null
- * `required_approvals` needs *all* its assignments, so adding one would make an
- * already-late stage harder to complete - the opposite of escalating it. So
- * before adding anyone, a null rule is pinned to the number of assignments the stage
- * already had. The people brought in are alternatives to the ones who did not
- * act, not extra hurdles. Set `required_approvals` in the config to say
- * something different.
+ * One rule needs care. A stage with a null `required_approvals` requires all its
+ * assignments, so adding an assignment would raise the number of approvals
+ * needed and make an already-late stage harder to complete. To avoid that, a
+ * null rule is pinned to the assignment count the stage had before the addition,
+ * so the added approvers act as alternatives to those who have not responded
+ * rather than as extra requirements. Set `required_approvals` in the
+ * configuration to choose a different number.
  *
- * Existing assignments are left alone. Somebody who is merely slow may still be about
- * to approve, and taking the request off their desk mid-thought helps nobody.
+ * Existing assignments are left in place: an approver who is only slow may still
+ * respond, and removing their assignment would discard work in progress.
  */
 final class EscalateStrategy implements EscalationStrategy
 {

@@ -23,16 +23,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
 /**
- * "I am away this week - ask her instead."
+ * An approver transfers their own assignment to another approver.
  *
- * The assignment stays where it is and keeps the original approver's name on it;
- * only `delegated_to` changes. Who was asked is part of the record, and a
- * delegation that erased that would leave an audit trail that could not answer
- * the one question audits ask.
+ * The assignment row is kept and retains the original approver's identity; only
+ * `delegated_to` changes. The originally assigned approver stays in the record,
+ * so the audit history shows who was asked as well as who answered.
  *
- * From that moment the assignment is the delegate's alone. The original cannot decision
- * from it, and it leaves their inbox for the delegate's - one assignment, one holder,
- * which is what keeps the approval arithmetic honest.
+ * From that point the assignment belongs to the delegate alone: the original
+ * approver can no longer decide it, and it moves from their inbox to the
+ * delegate's. One assignment always has exactly one holder, which is what keeps
+ * approvals received and approvals required consistent.
  */
 final class DelegateApproval
 {

@@ -72,7 +72,7 @@ function workflow(array $stages = [], array $attributes = []): ApprovalWorkflow
 
         $created = $workflow->stages()->create(array_merge([
             'sequence' => $sequence++,
-            'name' => 'Level '.($sequence - 1),
+            'name' => 'Stage '.($sequence - 1),
             'required_approvals' => 1,
         ], $stage));
 

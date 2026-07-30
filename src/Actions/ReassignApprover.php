@@ -21,20 +21,17 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
 /**
- * "She left in March. Give it to him."
+ * An administrator rewrites which approver an assignment belongs to.
  *
- * The administrative counterpart to {@see DelegateApproval}: the assignment is
- * rewritten rather than lent, because there is nobody to lend it. Any
- * delegation on the assignment is cleared - it was the departed approver's to make,
- * and it dies with their claim to the assignment.
+ * The administrative counterpart to {@see DelegateApproval}. Where delegation
+ * keeps the original approver on the assignment, reassignment replaces them, and
+ * any delegation on the assignment is cleared with them.
  *
- * Works on any stage that has not been decided, not only the active one, which
- * is the point: somebody leaving affects the stages their request has not
- * reached yet, and those are exactly the ones worth fixing before it does.
+ * Works on any undecided stage rather than only the active one, because an
+ * approver leaving also affects stages the request has not reached yet.
  *
- * An assignment that has already decided is not reassigned. That decision was cast by a
- * person, and moving the assignment under it would make the audit trail claim
- * somebody approved something they never saw.
+ * An assignment that already carries a decision is not reassigned: moving it
+ * would attribute that decision to an approver who never made it.
  */
 final class ReassignApprover
 {

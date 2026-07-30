@@ -14,14 +14,13 @@ use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Support\Facades\Date;
 
 /**
- * What the engine currently holds: a count per state, and the requests that
- * need somebody to look at them.
+ * Reports approval state: a count per request state, followed by the requests
+ * that need attention.
  *
- * The two lists at the end are the ones worth acting on. Overdue requests are
- * waiting on a person. Conflicted ones are waiting on a decision nobody can
- * make automatically - they cleared every stage and then found the record had
- * moved, so they sit there until somebody resolves them, and nothing else in
- * this package will chase them.
+ * The two lists at the end are actionable. Overdue requests are waiting on an
+ * approver. Conflicted requests approved every stage and then found the record
+ * had changed; nothing in this package resolves them automatically, so they stay
+ * open until an administrator reapplies or discards the draft.
  */
 final class StatusCommand extends Command
 {

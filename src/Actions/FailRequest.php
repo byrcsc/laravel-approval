@@ -14,17 +14,17 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
 
 /**
- * Closes a request as rejected, from whichever direction the "no" came.
+ * Closes a request as rejected, whatever produced the rejection.
  *
- * The counterpart to {@see CompleteStage}: a person rejecting and a deadline
- * expiring on an auto-reject stage end the same way, and they end it here so
- * there is only one description of what "rejected" does to a request.
+ * The counterpart to {@see CompleteStage}. An approver's rejection and an
+ * auto-reject escalation both end here, so there is one definition of what
+ * rejection does to a request.
  *
- * Stages that never ran are `skipped`. They did not decide anything, and
- * recording that they had would be a lie the reports would repeat.
+ * Stages that never ran are recorded as `skipped`, because they did not decide
+ * anything.
  *
- * Expects the caller to hold the request's row lock and to have already
- * recorded the audit action that explains why.
+ * Expects the caller to hold the request's row lock and to have already recorded
+ * the action that explains the rejection.
  */
 final class FailRequest
 {

@@ -225,9 +225,9 @@ it('does not resurrect a skipped step on resync, even after the workflow changes
 
     // The workflow moves on: the condition is dropped and the retired stage
     // gains people. None of that may reach the snapshotted, already-skipped step.
-    $firstLevel = $workflow->stages()->where('sequence', 1)->sole();
-    $firstLevel->forceFill(['condition' => null, 'condition_config' => null])->save();
-    approverRow($firstLevel, user('New Gatekeeper'));
+    $firstStage = $workflow->stages()->where('sequence', 1)->sole();
+    $firstStage->forceFill(['condition' => null, 'condition_config' => null])->save();
+    approverRow($firstStage, user('New Gatekeeper'));
     approverRow($workflow->stages()->where('sequence', 2)->sole(), $late);
 
     $changes = Approval::resync($request, user('Operator'), prune: true);

@@ -12,10 +12,12 @@ use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStage;
 use ByRcsc\LaravelApproval\Support\Attributes;
 
 /**
- * A workflow stage, lifted out of the definition so it can be frozen onto a
- * request. This is the only thing that crosses from the editable side of the
- * schema to the immutable one, which is what makes "edit the workflow, in-flight
- * requests keep their old rules" true rather than aspirational.
+ * A workflow stage read out of its definition so it can be copied onto a
+ * request at submission.
+ *
+ * This is the only path from the editable workflow tables to a request's own
+ * stages, which is what lets a workflow be edited without changing the rules an
+ * in-flight request runs under.
  */
 final readonly class StageSnapshot
 {

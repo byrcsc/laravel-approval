@@ -9,11 +9,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * "Something needs your approval."
+ * Tells an approver that a request is waiting on their decision.
  *
- * Mapped to both `ApprovalSubmitted` and `StageCompleted`, because being asked
- * first and being asked next are the same thing from the approver's side. In
- * either case the recipients are whoever the now-active stage is waiting on.
+ * Mapped to both `ApprovalSubmitted` and `StageCompleted`: an initial assignment
+ * and a next-stage assignment are the same fact for the approver receiving it.
+ * In both cases the recipients are the approvers the now-active stage is waiting
+ * on.
  */
 final class ApprovalRequestedNotification extends ApprovalNotification
 {
