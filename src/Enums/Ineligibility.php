@@ -7,14 +7,8 @@ namespace ByRcsc\LaravelApproval\Enums;
 /**
  * Why somebody may not decide a request.
  *
- * These are the same five findings the engine has always made at the vote; what
- * is new is that they can be read rather than only caught. A screen that wants
- * to say why a button is disabled needs the reason, and "an exception was
- * thrown" is not one.
- *
- * The order below is the order they are established, which is also the order
- * they are most useful in: nothing about a seat matters if the request is
- * already closed.
+ * The order follows the eligibility check, from request state through the
+ * active assignment.
  */
 enum Ineligibility: string
 {
@@ -22,16 +16,16 @@ enum Ineligibility: string
     case RequestClosed = 'request_closed';
 
     /** No level is currently waiting - the request is between states. */
-    case NoActiveStep = 'no_active_step';
+    case NoActiveStage = 'no_active_stage';
 
-    /** This actor holds no seat on the level that is waiting. */
+    /** This actor has no assignment on the active stage. */
     case NotAnApprover = 'not_an_approver';
 
-    /** They are named on a seat, but it now belongs to their delegate. */
-    case SeatDelegated = 'seat_delegated';
+    /** Their assignment now belongs to a delegate. */
+    case AssignmentDelegated = 'assignment_delegated';
 
-    /** They have already voted from the seat they hold. */
-    case AlreadyVoted = 'already_voted';
+    /** A decision has already been recorded for their assignment. */
+    case DecisionAlreadyRecorded = 'decision_already_recorded';
 
     /** They submitted it, and this workflow does not allow that. */
     case SelfApproval = 'self_approval';

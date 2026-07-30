@@ -24,9 +24,9 @@ final readonly class StepHealth
 
     public static function inspect(ApprovalRequestStep $step): self
     {
-        $ballot = Ballot::for($step);
+        $progress = StageProgress::for($step);
 
-        return new self($ballot->quorum(), count($ballot->holders()));
+        return new self($progress->approvalsRequired, count($progress->assignmentHolders()));
     }
 
     public function stranded(): bool

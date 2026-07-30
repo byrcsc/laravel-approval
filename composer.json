@@ -1,6 +1,6 @@
 {
     "name": "byrcsc/laravel-approval",
-    "description": "Multi-level approval workflows for Eloquent models: database-driven workflows, attribute drafts, quorums, and an immutable audit trail.",
+    "description": "Multi-stage approval workflows for Eloquent models: database-driven workflows, attribute drafts, approval thresholds, and a verifiable audit trail.",
     "keywords": [
         "laravel",
         "approval",

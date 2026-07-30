@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Data\ApproverSlot;
-use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
@@ -134,11 +134,11 @@ final class ResyncRequestApprovers
         $wanted = ($this->resolveApprovers)($level, $snapshot, $approvable, $submitter, $slug);
 
         $health = StepHealth::inspect($step);
-        $ballot = Ballot::for($step);
+        $progress = StageProgress::for($step);
 
         /** @var array<string, ApprovalRequestStepApprover> $held */
         $held = [];
-        $represented = $ballot->representedIdentities();
+        $represented = $progress->representedApproverIdentities();
 
         foreach ($step->approverSlots()->orderBy('id')->get() as $seat) {
             $seatKey = $this->seatKey($seat);
@@ -161,7 +161,7 @@ final class ResyncRequestApprovers
         }
 
         $removed = $prune
-            ? $this->prune($step, $held, $wanted, $ballot)
+            ? $this->prune($step, $held, $wanted, $progress)
             : [];
 
         $this->guardQuorum($step, $snapshot, $slug, $health);
@@ -174,8 +174,12 @@ final class ResyncRequestApprovers
      * @param  list<ApproverSlot>  $wanted
      * @return list<string>
      */
-    private function prune(ApprovalRequestStep $step, array $held, array $wanted, Ballot $ballot): array
-    {
+    private function prune(
+        ApprovalRequestStep $step,
+        array $held,
+        array $wanted,
+        StageProgress $progress,
+    ): array {
         $keep = [];
 
         foreach ($wanted as $slot) {
@@ -190,7 +194,7 @@ final class ResyncRequestApprovers
             }
 
             // A cast vote and a handed-over seat are both things somebody did.
-            if ($ballot->hasVoted($seat) || $seat->getAttributeValue('delegated_to_id') !== null) {
+            if ($progress->hasDecision($seat) || $seat->getAttributeValue('delegated_to_id') !== null) {
                 continue;
             }
 
@@ -249,7 +253,7 @@ final class ResyncRequestApprovers
             return;
         }
 
-        if (! Ballot::for($step)->isCarried()) {
+        if (! StageProgress::for($step)->isSatisfied()) {
             return;
         }
 

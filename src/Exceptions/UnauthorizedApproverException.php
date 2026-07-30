@@ -20,16 +20,16 @@ final class UnauthorizedApproverException extends ApprovalException
     public static function notAnApprover(Model $actor, ApprovalRequest $request): self
     {
         return new self(sprintf(
-            '[%s] holds no approver slot on the active level of approval request %s.',
+            '[%s] has no assignment on the active stage of approval request %s.',
             self::describe($actor),
             self::ulid($request),
         ));
     }
 
     /**
-     * The slot exists, but somebody else is holding it now.
+     * The assignment exists, but it now belongs to a delegate.
      */
-    public static function slotIsDelegated(Model $actor, ApprovalRequest $request): self
+    public static function assignmentWasDelegated(Model $actor, ApprovalRequest $request): self
     {
         return new self(sprintf(
             '[%s] delegated their approval on request %s, so the decision is no longer theirs to make.',

@@ -125,7 +125,7 @@ describe('what delegation refuses', function (): void {
         $request = post()->submitForApproval($workflow, null, user());
 
         expect(fn () => Approval::delegate($request, $one, $two))
-            ->toThrow(DelegationException::class, 'a seat short of its quorum forever');
+            ->toThrow(DelegationException::class, 'already has an assignment on this stage');
     });
 
     it('refuses delegating a seat that has already voted', function (): void {

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
-use ByRcsc\LaravelApproval\Data\Ballot;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
@@ -61,23 +61,23 @@ final class ReassignApprover
             $step = $seat->step;
 
             if ($step === null || ! $request->is($step->request)) {
-                throw AlreadyDecidedException::seatIsNotOnRequest($request);
+                throw AlreadyDecidedException::assignmentIsNotOnRequest($request);
             }
 
             $stepState = Attributes::enum($step, 'state', StepState::class) ?? StepState::Queued;
 
             if (! in_array($stepState, [StepState::Active, StepState::Queued], true)) {
-                throw AlreadyDecidedException::stepIsClosed($request);
+                throw AlreadyDecidedException::stageIsClosed($request);
             }
 
-            $ballot = Ballot::for($step);
+            $progress = StageProgress::for($step);
 
-            if ($ballot->hasVoted($seat)) {
-                throw AlreadyDecidedException::seatHasVoted($request);
+            if ($progress->hasDecision($seat)) {
+                throw AlreadyDecidedException::assignmentHasDecision($request);
             }
 
-            if ($ballot->seatFor($to) !== null) {
-                throw DelegationException::alreadySeated($to);
+            if ($progress->assignmentFor($to) !== null) {
+                throw DelegationException::alreadyAssigned($to);
             }
 
             // A seat handed to somebody who has themselves gone is the problem

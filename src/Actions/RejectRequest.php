@@ -49,12 +49,12 @@ final class RejectRequest
                 request: $request,
                 action: ActionType::Rejected,
                 actor: $decision->actor,
-                step: $context->step,
+                step: $context->stage,
                 comment: $comment,
                 metadata: $decision->metadata,
             );
 
-            ($this->failRequest)($request, $context->step, $decision->actor, $comment);
+            ($this->failRequest)($request, $context->stage, $decision->actor, $comment);
 
             return $request;
         });

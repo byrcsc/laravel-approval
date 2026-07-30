@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Notifications;
 
-use ByRcsc\LaravelApproval\Data\Ballot;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -117,7 +117,7 @@ abstract class ApprovalNotification extends Notification
      */
     protected static function approversOf(ApprovalRequestStep $step): array
     {
-        return Ballot::for($step)->holders();
+        return StageProgress::for($step)->assignmentHolders();
     }
 
     /**

@@ -7,12 +7,12 @@ namespace ByRcsc\LaravelApproval\Enums;
 enum DelegationIneligibility: string
 {
     case RequestClosed = 'request_closed';
-    case NoActiveStep = 'no_active_step';
+    case NoActiveStage = 'no_active_stage';
     case NotAnApprover = 'not_an_approver';
-    case SeatDelegated = 'seat_delegated';
-    case AlreadyVoted = 'already_voted';
+    case AssignmentDelegated = 'assignment_delegated';
+    case DecisionAlreadyRecorded = 'decision_already_recorded';
     case ApproverMissing = 'approver_missing';
     case CannotDelegateToSelf = 'cannot_delegate_to_self';
-    case DelegateAlreadySeated = 'delegate_already_seated';
+    case DelegateAlreadyAssigned = 'delegate_already_assigned';
     case DelegateMissing = 'delegate_missing';
 }

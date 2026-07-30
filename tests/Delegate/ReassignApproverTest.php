@@ -129,7 +129,7 @@ describe('what reassignment refuses', function (): void {
         Approval::approve($request, $one);
 
         expect(fn () => Approval::reassign($request, $seat, user('Successor')))
-            ->toThrow(AlreadyDecidedException::class, 'behind a decision they never made');
+            ->toThrow(AlreadyDecidedException::class, 'already has a decision and cannot be moved');
     });
 
     it('refuses moving an unused seat on a completed level', function (): void {
@@ -147,7 +147,7 @@ describe('what reassignment refuses', function (): void {
         Approval::approve($request, $one);
 
         expect(fn () => Approval::reassign($request, $unusedSeat, user('Replacement')))
-            ->toThrow(AlreadyDecidedException::class, 'level has already been decided');
+            ->toThrow(AlreadyDecidedException::class, 'stage is complete');
     });
 
     it('refuses moving a seat onto somebody who already has one', function (): void {
@@ -160,7 +160,7 @@ describe('what reassignment refuses', function (): void {
         $seat = $request->steps()->sole()->approverSlots()->orderBy('id')->first();
 
         expect(fn () => Approval::reassign($request, $seat, $two))
-            ->toThrow(DelegationException::class, 'already holds a seat');
+            ->toThrow(DelegationException::class, 'already has an assignment');
     });
 
     it('refuses a seat that belongs to a different request', function (): void {

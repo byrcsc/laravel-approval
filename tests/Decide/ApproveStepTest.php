@@ -129,7 +129,7 @@ it('carries decision metadata onto the audit action', function (): void {
         ->toBe(['ip' => '10.0.0.1']);
 });
 
-it('announces each vote with where the count stands', function (): void {
+it('announces each approval with the stage progress', function (): void {
     Event::fake([StepApproved::class, LevelCompleted::class, ApprovalCompleted::class]);
 
     $one = user('One');
@@ -140,12 +140,18 @@ it('announces each vote with where the count stands', function (): void {
 
     Approval::approve($request, $one);
 
-    Event::assertDispatched(StepApproved::class, fn (StepApproved $e): bool => $e->votes === 1 && $e->quorum === 2);
+    Event::assertDispatched(
+        StepApproved::class,
+        fn (StepApproved $e): bool => $e->approvalsReceived === 1 && $e->approvalsRequired === 2,
+    );
     Event::assertNotDispatched(LevelCompleted::class);
 
     Approval::approve($request, $two);
 
-    Event::assertDispatched(StepApproved::class, fn (StepApproved $e): bool => $e->votes === 2 && $e->quorum === 2);
+    Event::assertDispatched(
+        StepApproved::class,
+        fn (StepApproved $e): bool => $e->approvalsReceived === 2 && $e->approvalsRequired === 2,
+    );
     Event::assertDispatched(LevelCompleted::class, fn (LevelCompleted $e): bool => $e->next === null);
     Event::assertDispatched(ApprovalCompleted::class);
 });

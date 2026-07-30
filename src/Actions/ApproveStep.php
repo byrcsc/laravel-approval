@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
-use ByRcsc\LaravelApproval\Data\Ballot;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Events\StepApproved;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -39,25 +39,23 @@ final class ApproveStep
                 request: $request,
                 action: ActionType::Approved,
                 actor: $decision->actor,
-                step: $context->step,
+                step: $context->stage,
                 comment: $decision->comment(),
                 metadata: $decision->metadata,
             );
 
-            // Recounted after the vote rather than incremented, so the count is
-            // read from the audit trail that will still be there tomorrow.
-            $ballot = Ballot::for($context->step);
+            $progress = StageProgress::for($context->stage);
 
             Event::dispatch(new StepApproved(
                 $request,
-                $context->step,
+                $context->stage,
                 $decision->actor,
-                $ballot->votes(),
-                $ballot->quorum(),
+                $progress->approvalsReceived,
+                $progress->approvalsRequired,
             ));
 
-            if ($ballot->isCarried()) {
-                ($this->carryStep)($request, $context->step);
+            if ($progress->isSatisfied()) {
+                ($this->carryStep)($request, $context->stage);
             }
 
             return $request;

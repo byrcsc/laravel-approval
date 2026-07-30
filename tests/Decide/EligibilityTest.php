@@ -15,7 +15,7 @@ it('refuses somebody who holds no seat', function (): void {
     $request = post()->submitForApproval($workflow, null, user());
 
     expect(fn () => Approval::approve($request, user('Passer By')))
-        ->toThrow(UnauthorizedApproverException::class, 'holds no approver slot on the active level');
+        ->toThrow(UnauthorizedApproverException::class, 'has no assignment on the active stage');
 });
 
 it('refuses an approver from a level that is not this one', function (): void {

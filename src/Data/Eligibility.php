@@ -16,53 +16,53 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequestStepApprover;
  * paths cannot drift: there is one calculation, and the difference between
  * asking and acting is only what happens to the answer.
  *
- * The step and ballot come along because a caller that has asked is usually
- * about to render something - "2 of 3 approvals, waiting on Finance" needs the
- * same objects the check already loaded, and making them ask twice would make
- * the cheap question expensive.
+ * The stage, its progress, and the actor's assignment are included so callers
+ * can render the result without repeating the same queries.
  */
 final readonly class Eligibility
 {
     private function __construct(
         public bool $eligible,
         public ?Ineligibility $reason,
-        public ?ApprovalRequestStep $step,
-        public ?Ballot $ballot,
-        public ?ApprovalRequestStepApprover $seat,
+        public ?ApprovalRequestStep $stage,
+        public ?StageProgress $stageProgress,
+        public ?ApprovalRequestStepApprover $assignment,
     ) {}
 
     public static function granted(
-        ApprovalRequestStep $step,
-        Ballot $ballot,
-        ApprovalRequestStepApprover $seat,
+        ApprovalRequestStep $stage,
+        StageProgress $stageProgress,
+        ApprovalRequestStepApprover $assignment,
     ): self {
-        return new self(true, null, $step, $ballot, $seat);
+        return new self(true, null, $stage, $stageProgress, $assignment);
     }
 
     /**
-     * The step and ballot are passed where the denial happened late enough for
-     * them to exist - a delegated seat knows which level it is on, a closed
-     * request does not.
+     * Stage context is included when the request reached that part of the
+     * eligibility check.
      */
     public static function denied(
         Ineligibility $reason,
-        ?ApprovalRequestStep $step = null,
-        ?Ballot $ballot = null,
+        ?ApprovalRequestStep $stage = null,
+        ?StageProgress $stageProgress = null,
     ): self {
-        return new self(false, $reason, $step, $ballot, null);
+        return new self(false, $reason, $stage, $stageProgress, null);
     }
 
     /**
-     * What the engine needs to record a vote, or null when this actor may not
-     * cast one. The narrowing is the point: only a granted eligibility can
-     * produce a context, so nothing downstream has to re-check.
+     * The validated context needed to record a decision.
      */
     public function context(): ?DecisionContext
     {
-        if (! $this->eligible || $this->step === null || $this->ballot === null || $this->seat === null) {
+        if (
+            ! $this->eligible
+            || $this->stage === null
+            || $this->stageProgress === null
+            || $this->assignment === null
+        ) {
             return null;
         }
 
-        return new DecisionContext($this->step, $this->ballot, $this->seat);
+        return new DecisionContext($this->stage, $this->stageProgress, $this->assignment);
     }
 }

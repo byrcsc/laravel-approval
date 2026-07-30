@@ -7,8 +7,8 @@ namespace ByRcsc\LaravelApproval\Escalation;
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
 use ByRcsc\LaravelApproval\Data\ApproverSlot;
-use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\LevelSnapshot;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Data\StepHealth;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
@@ -122,7 +122,7 @@ final class EscalateStrategy implements EscalationStrategy
      */
     private function seated(ApprovalRequestStep $step): array
     {
-        return Ballot::for($step)->representedIdentities();
+        return StageProgress::for($step)->representedApproverIdentities();
     }
 
     /**

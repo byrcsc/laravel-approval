@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
-use ByRcsc\LaravelApproval\Data\Ballot;
 use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Enums\Ineligibility;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -41,29 +41,31 @@ final class CheckEligibility
         $step = $request->currentStep();
 
         if ($step === null) {
-            return Eligibility::denied(Ineligibility::NoActiveStep);
+            return Eligibility::denied(Ineligibility::NoActiveStage);
         }
 
-        $ballot = Ballot::for($step);
-        $seat = $ballot->seatFor($actor);
+        $progress = StageProgress::for($step);
+        $assignment = $progress->assignmentFor($actor);
 
-        if ($seat === null) {
+        if ($assignment === null) {
             return Eligibility::denied(
-                $ballot->hasDelegatedSeat($actor) ? Ineligibility::SeatDelegated : Ineligibility::NotAnApprover,
+                $progress->hasDelegatedAssignment($actor)
+                    ? Ineligibility::AssignmentDelegated
+                    : Ineligibility::NotAnApprover,
                 $step,
-                $ballot,
+                $progress,
             );
         }
 
-        if ($ballot->hasVoted($seat)) {
-            return Eligibility::denied(Ineligibility::AlreadyVoted, $step, $ballot);
+        if ($progress->hasDecision($assignment)) {
+            return Eligibility::denied(Ineligibility::DecisionAlreadyRecorded, $step, $progress);
         }
 
         if ($this->isSubmitter($request, $actor) && ! $this->allowsSelfApproval($request)) {
-            return Eligibility::denied(Ineligibility::SelfApproval, $step, $ballot);
+            return Eligibility::denied(Ineligibility::SelfApproval, $step, $progress);
         }
 
-        return Eligibility::granted($step, $ballot, $seat);
+        return Eligibility::granted($step, $progress, $assignment);
     }
 
     private function isSubmitter(ApprovalRequest $request, Model $actor): bool
