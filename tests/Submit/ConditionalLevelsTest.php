@@ -14,6 +14,7 @@ it('evaluates conditions once and snapshots skipped levels visibly', function ()
         [
             'condition' => AmountExceedsCondition::class,
             'condition_config' => ['amount' => 500_000],
+            'required_approvals' => null,
             'approvers' => [],
         ],
         ['approvers' => [$finance]],
@@ -50,11 +51,13 @@ it('auto-completes a request when every snapshotted level is skipped', function 
         [
             'condition' => AmountExceedsCondition::class,
             'condition_config' => ['amount' => 500],
+            'required_approvals' => null,
             'approvers' => [],
         ],
         [
             'condition' => AmountExceedsCondition::class,
             'condition_config' => ['amount' => 900],
+            'required_approvals' => null,
             'approvers' => [],
         ],
     ]), ['amount' => 200], user('Author'));

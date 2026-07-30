@@ -8,9 +8,9 @@ use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
-use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
@@ -31,8 +31,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalRequest submit(Model $approvable, ApprovalWorkflow|string|null $workflow = null, array<string, mixed>|null $newAttributes = null, Model|null $submitter = null, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static Eligibility eligibility(ApprovalRequest $request, Model $actor)
  * @method static bool canApprove(ApprovalRequest $request, Model $actor)
- * @method static CancellationEligibility cancellationEligibility(ApprovalRequest $request, Model $actor)
- * @method static bool canCancel(ApprovalRequest $request, Model $actor)
+ * @method static WithdrawalEligibility withdrawalEligibility(ApprovalRequest $request, Model $actor)
+ * @method static bool canWithdraw(ApprovalRequest $request, Model $actor)
  * @method static DelegationEligibility delegationEligibility(ApprovalRequest $request, Model $actor, Model|null $delegate = null)
  * @method static bool canDelegate(ApprovalRequest $request, Model $actor, Model|null $delegate = null)
  * @method static ApprovalRequest decide(ApprovalRequest $request, ApprovalDecision $decision)
@@ -44,7 +44,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static BulkDecisionResult rejectMany(iterable<int, ApprovalRequest> $requests, Model $actor, string $comment, array<string, mixed> $metadata = [])
  * @method static BulkDecisionResult bulkApprove(iterable<int, ApprovalRequest> $requests, Model $actor, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static BulkDecisionResult bulkReject(iterable<int, ApprovalRequest> $requests, Model $actor, string $comment, array<string, mixed> $metadata = [])
- * @method static ApprovalRequest cancel(ApprovalRequest $request, Model|null $actor = null, string|null $comment = null, bool $force = false)
+ * @method static ApprovalRequest withdraw(ApprovalRequest $request, Model $actor, string|null $comment = null)
+ * @method static ApprovalRequest cancel(ApprovalRequest $request, Model $actor, string|null $comment = null)
  * @method static mixed withoutGuard(Model $approvable, callable $callback, Model|null $actor = null, string|null $comment = null)
  * @method static ApprovalRequestStepApprover delegate(ApprovalRequest $request, Model $approver, Model $delegate, string|null $comment = null)
  * @method static ApprovalRequestStepApprover reassign(ApprovalRequest $request, ApprovalRequestStepApprover $seat, Model $to, Model|null $actor = null, string|null $comment = null)

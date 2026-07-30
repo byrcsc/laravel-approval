@@ -11,11 +11,8 @@ use Illuminate\Notifications\Messages\MailMessage;
 /**
  * "Your request cleared every level."
  *
- * Goes to the submitter, who is the person waiting on the answer. Fires on
- * `ApprovalCompleted`, which is before the draft is applied - so a request that
- * goes on to conflict will have told the submitter it was approved. That is
- * true: it was. Map `DraftConflicted` as well if the distinction matters to
- * your users.
+ * Goes to the submitter only after the request is approved and any draft was
+ * applied successfully.
  */
 final class ApprovalApprovedNotification extends ApprovalNotification
 {

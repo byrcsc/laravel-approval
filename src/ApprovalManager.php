@@ -8,9 +8,9 @@ use ByRcsc\LaravelApproval\Actions\ApproveStep;
 use ByRcsc\LaravelApproval\Actions\AttachFile;
 use ByRcsc\LaravelApproval\Actions\BypassApprovalGuard;
 use ByRcsc\LaravelApproval\Actions\CancelRequest;
-use ByRcsc\LaravelApproval\Actions\CheckCancellationEligibility;
 use ByRcsc\LaravelApproval\Actions\CheckDelegationEligibility;
 use ByRcsc\LaravelApproval\Actions\CheckEligibility;
+use ByRcsc\LaravelApproval\Actions\CheckWithdrawalEligibility;
 use ByRcsc\LaravelApproval\Actions\DecideInBulk;
 use ByRcsc\LaravelApproval\Actions\DelegateApproval;
 use ByRcsc\LaravelApproval\Actions\EscalateOverdueSteps;
@@ -24,12 +24,13 @@ use ByRcsc\LaravelApproval\Actions\ReturnRequest;
 use ByRcsc\LaravelApproval\Actions\SubmitForApproval;
 use ByRcsc\LaravelApproval\Actions\SyncWorkflowDefinitions;
 use ByRcsc\LaravelApproval\Actions\VerifyAuditTrail;
+use ByRcsc\LaravelApproval\Actions\WithdrawRequest;
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
-use ByRcsc\LaravelApproval\Data\CancellationEligibility;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
+use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
@@ -145,14 +146,14 @@ class ApprovalManager
         return $this->eligibility($request, $actor)->eligible;
     }
 
-    public function cancellationEligibility(ApprovalRequest $request, Model $actor): CancellationEligibility
+    public function withdrawalEligibility(ApprovalRequest $request, Model $actor): WithdrawalEligibility
     {
-        return $this->container->make(CheckCancellationEligibility::class)($request, $actor);
+        return $this->container->make(CheckWithdrawalEligibility::class)($request, $actor);
     }
 
-    public function canCancel(ApprovalRequest $request, Model $actor): bool
+    public function canWithdraw(ApprovalRequest $request, Model $actor): bool
     {
-        return $this->cancellationEligibility($request, $actor)->eligible;
+        return $this->withdrawalEligibility($request, $actor)->eligible;
     }
 
     public function delegationEligibility(
@@ -272,16 +273,24 @@ class ApprovalManager
         return $this->rejectMany($requests, $actor, $comment, $metadata);
     }
 
+    public function withdraw(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
+    {
+        /** @var WithdrawRequest $withdraw */
+        $withdraw = $this->container->make(WithdrawRequest::class);
+
+        return $withdraw($request, $actor, $comment);
+    }
+
     /**
-     * `force` is the admin escape hatch: without it, only the submitter may
-     * withdraw their own request.
+     * Administrative cancellation. The host application owns the policy that
+     * grants the `cancel` ability.
      */
-    public function cancel(ApprovalRequest $request, ?Model $actor = null, ?string $comment = null, bool $force = false): ApprovalRequest
+    public function cancel(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
     {
         /** @var CancelRequest $cancel */
         $cancel = $this->container->make(CancelRequest::class);
 
-        return $cancel($request, $actor, $comment, $force);
+        return $cancel($request, $actor, $comment);
     }
 
     /**
@@ -478,7 +487,7 @@ class ApprovalManager
     public function pendingFor(Model $approvable): ?ApprovalRequest
     {
         /** @var ApprovalRequest|null */
-        return $this->requestsFor($approvable)->pending()->first();
+        return $this->requestsFor($approvable)->unresolved()->first();
     }
 
     /**

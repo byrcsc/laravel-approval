@@ -13,6 +13,7 @@ use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * @return array{0: ApprovalRequest, 1: Post}
@@ -59,6 +60,7 @@ describe('resolving a conflict', function (): void {
 
     it('discards the draft and leaves the record alone', function (): void {
         [$request, $post] = conflictedRequest();
+        Gate::before(fn ($actor, string $ability): ?bool => $ability === 'cancel' ? true : null);
 
         Approval::resolve($request, ConflictResolution::Discard, user('Admin'), 'Their edit wins.');
 
@@ -70,8 +72,9 @@ describe('resolving a conflict', function (): void {
 
     it('frees the record either way', function (): void {
         [$request, $post] = conflictedRequest();
+        Gate::before(fn ($actor, string $ability): ?bool => $ability === 'cancel' ? true : null);
 
-        expect($post->isPendingApproval())->toBeFalse();
+        expect($post->isPendingApproval())->toBeTrue();
 
         Approval::resolve($request, ConflictResolution::Discard, user('Admin'));
 
@@ -202,13 +205,13 @@ describe('resubmitting', function (): void {
             ->toBe(['resubmitted_from' => $first->getAttributeValue('ulid')]);
     });
 
-    it('retries a cancelled request', function (): void {
+    it('retries a withdrawn request', function (): void {
         $author = user('Author');
         $post = post();
         $workflow = workflow([['approvers' => [user('Approver')]]]);
 
         $first = $post->submitForApproval($workflow, null, $author);
-        Approval::cancel($first, $author);
+        Approval::withdraw($first, $author);
 
         expect(Approval::resubmit($first)->state)->toBe(RequestState::Pending);
     });

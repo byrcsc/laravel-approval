@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
@@ -31,7 +32,11 @@ it('refuses a vote arriving through a copy loaded before the rejection', functio
     $approver = user('Approver');
     $rejector = user('Rejector');
 
-    $workflow = workflow([['required_approvals' => 1, 'approvers' => [$approver, $rejector]]]);
+    $workflow = workflow([[
+        'required_approvals' => 1,
+        'rejection_policy' => RejectionPolicy::AnyRejectionVetoes,
+        'approvers' => [$approver, $rejector],
+    ]]);
     $request = post()->submitForApproval($workflow, null, user());
 
     $stale = staleCopyOf($request);
@@ -52,7 +57,7 @@ it('refuses a vote arriving through a copy loaded before the withdrawal', functi
 
     $stale = staleCopyOf($request);
 
-    Approval::cancel($request, $submitter);
+    Approval::withdraw($request, $submitter);
 
     expect(fn () => Approval::approve($stale, $approver))
         ->toThrow(AlreadyDecidedException::class);
@@ -69,7 +74,7 @@ it('refuses a withdrawal arriving through a copy loaded before the final vote', 
 
     Approval::approve($request, $approver);
 
-    expect(fn () => Approval::cancel($stale, $submitter))
+    expect(fn () => Approval::withdraw($stale, $submitter))
         ->toThrow(AlreadyDecidedException::class)
         ->and($stale->state)->toBe(RequestState::Approved);
 });

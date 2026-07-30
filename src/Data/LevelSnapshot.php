@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Data;
 
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflowLevel;
@@ -26,6 +27,7 @@ final readonly class LevelSnapshot
         public int $sequence,
         public string $name,
         public ?int $requiredApprovals,
+        public RejectionPolicy $rejectionPolicy,
         public ?int $slaMinutes,
         public ?EscalationAction $escalationStrategy,
         public array $escalationConfig = [],
@@ -41,6 +43,7 @@ final readonly class LevelSnapshot
             sequence: Attributes::int($level, 'sequence'),
             name: Attributes::string($level, 'name'),
             requiredApprovals: Attributes::nullableInt($level, 'required_approvals'),
+            rejectionPolicy: self::rejectionPolicy($level),
             slaMinutes: Attributes::nullableInt($level, 'sla_minutes'),
             escalationStrategy: Attributes::enum($level, 'escalation_strategy', EscalationAction::class),
             escalationConfig: Attributes::object($level, 'escalation_config'),
@@ -60,6 +63,7 @@ final readonly class LevelSnapshot
             sequence: Attributes::int($step, 'sequence'),
             name: Attributes::string($step, 'name'),
             requiredApprovals: Attributes::nullableInt($step, 'required_approvals'),
+            rejectionPolicy: self::rejectionPolicy($step),
             slaMinutes: Attributes::nullableInt($step, 'sla_minutes'),
             escalationStrategy: Attributes::enum($step, 'escalation_strategy', EscalationAction::class),
             escalationConfig: Attributes::object($step, 'escalation_config'),
@@ -76,6 +80,7 @@ final readonly class LevelSnapshot
             sequence: $this->sequence,
             name: $this->name,
             requiredApprovals: $this->requiredApprovals,
+            rejectionPolicy: $this->rejectionPolicy,
             slaMinutes: $this->slaMinutes,
             escalationStrategy: $this->escalationStrategy,
             escalationConfig: $this->escalationConfig,
@@ -107,6 +112,7 @@ final readonly class LevelSnapshot
             'sequence' => $this->sequence,
             'name' => $this->name,
             'required_approvals' => $this->requiredApprovals,
+            'rejection_policy' => $this->rejectionPolicy,
             'sla_minutes' => $this->slaMinutes,
             'escalation_strategy' => $this->escalationStrategy,
             'escalation_config' => $this->escalationConfig === [] ? null : $this->escalationConfig,
@@ -116,5 +122,21 @@ final readonly class LevelSnapshot
             'condition_result' => $this->conditionPassed,
             'state' => $this->conditionPassed ? StepState::Queued : StepState::Skipped,
         ];
+    }
+
+    private static function rejectionPolicy(ApprovalWorkflowLevel|ApprovalRequestStep $stage): RejectionPolicy
+    {
+        $value = $stage->getRawOriginal('rejection_policy');
+
+        if ($value === null) {
+            return RejectionPolicy::ApprovalImpossible;
+        }
+
+        if (! is_string($value)) {
+            throw new \UnexpectedValueException('The rejection policy must be a string.');
+        }
+
+        return RejectionPolicy::tryFrom($value)
+            ?? throw new \UnexpectedValueException("Unknown rejection policy [{$value}].");
     }
 }

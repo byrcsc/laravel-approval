@@ -6,6 +6,7 @@ namespace ByRcsc\LaravelApproval\Models;
 
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalRequestStepFactory;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -68,6 +69,7 @@ final class ApprovalRequestStep extends Model
         return [
             'sequence' => 'integer',
             'required_approvals' => 'integer',
+            'rejection_policy' => RejectionPolicy::class,
             'sla_minutes' => 'integer',
             'escalation_strategy' => EscalationAction::class,
             'escalation_config' => 'array',

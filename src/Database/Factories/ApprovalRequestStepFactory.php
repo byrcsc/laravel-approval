@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Database\Factories;
 
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Enums\StepState;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStep;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -26,6 +27,7 @@ final class ApprovalRequestStepFactory extends Factory
             'sequence' => 1,
             'name' => 'Approval',
             'required_approvals' => 1,
+            'rejection_policy' => RejectionPolicy::ApprovalImpossible,
             'sla_minutes' => null,
             'escalation_strategy' => EscalationAction::Notify,
             'escalation_config' => null,

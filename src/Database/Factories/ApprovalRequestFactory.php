@@ -71,7 +71,20 @@ final class ApprovalRequestFactory extends Factory
 
     public function conflicted(): self
     {
-        return $this->closed(RequestState::Conflicted);
+        return $this->state([
+            'state' => RequestState::Conflicted,
+            'completed_at' => null,
+        ]);
+    }
+
+    public function withdrawn(): self
+    {
+        return $this->closed(RequestState::Withdrawn);
+    }
+
+    public function superseded(): self
+    {
+        return $this->closed(RequestState::Superseded);
     }
 
     public function withSteps(int $count = 1): self

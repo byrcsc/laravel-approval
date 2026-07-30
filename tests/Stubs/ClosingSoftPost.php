@@ -6,7 +6,7 @@ namespace ByRcsc\LaravelApproval\Tests\Stubs;
 
 final class ClosingSoftPost extends SoftPost
 {
-    public function cancelApprovalOnSoftDelete(): bool
+    public function closeApprovalOnSoftDelete(): bool
     {
         return true;
     }

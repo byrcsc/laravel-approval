@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Exceptions;
 
 /**
- * A rejection ends the request and sends the submitter back to the start, so
- * "no" without a reason is not a decision anybody can act on.
+ * A rejection can end the request, so "no" without a reason is not a decision
+ * anybody can act on.
  */
 final class CommentRequiredException extends ApprovalException
 {

@@ -68,7 +68,7 @@ final class AlreadyDecidedException extends ApprovalException
     public static function notRetryable(ApprovalRequest $request, RequestState $state): self
     {
         return new self(sprintf(
-            'Approval request %s is %s and cannot be resubmitted. Only rejected, cancelled, or conflicted requests can.',
+            'Approval request %s is %s and cannot be resubmitted. Only rejected, withdrawn, cancelled, or conflicted requests can.',
             self::ulid($request),
             $state->value,
         ));

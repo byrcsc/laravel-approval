@@ -6,6 +6,7 @@ namespace ByRcsc\LaravelApproval\Models;
 
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalWorkflowLevelFactory;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
+use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -57,6 +58,7 @@ final class ApprovalWorkflowLevel extends Model
         return [
             'sequence' => 'integer',
             'required_approvals' => 'integer',
+            'rejection_policy' => RejectionPolicy::class,
             'sla_minutes' => 'integer',
             'escalation_strategy' => EscalationAction::class,
             'escalation_config' => 'array',

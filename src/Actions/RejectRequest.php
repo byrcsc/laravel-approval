@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Actions;
 
 use ByRcsc\LaravelApproval\Data\ApprovalDecision;
+use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Exceptions\CommentRequiredException;
@@ -12,7 +13,8 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use Illuminate\Support\Facades\DB;
 
 /**
- * One "no" closes the request.
+ * Record a rejection and close the request only when its rejection policy says
+ * the level can no longer succeed.
  *
  * There is no sending it back a level for rework: the request becomes history
  * and resubmitting starts a fresh one at level one, against a fresh snapshot of
@@ -54,7 +56,11 @@ final class RejectRequest
                 metadata: $decision->metadata,
             );
 
-            ($this->failRequest)($request, $context->stage, $decision->actor, $comment);
+            $progress = StageProgress::for($context->stage);
+
+            if ($progress->isRejected()) {
+                ($this->failRequest)($request, $context->stage, $decision->actor, $comment);
+            }
 
             return $request;
         });

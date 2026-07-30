@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Support;
 
-use ByRcsc\LaravelApproval\Events\ApprovalCompleted;
+use ByRcsc\LaravelApproval\Events\ApprovalApproved;
 use ByRcsc\LaravelApproval\Events\ApprovalRejected;
 use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
+use ByRcsc\LaravelApproval\Events\DraftConflicted;
 use ByRcsc\LaravelApproval\Events\LevelCompleted;
 use ByRcsc\LaravelApproval\Events\StepOverdue;
 use ByRcsc\LaravelApproval\Exceptions\InvalidConfigurationException;
 use ByRcsc\LaravelApproval\Notifications\ApprovalApprovedNotification;
+use ByRcsc\LaravelApproval\Notifications\ApprovalConflictNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalOverdueNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalRejectedNotification;
@@ -39,7 +41,8 @@ final class NotificationMap
     private const DEFAULTS = [
         ApprovalSubmitted::class => ApprovalRequestedNotification::class,
         LevelCompleted::class => ApprovalRequestedNotification::class,
-        ApprovalCompleted::class => ApprovalApprovedNotification::class,
+        ApprovalApproved::class => ApprovalApprovedNotification::class,
+        DraftConflicted::class => ApprovalConflictNotification::class,
         ApprovalRejected::class => ApprovalRejectedNotification::class,
         StepOverdue::class => ApprovalOverdueNotification::class,
     ];

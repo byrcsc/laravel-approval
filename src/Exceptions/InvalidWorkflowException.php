@@ -34,15 +34,32 @@ final class InvalidWorkflowException extends ApprovalException
 
     public static function quorumUnreachable(string $slug, int $sequence, int $required, int $available): self
     {
+        return self::approvalRuleUnreachable($slug, $sequence, $required, $available);
+    }
+
+    public static function approvalRuleUnreachable(string $slug, int $sequence, int $required, int $available): self
+    {
         return new self(
-            "Level {$sequence} of the approval workflow [{$slug}] requires {$required} approvals but has only {$available} approvers."
+            "Stage {$sequence} of the approval workflow [{$slug}] has an invalid approval rule: the approval rule requires {$required} approvals but only {$available} assignments were resolved."
         );
     }
 
     public static function quorumNotPositive(string $slug, int $sequence, int $required): self
     {
+        return self::approvalRuleNotPositive($slug, $sequence, $required);
+    }
+
+    public static function approvalRuleNotPositive(string $slug, int $sequence, int $required): self
+    {
         return new self(
-            "Level {$sequence} of the approval workflow [{$slug}] requires {$required} approvals. Leave the column null to mean all of them."
+            "Stage {$sequence} of the approval workflow [{$slug}] has an invalid approval rule: minimum approvals must be positive, or omitted to require every assignment."
+        );
+    }
+
+    public static function unknownRejectionPolicy(string $slug, int $sequence, string $policy): self
+    {
+        return new self(
+            "Stage {$sequence} of the approval workflow [{$slug}] has an invalid rejection policy [{$policy}]."
         );
     }
 

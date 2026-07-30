@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Events;
 
 /**
- * Every level is carried. Fired before the draft is applied, so a listener sees
- * the record as it still is - {@see DraftApplied} is the one that fires after.
+ * Approval routing completed because every applicable stage was satisfied.
+ * This does not mean a draft was applied or the request reached its final
+ * approved state; {@see ApprovalApproved} represents that later fact.
  */
 final class ApprovalCompleted extends ApprovalEvent {}

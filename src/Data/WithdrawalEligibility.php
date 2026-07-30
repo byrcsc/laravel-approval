@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Data;
 
-use ByRcsc\LaravelApproval\Enums\CancellationIneligibility;
+use ByRcsc\LaravelApproval\Enums\WithdrawalIneligibility;
 
-final readonly class CancellationEligibility
+final readonly class WithdrawalEligibility
 {
     private function __construct(
         public bool $eligible,
-        public ?CancellationIneligibility $reason,
+        public ?WithdrawalIneligibility $reason,
     ) {}
 
     public static function granted(): self
@@ -18,7 +18,7 @@ final readonly class CancellationEligibility
         return new self(true, null);
     }
 
-    public static function denied(CancellationIneligibility $reason): self
+    public static function denied(WithdrawalIneligibility $reason): self
     {
         return new self(false, $reason);
     }

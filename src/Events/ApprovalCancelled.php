@@ -8,14 +8,13 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Withdrawn rather than decided. `$actor` is null when the system closed it -
- * an escalation strategy, or a cleanup command.
+ * An administrator cancelled the request after host authorization.
  */
 final class ApprovalCancelled extends ApprovalEvent
 {
     public function __construct(
         ApprovalRequest $request,
-        public readonly ?Model $actor = null,
+        public readonly Model $actor,
         public readonly ?string $comment = null,
     ) {
         parent::__construct($request);
