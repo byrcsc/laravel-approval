@@ -11,6 +11,7 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -78,7 +79,7 @@ abstract class ApprovalNotification extends Notification
         $approvable = $this->approvable();
 
         if ($approvable === null) {
-            return 'a deleted record';
+            return self::line('approval::approval.deleted_record');
         }
 
         foreach (['name', 'title', 'reference', 'label'] as $attribute) {
@@ -92,6 +93,35 @@ abstract class ApprovalNotification extends Notification
         $key = $approvable->getKey();
 
         return class_basename($approvable).' #'.(is_scalar($key) ? (string) $key : '?');
+    }
+
+    /**
+     * @param  array<string, mixed>  $with
+     */
+    protected function mailFor(string $key, array $with = []): MailMessage
+    {
+        $subject = $this->subject();
+
+        return (new MailMessage)
+            ->subject(self::line("approval::approval.{$key}.subject", ['subject' => $subject]))
+            ->markdown("approval::mail.{$key}", [
+                'subject' => $subject,
+                'reference' => $this->requestUlid(),
+                'request' => $this->request(),
+                'approvable' => $this->approvable(),
+                'notification' => $this,
+                ...$with,
+            ]);
+    }
+
+    /**
+     * @param  array<string, string>  $replace
+     */
+    protected static function line(string $key, array $replace = []): string
+    {
+        $line = trans($key, $replace);
+
+        return is_string($line) ? $line : $key;
     }
 
     /**

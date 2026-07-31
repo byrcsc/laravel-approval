@@ -6,6 +6,7 @@ use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Exceptions\InvalidConfigurationException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
+use Illuminate\Support\ServiceProvider;
 
 it('resolves the manager as a singleton behind the facade', function () {
     expect(app(ApprovalManager::class))->toBeInstanceOf(ApprovalManager::class)
@@ -72,4 +73,21 @@ it('refuses an unknown per-model approval mode at boot', function () {
 
     expect(fn () => $this->refreshApplication())
         ->toThrow(InvalidConfigurationException::class, 'Expected one of: explicit, guard');
+});
+
+it('documents every publish tag it registers', function () {
+    $readme = (string) file_get_contents(dirname(__DIR__).'/README.md');
+
+    $tags = array_filter(
+        array_keys(ServiceProvider::$publishGroups),
+        fn (string $tag): bool => str_starts_with($tag, 'approval-'),
+    );
+
+    expect($tags)->not->toBeEmpty();
+
+    foreach ($tags as $tag) {
+        expect($readme)->toContain("--tag=\"{$tag}\"");
+    }
+
+    expect($readme)->not->toContain('--tag="laravel-approval-');
 });

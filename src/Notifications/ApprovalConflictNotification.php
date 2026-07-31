@@ -24,11 +24,7 @@ final class ApprovalConflictNotification extends ApprovalNotification
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject('Approval conflict: '.$this->subject())
-            ->line($this->subject().' could not be updated because the record changed while approval was pending.')
-            ->line('The approval request remains unresolved.')
-            ->line('Reference: '.$this->requestUlid().'.');
+        return $this->mailFor('conflicted');
     }
 
     /**

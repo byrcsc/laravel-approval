@@ -23,6 +23,8 @@ function shippedFiles(): array
         ...(glob($root.'/src/*/*/*.php') ?: []),
         ...(glob($root.'/config/*.php') ?: []),
         ...(glob($root.'/database/migrations/*.stub') ?: []),
+        ...(glob($root.'/resources/lang/*/*.php') ?: []),
+        ...(glob($root.'/resources/views/*/*.blade.php') ?: []),
         $root.'/README.md',
     ];
 

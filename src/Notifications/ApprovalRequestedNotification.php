@@ -28,10 +28,7 @@ final class ApprovalRequestedNotification extends ApprovalNotification
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject('Approval needed: '.$this->subject())
-            ->line('You have been asked to approve '.$this->subject().'.')
-            ->line('Reference: '.$this->requestUlid().'.');
+        return $this->mailFor('requested');
     }
 
     /**

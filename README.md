@@ -30,7 +30,7 @@ Install the package and publish its migration:
 
 ```bash
 composer require byrcsc/laravel-approval
-php artisan vendor:publish --tag="laravel-approval-migrations"
+php artisan vendor:publish --tag="approval-migrations"
 php artisan migrate
 ```
 
@@ -38,12 +38,20 @@ Publish the configuration before the migration when you need custom table names
 or non-integer user identities:
 
 ```bash
-php artisan vendor:publish --tag="laravel-approval-config"
+php artisan vendor:publish --tag="approval-config"
 ```
 
 Set `APPROVAL_USER_KEY_TYPE` to `uuid`, `ulid`, or `string` as needed. The
 approvable model key is independent; adjust `approvable_id` in the published
 migration when those models do not use integer keys.
+
+Notification wording and its mail views publish separately, and only when you
+want to change them:
+
+```bash
+php artisan vendor:publish --tag="approval-translations"
+php artisan vendor:publish --tag="approval-views"
+```
 
 ## What the package approves
 
@@ -362,6 +370,74 @@ The console equivalents are `approval:status`, `approval:sync`,
 `approval:doctor`. `approval:resync` takes `--operator` so the assignment change
 is attributed to a person rather than to shell history.
 
+### Notification content
+
+Notification delivery is off until you turn it on:
+
+```php
+'notifications' => ['enabled' => true, 'channels' => ['mail']],
+```
+
+There are three ways to change what those messages say, and the cheapest one
+that fits is the right one.
+
+**Reword or translate them.** Every user-facing string lives in one file:
+
+```bash
+php artisan vendor:publish --tag="approval-translations"
+```
+
+That writes `lang/vendor/approval/en/approval.php`. Edit it in place, or copy
+the directory to `es`, `fr`, and so on — messages follow the application locale
+at send time, so a request routed to a French-speaking approver reads in French
+without any work here. Placeholders may sit anywhere in a line:
+
+```php
+'requested' => [
+    'subject' => 'Approbation requise : :subject',
+    'body' => 'Il vous est demandé d\'approuver :subject.',
+],
+```
+
+`:subject` is the record's readable name, taken from its `name`, `title`,
+`reference`, or `label` attribute, and falling back to its class and key.
+
+**Restructure the emails.** To add a button linking into your own UI, change the
+layout, or drop a line entirely:
+
+```bash
+php artisan vendor:publish --tag="approval-views"
+```
+
+That writes `resources/views/vendor/approval/mail/*.blade.php`, one per message.
+Each is a normal markdown mail view that reads the translations, so publishing
+views does not freeze the wording:
+
+```blade
+<x-mail::message>
+{{ __('approval::approval.requested.body', ['subject' => $subject]) }}
+
+<x-mail::button :url="route('approvals.show', $request)">
+{{ __('Review it') }}
+</x-mail::button>
+</x-mail::message>
+```
+
+Each view receives `$subject`, `$reference`, `$request`, `$approvable` (null
+once the record is deleted), and `$notification`; the rejected and returned
+views also receive `$reason`.
+
+**Replace the message and its recipients.** When the audience is wrong, not just
+the words, point the event at your own class in `approval.notifications.map`:
+
+```php
+Events\ApprovalSubmitted::class => App\Notifications\ApprovalRequest::class,
+```
+
+Extend `ApprovalNotification`, implement `recipients()`, and use `mailFor()` to
+keep the publishable content path. Setting an entry to `null` silences that
+event instead.
+
 ### Testing
 
 `Approval::fake()` records every public mutation instead of performing it, and
@@ -404,8 +480,9 @@ Nothing is written to the approval tables while the fake is active.
   writes touching attributes held in a pending draft.
 - SLA deadlines, reminders, configurable escalation strategies, stranded-stage
   detection, and operational status commands.
-- Notifications, lifecycle events, inbox and progress queries, model scopes,
-  timelines, factories, and an `Approval::fake()` test helper.
+- Notifications with publishable, locale-aware wording and mail views;
+  lifecycle events, inbox and progress queries, model scopes, timelines,
+  factories, and an `Approval::fake()` test helper.
 - An append-only, hash-chained action history with attachment evidence and
   verification through `approval:verify`.
 

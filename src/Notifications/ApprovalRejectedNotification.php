@@ -27,15 +27,7 @@ final class ApprovalRejectedNotification extends ApprovalNotification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $message = (new MailMessage)
-            ->subject('Rejected: '.$this->subject())
-            ->line($this->subject().' was not approved.');
-
-        if ($this->reason() !== null) {
-            $message->line('Reason: '.$this->reason());
-        }
-
-        return $message->line('Reference: '.$this->requestUlid().'.');
+        return $this->mailFor('rejected', ['reason' => $this->reason()]);
     }
 
     /**
