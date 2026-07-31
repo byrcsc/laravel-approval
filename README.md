@@ -30,7 +30,7 @@ Install the package and publish its migration:
 
 ```bash
 composer require byrcsc/laravel-approval
-php artisan vendor:publish --tag="laravel-approval-migrations"
+php artisan vendor:publish --tag="approval-migrations"
 php artisan migrate
 ```
 
@@ -38,7 +38,7 @@ Publish the configuration before the migration when you need custom table names
 or non-integer user identities:
 
 ```bash
-php artisan vendor:publish --tag="laravel-approval-config"
+php artisan vendor:publish --tag="approval-config"
 ```
 
 Set `APPROVAL_USER_KEY_TYPE` to `uuid`, `ulid`, or `string` as needed. The
