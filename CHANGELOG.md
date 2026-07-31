@@ -53,6 +53,14 @@ pre-release testing and compatibility review.
   rejected, returned-for-revision, assigned, conflicted, and overdue events
   behind an opt-in event map, disabled by default and deferred until the
   transaction commits.
+- **Publishable notification content** — every user-facing string in
+  `resources/lang/en/approval.php` and every mail body in
+  `resources/views/mail`, published with `approval-translations` and
+  `approval-views`. Messages follow the application locale, placeholders carry
+  the record name rather than concatenation fixing the word order, and the
+  views read the translations, so republishing one half does not freeze the
+  other. `ApprovalNotification::mailFor()` gives a replacement notification the
+  same path.
 - **Append-only action history** — application-enforced append-only, per-request
   hash-chained actions that are tamper-evident within a documented trust
   boundary, actor labels, host-owned attachment references bound into the chain,
