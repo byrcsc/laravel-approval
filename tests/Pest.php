@@ -13,6 +13,7 @@ use ByRcsc\LaravelApproval\Tests\Stubs\Invoice;
 use ByRcsc\LaravelApproval\Tests\Stubs\InvoiceStatus;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
 use ByRcsc\LaravelApproval\Tests\Stubs\PurchaseOrder;
+use ByRcsc\LaravelApproval\Tests\Stubs\RequestedByWorkflowCondition;
 use ByRcsc\LaravelApproval\Tests\Stubs\ScriptedCondition;
 use ByRcsc\LaravelApproval\Tests\Stubs\User;
 use ByRcsc\LaravelApproval\Tests\Stubs\WitnessResolver;
@@ -31,6 +32,7 @@ uses()->beforeEach(function (): void {
     PurchaseOrder::$actingRequester = null;
     PurchaseOrder::$workflowSlug = 'purchase-order';
     ScriptedCondition::reset();
+    RequestedByWorkflowCondition::$sawRequester = null;
     WitnessResolver::$sawAmount = null;
     WitnessResolver::$approvers = [];
 })->in(__DIR__);

@@ -87,6 +87,26 @@ final class Attributes
     }
 
     /**
+     * The record as the draft proposes it, which is what a condition judges.
+     *
+     * A copy: the real model must not carry held values, and neither must the
+     * instance an approver resolver receives.
+     *
+     * @param  array<string, mixed>|null  $newAttributes
+     */
+    public static function proposed(Model $model, ?array $newAttributes): Model
+    {
+        if ($newAttributes === null || $newAttributes === []) {
+            return $model;
+        }
+
+        $proposed = clone $model;
+        $proposed->forceFill($newAttributes);
+
+        return $proposed;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private static function wrap(Model $model, string $key): array

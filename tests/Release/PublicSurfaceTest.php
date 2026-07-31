@@ -57,6 +57,8 @@ it('pins the facade and manager command and query surface', function (): void {
         'withoutGuard',
         'workflow',
         'workflowFor',
+        'workflows',
+        'workflowsFor',
     ]);
 });
 

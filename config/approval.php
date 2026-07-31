@@ -69,16 +69,20 @@ return [
     | Default workflow per model
     |--------------------------------------------------------------------------
     |
-    | The last place `submitForApproval()` looks. It checks its own argument
-    | first, then the model's `approvalWorkflow()` method, then this map. Use it
-    | for models you do not own, or to keep the mapping in one file.
+    | Where `submitForApproval()` looks third. It checks its own argument first,
+    | then the model's `approvalWorkflow()` method, then this map, and finally
+    | the workflows whose `approvable_type` names the model. Use it for models
+    | you do not own, or to keep the mapping in one file.
     |
-    | Keyed by model class, valued by workflow slug.
+    | Keyed by model class. One slug names one workflow; a list of slugs is a
+    | preference order, and the first whose condition applies is the one that
+    | runs.
     |
     */
 
     'workflows' => [
         // App\Models\PurchaseOrder::class => 'purchase-order',
+        // App\Models\Invoice::class => ['invoice-executive', 'invoice-standard'],
     ],
 
     /*

@@ -40,7 +40,8 @@ it('gives every model a table that exists', function (string $model) {
 
 it('describes a workflow and its stages', function () {
     expect(Schema::hasColumns('approval_workflows', [
-        'id', 'name', 'slug', 'description', 'active', 'settings',
+        'id', 'name', 'slug', 'description', 'active',
+        'approvable_type', 'condition', 'condition_config', 'priority', 'settings',
         'created_at', 'updated_at', 'deleted_at',
     ]))->toBeTrue();
 

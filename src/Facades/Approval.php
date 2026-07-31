@@ -21,6 +21,7 @@ use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Facade;
 
 /**
@@ -34,7 +35,9 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalFake fake()
  * @method static ApprovalWorkflow|null findWorkflow(string $slug)
  * @method static ApprovalWorkflow workflow(string $slug)
- * @method static ApprovalWorkflow workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null)
+ * @method static Builder<ApprovalWorkflow> workflows()
+ * @method static Collection<int, ApprovalWorkflow> workflowsFor(Model $approvable, Model|null $requester = null, array<string, mixed>|null $newAttributes = null)
+ * @method static ApprovalWorkflow workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null, Model|null $requester = null, array<string, mixed>|null $newAttributes = null)
  * @method static ApprovalRequest submit(Model $approvable, ApprovalWorkflow|string|null $workflow = null, array<string, mixed>|null $newAttributes = null, Model|null $requester = null, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static Eligibility eligibility(ApprovalRequest $request, Model $actor)
  * @method static bool canApprove(ApprovalRequest $request, Model $actor)

@@ -6,6 +6,7 @@ namespace ByRcsc\LaravelApproval\Exceptions;
 
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
 use ByRcsc\LaravelApproval\Contracts\StageCondition;
+use ByRcsc\LaravelApproval\Contracts\WorkflowCondition;
 
 /**
  * A workflow that cannot produce a decision. Every one of these is raised at
@@ -135,6 +136,23 @@ final class InvalidWorkflowException extends ApprovalException
             $slug,
             $condition,
             StageCondition::class,
+        ));
+    }
+
+    public static function unknownWorkflowCondition(string $slug, string $condition): self
+    {
+        return new self(
+            "The approval workflow [{$slug}] names the condition [{$condition}], which does not exist."
+        );
+    }
+
+    public static function notAWorkflowCondition(string $slug, string $condition): self
+    {
+        return new self(sprintf(
+            'The approval workflow [%s] names the condition [%s], which does not implement %s.',
+            $slug,
+            $condition,
+            WorkflowCondition::class,
         ));
     }
 }
