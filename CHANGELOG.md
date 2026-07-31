@@ -41,6 +41,12 @@ pre-release testing and compatibility review.
   events.
 - **Conditional stages** — container-resolved `StageCondition` classes,
   evaluated once at submission and snapshotted as visible skipped stages.
+- **Several workflows per model** — an `approvable_type` column registers a
+  workflow against a model type, container-resolved `WorkflowCondition` classes
+  decide which of them applies to the submission in hand, and `priority` orders
+  what is left. Equally specific candidates are refused rather than resolved
+  arbitrarily. `Approval::workflows()` and `Approval::workflowsFor()` are the
+  listing queries behind a workflow picker.
 - **Delegation and recovery** — delegate or reassign an assignment,
   deliberately resync a live request, preserve living assignment coverage
   during ownership changes, and close orphaned work when its approvable is
