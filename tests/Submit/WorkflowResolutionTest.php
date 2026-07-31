@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ByRcsc\LaravelApproval\Exceptions\MissingSubmitterException;
+use ByRcsc\LaravelApproval\Exceptions\MissingRequesterException;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
@@ -68,26 +68,26 @@ it('reports a declared slug that does not exist', function (): void {
         ->toThrow(WorkflowNotFoundException::class, '[never-created]');
 });
 
-it('takes the submitter the model names', function (): void {
+it('takes the requester the model names', function (): void {
     $buyer = user('Buyer');
-    PurchaseOrder::$actingSubmitter = $buyer;
+    PurchaseOrder::$actingRequester = $buyer;
 
     workflow([['approvers' => [user()]]], ['slug' => 'purchase-order']);
 
     $request = purchaseOrder()->submitForApproval();
 
-    expect($request->submitter?->getKey())->toBe($buyer->getKey());
+    expect($request->requester?->getKey())->toBe($buyer->getKey());
 });
 
-it('takes the submitter passed to the call over the one the model names', function (): void {
-    PurchaseOrder::$actingSubmitter = user('Declared');
+it('takes the requester passed to the call over the one the model names', function (): void {
+    PurchaseOrder::$actingRequester = user('Declared');
     $explicit = user('Explicit');
 
     workflow([['approvers' => [user()]]], ['slug' => 'purchase-order']);
 
     $request = purchaseOrder()->submitForApproval(null, null, $explicit);
 
-    expect($request->submitter?->getKey())->toBe($explicit->getKey());
+    expect($request->requester?->getKey())->toBe($explicit->getKey());
 });
 
 it('falls back to the authenticated user', function (): void {
@@ -96,12 +96,12 @@ it('falls back to the authenticated user', function (): void {
 
     $workflow = workflow([['approvers' => [user()]]]);
 
-    expect(post()->submitForApproval($workflow)->submitter?->getKey())->toBe($actor->getKey());
+    expect(post()->submitForApproval($workflow)->requester?->getKey())->toBe($actor->getKey());
 });
 
-it('refuses to guess a submitter when nobody is signed in', function (): void {
+it('refuses to guess a requester when nobody is signed in', function (): void {
     $workflow = workflow([['approvers' => [user()]]]);
 
     expect(fn () => post()->submitForApproval($workflow))
-        ->toThrow(MissingSubmitterException::class, 'No submitter could be determined');
+        ->toThrow(MissingRequesterException::class, 'No requester could be determined');
 });

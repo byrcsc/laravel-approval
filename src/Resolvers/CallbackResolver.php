@@ -33,7 +33,7 @@ final class CallbackResolver implements ApproverResolver
      * @param  array<string, mixed>  $config
      * @return iterable<int, Model>
      */
-    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
+    public function resolve(StageSnapshot $stage, Model $approvable, Model $requester, array $config): iterable
     {
         $callback = Payload::nullableString($config, 'callback');
 
@@ -56,7 +56,7 @@ final class CallbackResolver implements ApproverResolver
         }
 
         /** @var mixed $approvers */
-        $approvers = $instance->{$method}($stage, $approvable, $submitter, $config);
+        $approvers = $instance->{$method}($stage, $approvable, $requester, $config);
 
         return is_iterable($approvers) ? $this->onlyModels($approvers) : [];
     }

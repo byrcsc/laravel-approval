@@ -15,11 +15,17 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use LogicException;
 
 /**
- * One line of the audit trail, append-only and enforced as such.
+ * One entry in the append-only action history.
  *
- * Rewriting one is a bug in the calling code rather than a condition to handle,
- * hence `LogicException` rather than one of this package's own exceptions.
- * Corrections work the way they do on paper: by appending another action.
+ * Append-only is enforced by this model, which is an application-level
+ * guarantee: it blocks updates and deletes made through Eloquent. A direct
+ * query-builder or SQL write bypasses it, and detecting that is the job of the
+ * hash chain and `approval:verify`. Corrections are made by appending another
+ * action rather than editing one.
+ *
+ * Attempting to rewrite an entry is a bug in the calling code rather than a
+ * runtime condition to handle, hence `LogicException` rather than one of this
+ * package's own exceptions.
  */
 final class ApprovalAction extends Model
 {
@@ -45,13 +51,13 @@ final class ApprovalAction extends Model
     {
         self::updating(function (self $action): void {
             throw new LogicException(
-                "Approval actions are an immutable audit trail and cannot be updated. Append a new action instead. [{$action->describe()}]"
+                "Approval actions are an append-only history and cannot be updated. Append a new action instead. [{$action->describe()}]"
             );
         });
 
         self::deleting(function (self $action): void {
             throw new LogicException(
-                "Approval actions are an immutable audit trail and cannot be deleted. [{$action->describe()}]"
+                "Approval actions are an append-only history and cannot be deleted. [{$action->describe()}]"
             );
         });
     }

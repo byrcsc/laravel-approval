@@ -35,7 +35,7 @@ it('opens a pending request at the first stage', function (): void {
         ->and($request->completed_at)->toBeNull()
         ->and($request->approvable)->toBeInstanceOf(Post::class)
         ->and($request->approvable?->getKey())->toBe($post->getKey())
-        ->and($request->submitter?->getKey())->toBe($author->getKey())
+        ->and($request->requester?->getKey())->toBe($author->getKey())
         ->and($request->workflow?->getKey())->toBe($workflow->getKey());
 });
 

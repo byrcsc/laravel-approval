@@ -112,7 +112,7 @@ return new class extends Migration
             $table->json('new_attributes')->nullable();
             $table->json('original_attributes')->nullable();
 
-            $this->identityMorphs($table, 'submitter');
+            $this->identityMorphs($table, 'requester');
 
             // Set on the replacement when a rejected request is resubmitted;
             // the only link between the two. Indexed explicitly: MySQL indexes
@@ -130,7 +130,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            // "Is there an open request for this record?"
+            // Supports the unresolved-request lookup for one record.
             $table->index(['approvable_type', 'approvable_id', 'state']);
         });
 
@@ -152,8 +152,8 @@ return new class extends Migration
             $table->json('condition_config')->nullable();
             $table->boolean('condition_result')->default(true);
 
-            // Computed when the stage becomes active: the clock only starts
-            // once the stage is somebody's turn.
+            // Computed when the stage becomes active: the deadline runs from
+            // the moment the stage starts waiting on its approvers.
             $table->timestamp('deadline_at')->nullable();
 
             // Checked before escalating, so a command on a one-minute schedule
@@ -203,7 +203,7 @@ return new class extends Migration
             // Postgres does not.
             $table->foreignId('stage_id')->nullable()->index()->constrained($tables['request_stages'])->nullOnDelete();
 
-            // Null for what the system did on nobody's behalf.
+            // Null for automated actions, which have no actor.
             $this->identityMorphs($table, 'actor', true);
 
             // Who the actor was, in words, captured when the line is written

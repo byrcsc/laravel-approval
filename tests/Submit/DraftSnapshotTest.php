@@ -119,5 +119,5 @@ it('reads a null draft for a record gated as a whole', function (): void {
 });
 
 afterEach(function (): void {
-    PurchaseOrder::$actingSubmitter = null;
+    PurchaseOrder::$actingRequester = null;
 });

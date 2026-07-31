@@ -34,7 +34,7 @@ use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
-use ByRcsc\LaravelApproval\Exceptions\MissingSubmitterException;
+use ByRcsc\LaravelApproval\Exceptions\MissingRequesterException;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
@@ -48,13 +48,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * The front door behind the `Approval` facade: finding workflows, finding
- * requests, and working out who or what the caller left implicit.
+ * The implementation behind the `Approval` facade, which is the package's
+ * primary command and query surface.
  *
- * It holds no behavior of its own. Anything that changes a request's state
- * lives in an action, and this hands off to one - the moment this class starts
- * deciding things is the moment it starts becoming the god service the design
- * set out to avoid.
+ * Everything that changes a request's state lives in an action; this class
+ * resolves workflows, requests, and implicit actors, then delegates. Methods
+ * are grouped as routine approval work first, then the administrative and
+ * operational entry points documented as such on each method.
  */
 class ApprovalManager
 {
@@ -75,22 +75,15 @@ class ApprovalManager
         return ApprovalWorkflow::query()->where('slug', $slug)->first();
     }
 
-    /**
-     * @param  iterable<int|string, mixed>  $definitions
-     */
-    public function syncDefinitions(iterable $definitions, bool $dryRun = false): WorkflowSyncResult
-    {
-        return $this->container->make(SyncWorkflowDefinitions::class)($definitions, $dryRun);
-    }
-
     public function workflow(string $slug): ApprovalWorkflow
     {
         return $this->findWorkflow($slug) ?? throw WorkflowNotFoundException::forSlug($slug);
     }
 
     /**
-     * Three places a workflow can come from, in order of how specific they are:
-     * the call, the model, and the config map. The first that answers wins.
+     * Resolves a workflow from three sources, most specific first: the argument,
+     * the model's `approvalWorkflow()`, then the `approval.workflows` config
+     * map. The first source that answers is used.
      */
     public function workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null): ApprovalWorkflow
     {
@@ -109,7 +102,7 @@ class ApprovalManager
         Model $approvable,
         ApprovalWorkflow|string|null $workflow = null,
         ?array $newAttributes = null,
-        ?Model $submitter = null,
+        ?Model $requester = null,
         ?string $comment = null,
         array $metadata = [],
     ): ApprovalRequest {
@@ -120,7 +113,7 @@ class ApprovalManager
             $approvable,
             $this->workflowFor($approvable, $workflow),
             $newAttributes,
-            $submitter ?? $this->submitterFor($approvable),
+            $requester ?? $this->requesterFor($approvable),
             $comment,
             $metadata,
         );
@@ -129,9 +122,9 @@ class ApprovalManager
     /**
      * Whether this actor may decide this request, and if not, why not.
      *
-     * The same check a decision makes, minus the throwing. Ask this to render a
-     * button, name a reason next to a disabled one, or show where the stage
-     * stands - the answer carries the stage and progress it already loaded.
+     * Runs the same check a decision runs, without throwing. The result carries
+     * the current stage and its progress, so a view can render a control, a
+     * reason for a disabled control, and the stage state from one call.
      */
     public function eligibility(ApprovalRequest $request, Model $actor): Eligibility
     {
@@ -139,7 +132,8 @@ class ApprovalManager
     }
 
     /**
-     * The boolean, for callers that do not need the reason.
+     * {@see self::eligibility()} without the reason, for callers that only need
+     * the boolean.
      */
     public function canApprove(ApprovalRequest $request, Model $actor): bool
     {
@@ -170,8 +164,11 @@ class ApprovalManager
     }
 
     /**
-     * The generic entry point: one decision, whichever way it went. A
-     * controller that renders one form for both buttons wants this.
+     * Advanced entry point: record whichever decision the caller has already
+     * built. Applications should prefer {@see self::approve()},
+     * {@see self::reject()}, and {@see self::returnForRevision()}; this exists
+     * for callers that dispatch a decision assembled elsewhere, such as a
+     * single controller action serving several buttons.
      */
     public function decide(ApprovalRequest $request, ApprovalDecision $decision): ApprovalRequest
     {
@@ -199,9 +196,13 @@ class ApprovalManager
     }
 
     /**
+     * Send the request back to its requester for revision. The requester may
+     * then revise the draft and resubmit through
+     * {@see self::reviseAndResubmit()}.
+     *
      * @param  array<string, mixed>  $metadata
      */
-    public function returnToSubmitter(ApprovalRequest $request, Model $actor, string $comment, array $metadata = []): ApprovalRequest
+    public function returnForRevision(ApprovalRequest $request, Model $actor, string $comment, array $metadata = []): ApprovalRequest
     {
         return $this->decide($request, ApprovalDecision::return($actor, $comment, $metadata));
     }
@@ -248,31 +249,8 @@ class ApprovalManager
     }
 
     /**
-     * @param  iterable<int, ApprovalRequest>  $requests
-     * @param  array<string, mixed>  $metadata
+     * Requester withdrawal. The actor must be the request's requester.
      */
-    public function bulkApprove(
-        iterable $requests,
-        Model $actor,
-        ?string $comment = null,
-        array $metadata = [],
-    ): BulkDecisionResult {
-        return $this->approveMany($requests, $actor, $comment, $metadata);
-    }
-
-    /**
-     * @param  iterable<int, ApprovalRequest>  $requests
-     * @param  array<string, mixed>  $metadata
-     */
-    public function bulkReject(
-        iterable $requests,
-        Model $actor,
-        string $comment,
-        array $metadata = [],
-    ): BulkDecisionResult {
-        return $this->rejectMany($requests, $actor, $comment, $metadata);
-    }
-
     public function withdraw(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
     {
         /** @var WithdrawRequest $withdraw */
@@ -282,49 +260,9 @@ class ApprovalManager
     }
 
     /**
-     * Administrative cancellation. The host application owns the policy that
-     * grants the `cancel` ability.
-     */
-    public function cancel(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
-    {
-        /** @var CancelRequest $cancel */
-        $cancel = $this->container->make(CancelRequest::class);
-
-        return $cancel($request, $actor, $comment);
-    }
-
-    /**
-     * Operational escape hatch, not routine approval flow: run an exceptional
-     * correction while guard mode holds a pending draft. The bypass is always
-     * appended to the open request's audit trail.
-     *
-     * @template TValue
-     *
-     * @param  callable(Model): TValue  $callback
-     * @return TValue
-     */
-    public function withoutGuard(
-        Model $approvable,
-        callable $callback,
-        ?Model $actor = null,
-        ?string $comment = null,
-    ): mixed {
-        $request = $this->pendingFor($approvable);
-
-        if ($request === null) {
-            return $callback($approvable);
-        }
-
-        /** @var BypassApprovalGuard $bypass */
-        $bypass = $this->container->make(BypassApprovalGuard::class);
-
-        return $bypass($approvable, $request, $callback, $actor, $comment);
-    }
-
-    /**
-     * Hand an approver's assignment to somebody else for the stage now waiting. The
-     * approver does this themselves; see {@see self::reassign()} for the case
-     * where they are not around to.
+     * Transfer an approver's own assignment on the waiting stage to somebody
+     * else. The approver performs this themselves; {@see self::reassign()} is
+     * the administrative equivalent for when they cannot.
      */
     public function delegate(
         ApprovalRequest $request,
@@ -336,56 +274,6 @@ class ApprovalManager
         $delegateApproval = $this->container->make(DelegateApproval::class);
 
         return $delegateApproval($request, $approver, $delegate, $comment);
-    }
-
-    /**
-     * Rewrite who an assignment belongs to. Works on any undecided stage, not only the
-     * active one.
-     */
-    public function reassign(
-        ApprovalRequest $request,
-        ApprovalRequestAssignment $assignment,
-        Model $to,
-        Model $actor,
-        ?string $comment = null,
-    ): ApprovalRequestAssignment {
-        /** @var ReassignApprover $reassign */
-        $reassign = $this->container->make(ReassignApprover::class);
-
-        return $reassign($request, $assignment, $to, $actor, $comment);
-    }
-
-    /**
-     * Rebuild a live request's approver assignments from the current workflow.
-     *
-     * An administrative recovery operation, not routine approval flow, and it
-     * is attributed to the operator who runs it.
-     *
-     * @return array<int, array{added: list<string>, removed: list<string>}>
-     */
-    public function resync(ApprovalRequest $request, Model $actor, bool $prune = false): array
-    {
-        /** @var ResyncRequestApprovers $resync */
-        $resync = $this->container->make(ResyncRequestApprovers::class);
-
-        return $resync($request, $actor, $prune);
-    }
-
-    /**
-     * Clear a conflicted request, one way or the other - an administrative
-     * conflict resolution, not routine approval flow. See
-     * {@see ConflictResolution} for what the two ways mean.
-     */
-    public function resolve(
-        ApprovalRequest $request,
-        ConflictResolution $resolution,
-        ?Model $actor = null,
-        ?string $comment = null,
-    ): ApprovalRequest {
-        /** @var ResolveConflict $resolve */
-        $resolve = $this->container->make(ResolveConflict::class);
-
-        return $resolve($request, $resolution, $actor, $comment);
     }
 
     /**
@@ -412,37 +300,6 @@ class ApprovalManager
         $attach = $this->container->make(AttachFile::class);
 
         return $attach($evidence);
-    }
-
-    /**
-     * Walk the audit trail's hash chains - an operational verification, not
-     * routine approval flow. The `approval:verify` command is the usual
-     * caller; this is here for hosts wiring it into their own monitoring.
-     *
-     * @return list<array{request: string, subject: string, problem: string}>
-     */
-    public function verifyTrail(?ApprovalRequest $only = null): array
-    {
-        /** @var VerifyAuditTrail $verify */
-        $verify = $this->container->make(VerifyAuditTrail::class);
-
-        return $verify($only);
-    }
-
-    /**
-     * Apply each overdue stage's escalation policy - scheduled overdue
-     * processing, not routine approval flow. The `approval:escalate` command
-     * is the usual caller; this is here for hosts who would rather drive it
-     * from their own job.
-     *
-     * @return array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>}
-     */
-    public function escalateOverdue(): array
-    {
-        /** @var EscalateOverdueStages $escalate */
-        $escalate = $this->container->make(EscalateOverdueStages::class);
-
-        return $escalate();
     }
 
     /**
@@ -483,22 +340,157 @@ class ApprovalManager
     }
 
     /**
-     * As with the workflow: the call, then the model, then the ambient
-     * authenticated user - which is absent in a queue worker, and that is the
-     * case worth failing loudly on.
+     * Resolves the requester the same way as the workflow: the argument, then
+     * the model's `approvalRequester()`, then the authenticated user. Throws
+     * when none of the three answers, because an unattributed request cannot be
+     * withdrawn by its requester or audited.
      */
-    public function submitterFor(Model $approvable): Model
+    public function requesterFor(Model $approvable): Model
     {
-        if (method_exists($approvable, 'approvalSubmitter')) {
+        if (method_exists($approvable, 'approvalRequester')) {
             /** @var mixed $declared */
-            $declared = $approvable->approvalSubmitter();
+            $declared = $approvable->approvalRequester();
 
             if ($declared instanceof Model) {
                 return $declared;
             }
         }
 
-        return $this->authenticated() ?? throw MissingSubmitterException::forApprovable($approvable);
+        return $this->authenticated() ?? throw MissingRequesterException::forApprovable($approvable);
+    }
+
+    // Administrative and operational operations. Each is labelled as such in its
+    // own docblock, which is what identifies it; this comment only marks where
+    // the group starts for a reader scanning the class.
+
+    /**
+     * Administrative cancellation. Requires an attributable actor; the host
+     * application owns the policy that grants the `cancel` ability.
+     */
+    public function cancel(ApprovalRequest $request, Model $actor, ?string $comment = null): ApprovalRequest
+    {
+        /** @var CancelRequest $cancel */
+        $cancel = $this->container->make(CancelRequest::class);
+
+        return $cancel($request, $actor, $comment);
+    }
+
+    /**
+     * Administrative reassignment: rewrite which approver an assignment belongs
+     * to. Works on any undecided stage, not only the active one.
+     */
+    public function reassign(
+        ApprovalRequest $request,
+        ApprovalRequestAssignment $assignment,
+        Model $to,
+        Model $actor,
+        ?string $comment = null,
+    ): ApprovalRequestAssignment {
+        /** @var ReassignApprover $reassign */
+        $reassign = $this->container->make(ReassignApprover::class);
+
+        return $reassign($request, $assignment, $to, $actor, $comment);
+    }
+
+    /**
+     * Administrative recovery: rebuild a live request's approver assignments
+     * from the current workflow. Attributed to the operator who runs it.
+     *
+     * @return array<int, array{added: list<string>, removed: list<string>}>
+     */
+    public function resync(ApprovalRequest $request, Model $actor, bool $prune = false): array
+    {
+        /** @var ResyncRequestApprovers $resync */
+        $resync = $this->container->make(ResyncRequestApprovers::class);
+
+        return $resync($request, $actor, $prune);
+    }
+
+    /**
+     * Administrative conflict resolution: clear a conflicted request by
+     * reapplying or discarding its draft. See {@see ConflictResolution} for
+     * what each resolution does.
+     */
+    public function resolve(
+        ApprovalRequest $request,
+        ConflictResolution $resolution,
+        ?Model $actor = null,
+        ?string $comment = null,
+    ): ApprovalRequest {
+        /** @var ResolveConflict $resolve */
+        $resolve = $this->container->make(ResolveConflict::class);
+
+        return $resolve($request, $resolution, $actor, $comment);
+    }
+
+    /**
+     * Operational escape hatch: run a correction on the approvable model while
+     * guard mode holds a pending draft. The bypass is appended to the open
+     * request's audit trail.
+     *
+     * @template TValue
+     *
+     * @param  callable(Model): TValue  $callback
+     * @return TValue
+     */
+    public function withoutGuard(
+        Model $approvable,
+        callable $callback,
+        ?Model $actor = null,
+        ?string $comment = null,
+    ): mixed {
+        $request = $this->pendingFor($approvable);
+
+        if ($request === null) {
+            return $callback($approvable);
+        }
+
+        /** @var BypassApprovalGuard $bypass */
+        $bypass = $this->container->make(BypassApprovalGuard::class);
+
+        return $bypass($approvable, $request, $callback, $actor, $comment);
+    }
+
+    /**
+     * Administrative workflow-definition management: create, update, or preview
+     * persisted workflows from definitions. Usually driven by `approval:sync`.
+     *
+     * @param  iterable<int|string, mixed>  $definitions
+     */
+    public function syncDefinitions(iterable $definitions, bool $dryRun = false): WorkflowSyncResult
+    {
+        return $this->container->make(SyncWorkflowDefinitions::class)($definitions, $dryRun);
+    }
+
+    /**
+     * Operational verification: walk the audit trail's hash chains. Usually
+     * driven by `approval:verify`; exposed here for hosts wiring verification
+     * into their own monitoring. See {@see VerifyAuditTrail} for the exact
+     * coverage of a clean result.
+     *
+     * @return list<array{request: string, subject: string, problem: string}>
+     */
+    public function verifyTrail(?ApprovalRequest $only = null): array
+    {
+        /** @var VerifyAuditTrail $verify */
+        $verify = $this->container->make(VerifyAuditTrail::class);
+
+        return $verify($only);
+    }
+
+    /**
+     * Scheduled overdue processing: apply each overdue stage's escalation
+     * policy. Usually driven by `approval:escalate`; exposed here for hosts
+     * that drive it from their own job.
+     *
+     * @return array{escalated: list<string>, reminded: list<string>, stranded: list<string>, failed: array<string, string>}
+     */
+    public function escalateOverdue(): array
+    {
+        /** @var EscalateOverdueStages $escalate */
+        $escalate = $this->container->make(EscalateOverdueStages::class);
+
+        return $escalate();
     }
 
     private function authenticated(): ?Model
@@ -534,9 +526,9 @@ class ApprovalManager
     }
 
     /**
-     * The `approval.workflows` map, keyed by model class. Written against the
-     * class name rather than the morph alias: config is read by people, and a
-     * morph alias is a database detail.
+     * The `approval.workflows` map, keyed by model class. The class name is
+     * matched first and the morph alias second, so configuration can be written
+     * in either form.
      */
     private function mappedWorkflow(Model $approvable): ?string
     {

@@ -158,6 +158,19 @@ abstract class TestCase extends Orchestra
             $table->timestamps();
         });
 
+        // A container model and its membership, for the rule that the package
+        // never expands a container into its members.
+        Schema::create('teams', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('team_user', function (Blueprint $table) {
+            $table->unsignedBigInteger('team_id');
+            $table->unsignedBigInteger('user_id');
+        });
+
         Schema::create('posts', function (Blueprint $table) {
             $table->id();
             $table->string('title');

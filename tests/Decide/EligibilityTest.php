@@ -67,7 +67,7 @@ it('refuses a decision on a request that has closed', function (): void {
         ->toThrow(AlreadyDecidedException::class, 'was already approved and cannot be decided again');
 });
 
-it('refuses the submitter approving their own request', function (): void {
+it('refuses the requester approving their own request', function (): void {
     $author = user('Author');
     $workflow = workflow([['approvers' => [$author]]]);
     $request = post()->submitForApproval($workflow, null, $author);
@@ -115,7 +115,7 @@ it('lets a workflow forbid self-approval the config allows', function (): void {
     expect(fn () => Approval::approve($request, $author))->toThrow(SelfApprovalException::class);
 });
 
-it('lets the submitter approve a stage they are not the only assignment on', function (): void {
+it('lets the requester approve a stage they are not the only assignment on', function (): void {
     config()->set('approval.allow_self_approval', false);
 
     $author = user('Author');
@@ -124,7 +124,7 @@ it('lets the submitter approve a stage they are not the only assignment on', fun
     $workflow = workflow([['required_approvals' => 1, 'approvers' => [$author, $colleague]]]);
     $request = post()->submitForApproval($workflow, null, $author);
 
-    // The submitter still cannot decision, but the stage is not deadlocked.
+    // The requester still cannot decide, but the stage is not deadlocked.
     expect(fn () => Approval::approve($request, $author))->toThrow(SelfApprovalException::class);
 
     Approval::approve($request, $colleague);

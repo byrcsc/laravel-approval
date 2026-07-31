@@ -29,17 +29,16 @@ use ByRcsc\LaravelApproval\Notifications\ApprovalReturnedNotification;
 /**
  * Which event sends which notification.
  *
- * Notifications are off entirely by default. A package that starts mailing
- * people the moment it is installed is a package that gets uninstalled, and
- * every application already has opinions about who hears what.
+ * Notification delivery is opt-in: it is disabled by default so that installing
+ * the package cannot send external messages, and so that an application's own
+ * notification rules stay in charge.
  *
- * Turning them on gets the entries below. Setting any entry to null silences
- * that event; pointing it at your own class - anything extending
- * {@see ApprovalNotification} - changes both the message and its audience.
+ * Enabling it activates the entries below. Setting an entry to null silences
+ * that event; pointing it at a class extending {@see ApprovalNotification}
+ * replaces both the message and its recipients.
  *
- * Not every event is mapped. The rest exist to be listened to; not every
- * state change is worth an email, and the ones chosen here are the ones
- * somebody is actually waiting on.
+ * Not every event is mapped. The mapped ones are the state changes that leave
+ * someone waiting on an action; the rest are available to listen to.
  */
 final class NotificationMap
 {

@@ -16,5 +16,5 @@ interface StageCondition
     /**
      * @param  array<string, mixed>  $config
      */
-    public function passes(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): bool;
+    public function passes(StageSnapshot $stage, Model $approvable, Model $requester, array $config): bool;
 }

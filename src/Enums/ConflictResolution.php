@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Enums;
 
 /**
- * The two ways out of a conflicted request: apply the draft over whatever the
- * record now holds, or throw the draft away.
+ * The two resolutions available for a conflicted request: apply the draft over
+ * the record's current values, or discard the draft.
  *
- * There is no third option that merges them. Deciding which of two changes to
- * a purchase order is the right one needs a person who understands purchase
- * orders, and this package is not that person - it just holds the request open
- * until somebody says.
+ * There is no merge resolution. Choosing between two competing changes depends on
+ * application-specific meaning the package does not have, so a conflicted
+ * request stays open until an administrator chooses one of these two.
  */
 enum ConflictResolution: string
 {

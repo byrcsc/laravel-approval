@@ -9,6 +9,17 @@ use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowDefinitionException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
+/**
+ * One approver rule on a stage definition: either a concrete approver or a
+ * resolver that produces them.
+ *
+ * A concrete approver is an exact actor identity - the persisted model named
+ * here is the only identity that may decide. Container models such as a Team,
+ * Role, or Position are never expanded into their members; assigning one assigns
+ * the container itself. To assign the members, use an approver resolver, which
+ * must return persisted actor models. Both forms are validated here, so an
+ * unreachable approver fails at definition time rather than at submission.
+ */
 final readonly class ApproverDefinition
 {
     /**

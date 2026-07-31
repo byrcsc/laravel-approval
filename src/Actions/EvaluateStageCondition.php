@@ -17,7 +17,7 @@ final class EvaluateStageCondition
     public function __invoke(
         StageSnapshot $snapshot,
         Model $approvable,
-        Model $submitter,
+        Model $requester,
         string $slug,
     ): bool {
         $condition = $snapshot->condition;
@@ -37,6 +37,6 @@ final class EvaluateStageCondition
         /** @var StageCondition $instance */
         $instance = $this->container->make($condition);
 
-        return $instance->passes($snapshot, $approvable, $submitter, $snapshot->conditionConfig);
+        return $instance->passes($snapshot, $approvable, $requester, $snapshot->conditionConfig);
     }
 }

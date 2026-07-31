@@ -9,10 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * "Your request cleared every stage."
+ * Tells the requester that their request was approved.
  *
- * Goes to the submitter only after the request is approved and any draft was
- * applied successfully.
+ * Sent only after the request state is approved, which means every stage was
+ * satisfied and any draft was applied successfully.
  */
 final class ApprovalApprovedNotification extends ApprovalNotification
 {
@@ -21,7 +21,7 @@ final class ApprovalApprovedNotification extends ApprovalNotification
      */
     public static function recipients(ApprovalEvent $event): iterable
     {
-        return self::submitterOf($event);
+        return self::requesterOf($event);
     }
 
     public function toMail(object $notifiable): MailMessage

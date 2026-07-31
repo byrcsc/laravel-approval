@@ -14,10 +14,10 @@ final class DeletingApprovableResolver implements ApproverResolver
      * @param  array<string, mixed>  $config
      * @return list<Model>
      */
-    public function resolve(StageSnapshot $stage, Model $approvable, Model $submitter, array $config): iterable
+    public function resolve(StageSnapshot $stage, Model $approvable, Model $requester, array $config): iterable
     {
         $approvable->delete();
 
-        return [$submitter];
+        return [$requester];
     }
 }

@@ -7,11 +7,9 @@ namespace ByRcsc\LaravelApproval\Concerns;
 use ByRcsc\LaravelApproval\Actions\SystemCloseRequest;
 use ByRcsc\LaravelApproval\Contracts\AutoSubmitsForApproval;
 use ByRcsc\LaravelApproval\Data\AutoSubmission;
-use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Draft;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\TimelineEntry;
-use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Enums\ApprovalMode;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalGuardException;
@@ -29,16 +27,31 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 
 /**
- * Makes a model something that can be put through a workflow.
+ * Makes a model submittable to an approval workflow.
  *
- * Submission is explicit. Guard mode can additionally intercept Eloquent
- * saves to attributes held in a pending draft; explicit mode, the default,
- * intercepts nothing. Query-builder and raw writes remain outside model
- * events, with the final stale check as their backstop.
+ * The trait is limited to model-centric members: the approval relationships,
+ * submission, access to the model's current request, reporting conveniences for
+ * the current stage, and model scopes.
  *
- * The `approval*` methods below are the seams. Override them on the model
- * rather than configuring them from outside: which workflow a purchase order
- * uses is a fact about purchase orders.
+ * Commands have exactly one path, the `Approval` facade. The trait mirrors none
+ * of them, with one deliberate exception: {@see withoutApprovalGuard()}, because
+ * guard mode is itself a model-level feature.
+ *
+ * Eligibility is the other deliberate duplication. `Approval::eligibility()`
+ * takes a request, {@see ApprovalRequest::approvalEligibility()} asks it of a
+ * request you already hold, and {@see approvalEligibility()} here asks it of this
+ * model's current request, returning null when there is none. Withdrawal and
+ * delegation eligibility are request-level questions only, so ask those on the
+ * request.
+ *
+ * Submission is explicit. Guard mode can additionally intercept Eloquent saves
+ * to attributes held in a pending draft; explicit mode, the default, intercepts
+ * nothing. Query-builder and raw writes stay outside model events, and the
+ * stale check performed before a draft is applied is the backstop for them.
+ *
+ * The `approval*` and `approvable*` methods are configuration seams. Override
+ * them on the model to declare which workflow it uses, which attributes may be
+ * drafted, and who submits.
  *
  * @phpstan-require-extends Model
  */
@@ -101,7 +114,7 @@ trait Approvable
                 $model,
                 $submission->workflow,
                 $submission->newAttributes,
-                $submission->submitter,
+                $submission->requester,
                 $submission->comment,
                 $submission->metadata,
             );
@@ -109,8 +122,8 @@ trait Approvable
     }
 
     /**
-     * Newest first, including the closed ones - a rejected request is history,
-     * not rubbish.
+     * Every request for this model, newest first, including closed ones. Closed
+     * requests are retained as approval history.
      *
      * @return MorphMany<ApprovalRequest, $this>
      */
@@ -128,22 +141,29 @@ trait Approvable
     }
 
     /**
-     * @param  array<string, mixed>|null  $newAttributes  null gates this record itself rather than an edit to it
+     * Submit this already-persisted record for approval.
+     *
+     * Passing `$newAttributes` holds those proposed values in a draft until the
+     * request is approved. Passing null creates a record-level request: the
+     * record itself is what needs approval, and the package applies no
+     * attribute changes when the request completes.
+     *
+     * @param  array<string, mixed>|null  $newAttributes  null requests approval of the record itself rather than of an edit to it
      * @param  array<string, mixed>  $metadata
      */
     public function submitForApproval(
         ApprovalWorkflow|string|null $workflow = null,
         ?array $newAttributes = null,
-        ?Model $submitter = null,
+        ?Model $requester = null,
         ?string $comment = null,
         array $metadata = [],
     ): ApprovalRequest {
-        return Approval::submit($this, $workflow, $newAttributes, $submitter, $comment, $metadata);
+        return Approval::submit($this, $workflow, $newAttributes, $requester, $comment, $metadata);
     }
 
     /**
-     * The one request that is still awaiting a decision, of which there is at
-     * most one.
+     * This model's unresolved request - pending or conflicted - of which there
+     * is at most one.
      */
     public function pendingApprovalRequest(): ?ApprovalRequest
     {
@@ -156,11 +176,10 @@ trait Approvable
     }
 
     /**
-     * Whether this user could approve the open request right now.
+     * Whether this user may approve the unresolved request right now.
      *
-     * The question a view asks before rendering the button. False covers both
-     * "not their turn" and "nothing to approve" - `approvalEligibility()` is
-     * the version that says which.
+     * False covers both "not this user's stage" and "no unresolved request";
+     * {@see approvalEligibility()} distinguishes them.
      */
     public function canBeApprovedBy(Model $user): bool
     {
@@ -168,38 +187,15 @@ trait Approvable
     }
 
     /**
-     * Why this user may or may not decide the open request, or null when there
-     * is no open request to decide.
+     * Why this user may or may not decide the unresolved request, or null when
+     * there is no unresolved request. Withdrawal and delegation eligibility are
+     * request-level questions; ask them on the request itself.
      */
     public function approvalEligibility(Model $user): ?Eligibility
     {
         $request = $this->pendingApprovalRequest();
 
         return $request === null ? null : Approval::eligibility($request, $user);
-    }
-
-    public function withdrawalEligibility(Model $user): ?WithdrawalEligibility
-    {
-        $request = $this->pendingApprovalRequest();
-
-        return $request === null ? null : Approval::withdrawalEligibility($request, $user);
-    }
-
-    public function canWithdrawApproval(Model $user): bool
-    {
-        return $this->withdrawalEligibility($user)?->eligible === true;
-    }
-
-    public function delegationEligibility(Model $user, ?Model $delegate = null): ?DelegationEligibility
-    {
-        $request = $this->pendingApprovalRequest();
-
-        return $request === null ? null : Approval::delegationEligibility($request, $user, $delegate);
-    }
-
-    public function canDelegateApproval(Model $user, ?Model $delegate = null): bool
-    {
-        return $this->delegationEligibility($user, $delegate)?->eligible === true;
     }
 
     public function currentApprovalStage(): ?ApprovalRequestStage
@@ -244,8 +240,8 @@ trait Approvable
 
     /**
      * The draft waiting to be applied, or null when there is none. Null covers
-     * both "no unresolved request" and "the unresolved request gates the
-     * record itself"; use {@see pendingApprovalRequest()} to tell those apart.
+     * both "no unresolved request" and "the unresolved request is record-level";
+     * use {@see pendingApprovalRequest()} to distinguish them.
      */
     public function pendingDraft(): ?Draft
     {
@@ -255,25 +251,9 @@ trait Approvable
     }
 
     /**
-     * Withdraw the open request, if there is one. Returns false when there was
-     * nothing to withdraw, so callers do not have to check first.
-     */
-    public function withdrawApproval(Model $actor, ?string $comment = null): bool
-    {
-        $request = $this->pendingApprovalRequest();
-
-        if ($request === null) {
-            return false;
-        }
-
-        Approval::withdraw($request, $actor, $comment);
-
-        return true;
-    }
-
-    /**
-     * Run an exceptional correction while guard mode is active. The bypass is
-     * always appended to the open request's audit trail.
+     * Operational escape hatch: run a correction on this model while guard mode
+     * holds a pending draft. The bypass is appended to the open request's audit
+     * trail. Equivalent to `Approval::withoutGuard($model, ...)`.
      *
      * @template TValue
      *
@@ -324,16 +304,24 @@ trait Approvable
         return false;
     }
 
+    /**
+     * Whether creating this model should also create an approval request. The
+     * request is created after the record is persisted; it does not gate
+     * creation. Implementing {@see AutoSubmitsForApproval} has the same effect.
+     */
     public function shouldAutoSubmitForApproval(): bool
     {
         return false;
     }
 
+    /**
+     * The workflow, requester, comment, and draft used by automatic submission.
+     */
     public function approvalAutoSubmission(): AutoSubmission
     {
         return new AutoSubmission(
             workflow: $this->approvalWorkflow(),
-            submitter: $this->approvalSubmitter(),
+            requester: $this->approvalRequester(),
         );
     }
 
@@ -459,6 +447,8 @@ trait Approvable
     }
 
     /**
+     * Models whose unresolved request has an active stage waiting on this user.
+     *
      * @param  Builder<static>  $query
      */
     public function scopeAwaitingApprovalBy(Builder $query, Model $user): void
@@ -475,9 +465,10 @@ trait Approvable
     }
 
     /**
-     * Which attributes may be drafted. Null - the default - means all of them,
-     * which is rarely what you want on a model with a `status` column somebody
-     * else owns.
+     * Which attributes may be drafted. Null - the default - allows all of them.
+     * Return an explicit list on models with columns the approval workflow
+     * should not be able to change, such as a status column owned by another
+     * part of the application.
      *
      * @return list<string>|null
      */
@@ -487,10 +478,10 @@ trait Approvable
     }
 
     /**
-     * Who is submitting, when it is not simply the authenticated user. Return
-     * null to fall through to that.
+     * Who is submitting, when it is not the authenticated user. Return null to
+     * fall through to the authenticated user.
      */
-    public function approvalSubmitter(): ?Model
+    public function approvalRequester(): ?Model
     {
         return null;
     }

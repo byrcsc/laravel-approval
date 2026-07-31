@@ -177,7 +177,7 @@ describe('what delegation refuses', function (): void {
 });
 
 describe('delegation and self-approval', function (): void {
-    it('does not let the submitter approve through a delegated assignment', function (): void {
+    it('does not let the requester approve through a delegated assignment', function (): void {
         $author = user('Author');
         $approver = user('Approver');
 

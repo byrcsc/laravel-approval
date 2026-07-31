@@ -145,7 +145,7 @@ describe('who gets told', function (): void {
         Notification::assertNotSentTo($approver, ApprovalRequestedNotification::class);
     });
 
-    it('tells the submitter when it is approved', function (): void {
+    it('tells the requester when it is approved', function (): void {
         $author = user('Author');
         $approver = user('Approver');
 
@@ -158,7 +158,7 @@ describe('who gets told', function (): void {
         Notification::assertNotSentTo($approver, ApprovalApprovedNotification::class);
     });
 
-    it('tells the submitter when it is rejected, with the reason', function (): void {
+    it('tells the requester when it is rejected, with the reason', function (): void {
         $author = user('Author');
         $approver = user('Approver');
 
@@ -378,7 +378,7 @@ describe('assignment changes', function (): void {
         $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, $author);
 
         Notification::fake();
-        Approval::returnToSubmitter($request, $approver, 'Fix the title.');
+        Approval::returnForRevision($request, $approver, 'Fix the title.');
 
         Notification::assertSentTo($author, ApprovalReturnedNotification::class);
         Notification::assertNotSentTo($approver, ApprovalReturnedNotification::class);

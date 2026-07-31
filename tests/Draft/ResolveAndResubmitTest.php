@@ -121,7 +121,7 @@ describe('resubmitting', function (): void {
             ->and($first->refresh()->resubmissions()->count())->toBe(1);
     });
 
-    it('carries the original draft and submitter forward', function (): void {
+    it('carries the original draft and requester forward', function (): void {
         $approver = user('Approver');
         $author = user('Author');
         $post = post();
@@ -133,7 +133,7 @@ describe('resubmitting', function (): void {
         $second = Approval::reviseAndResubmit($first, RevisedDraft::inherit());
 
         expect($second->getAttributeValue('new_attributes'))->toBe(['title' => 'Take one'])
-            ->and($second->submitter?->getKey())->toBe($author->getKey());
+            ->and($second->requester?->getKey())->toBe($author->getKey());
     });
 
     it('takes a revised draft instead when one is given', function (): void {

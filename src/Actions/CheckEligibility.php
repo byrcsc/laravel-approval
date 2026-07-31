@@ -61,16 +61,16 @@ final class CheckEligibility
             return Eligibility::denied(Ineligibility::DecisionAlreadyRecorded, $stage, $progress);
         }
 
-        if ($this->isSubmitter($request, $actor) && ! $this->allowsSelfApproval($request)) {
+        if ($this->isRequester($request, $actor) && ! $this->allowsSelfApproval($request)) {
             return Eligibility::denied(Ineligibility::SelfApproval, $stage, $progress);
         }
 
         return Eligibility::granted($stage, $progress, $assignment);
     }
 
-    private function isSubmitter(ApprovalRequest $request, Model $actor): bool
+    private function isRequester(ApprovalRequest $request, Model $actor): bool
     {
-        return $request->wasSubmittedBy($actor);
+        return $request->wasRequestedBy($actor);
     }
 
     /**

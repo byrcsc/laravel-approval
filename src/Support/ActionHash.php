@@ -5,14 +5,20 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Support;
 
 /**
- * The audit trail's tamper-evidence: each line's hash covers its own content
- * and the hash of the line before it, per request.
+ * The action history's tamper-evidence: each action's hash covers its own
+ * content and the hash of the action before it, per request.
  *
- * The same computation runs twice - once in `RecordAction` when the line is
- * written, once in `approval:verify` from what the database hands back - so
- * everything here is defined in terms that survive the round trip. Metadata is
- * normalised through JSON with object keys sorted, because MySQL's binary JSON
- * form reorders keys; timestamps are hashed at the second precision the
+ * This makes an edit, deletion, reordering, or insertion detectable by
+ * `approval:verify`. It is not a signature: the hash is unkeyed and stored
+ * alongside the data it covers, so anyone able to write to the database directly
+ * can recompute a consistent chain. The guarantee holds against accidental and
+ * application-level modification, not against a database administrator.
+ *
+ * The same computation runs twice - in `RecordAction` when the action is
+ * written, and in `approval:verify` from what the database returns - so every
+ * value here is defined in terms that survive the round trip. Metadata is
+ * normalized through JSON with object keys sorted, because MySQL's binary JSON
+ * form reorders keys, and timestamps are hashed at the second precision the
  * `timestamp` column keeps.
  */
 final class ActionHash

@@ -14,12 +14,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * "An approval assignment is now yours."
+ * Tells an approver that an assignment is now theirs.
  *
  * Sent to whoever an assignment change makes responsible: the delegate of a
  * delegation, the replacement of a reassignment, and the approvers added by
- * resynchronization or escalation. Recipients are read from the event after
- * the assignment exists, so the replaced holder is never addressed.
+ * resynchronization or escalation. Recipients are read from the event after the
+ * assignment exists, so the previous holder is never addressed.
  */
 final class ApprovalAssignedNotification extends ApprovalNotification
 {

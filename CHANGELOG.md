@@ -53,12 +53,13 @@ pre-release testing and compatibility review.
   rejected, returned-for-revision, assigned, conflicted, and overdue events
   behind an opt-in event map, disabled by default and deferred until the
   transaction commits.
-- **Tamper-evident history** — append-only, per-request hash-chained audit
-  actions, actor labels, host-owned attachment references bound into the chain,
+- **Append-only action history** — application-enforced append-only, per-request
+  hash-chained actions that are tamper-evident within a documented trust
+  boundary, actor labels, host-owned attachment references bound into the chain,
   and `approval:verify` for global or request-scoped verification.
 - **Host testing support** — exported coherent factories for every package
-  model and `Approval::fake()` assertions for submissions and single or bulk
-  decisions without state changes or outward side effects.
+  model and an `Approval::fake()` that records every public mutation, with a
+  matching assertion for each and no approval-state writes.
 - **Automatic submission** — an opt-in model hook that submits newly created
   approvables exactly once after persistence.
 - **Operations and compatibility** — `approval:status`, database-aware tests
@@ -116,5 +117,69 @@ pre-release testing and compatibility review.
   `request_stages`, and `assignments`. Persisted `escalation_strategy` values
   of `notify` become `record_only`. The audit hash serialization is unchanged,
   so existing chains still verify after the rename.
-- The package remains explicitly pre-1.0. Its public API will receive another
-  compatibility pass before a stable `1.0.0` tag.
+- Completed the requester vocabulary. The person who submits a request and may
+  later withdraw or revise it is now the **requester** everywhere, replacing the
+  mixture of `submitter` and `requester` the earlier steps left behind. The verb
+  is untouched: `submitForApproval()`, `Approval::submit()`, `submitted_at`,
+  `ActionType::Submitted`, `ApprovalSubmitted`, and `AutoSubmitsForApproval` all
+  keep their names, because they describe the act rather than the person.
+  Renamed: the `$submitter` argument of `Approval::submit()`,
+  `submitForApproval()`, `ApproverResolver::resolve()`, and
+  `StageCondition::passes()` → `$requester`; `submitterFor()` →
+  `requesterFor()`; `approvalSubmitter()` → `approvalRequester()`;
+  `ApprovalRequest::submitter()` → `requester()`; `wasSubmittedBy()` →
+  `wasRequestedBy()`; `AutoSubmission::$submitter` → `$requester`;
+  `ApprovalNotification::submitterOf()` → `requesterOf()`;
+  `SelfApprovalException::forSubmitter()` → `forRequester()`;
+  `UnauthorizedApproverException::notTheSubmitter()` → `notTheRequester()`; and
+  `MissingSubmitterException` → `MissingRequesterException`.
+- Renamed the requester columns to match. For pre-release installs:
+  `approval_requests.submitter_type` → `requester_type` and
+  `approval_requests.submitter_id` → `requester_id`. `submitted_at` is
+  unchanged. Both names are nine characters, so no generated index name
+  changes length.
+- Renamed the audit hash payload's stage key from `step` to `stage`, which had
+  been left frozen to preserve development chains. **This invalidates every
+  previously recorded hash chain**, so `approval:verify` will report findings
+  against actions recorded before this change. Pre-release installs should
+  migrate fresh. No legacy terminology now remains in the shipped package.
+- Consolidated the public API around the facade. `returnToSubmitter()` is now
+  `returnForRevision()` on the facade, the manager, and the shipped policy; the
+  `bulkApprove()` and `bulkReject()` aliases are gone in favour of
+  `approveMany()` and `rejectMany()`; and the manager and facade are grouped so
+  administrative and operational operations (`cancel`, `reassign`, `resync`,
+  `resolve`, `withoutGuard`, `syncDefinitions`, `verifyTrail`,
+  `escalateOverdue`) are separated from routine approval work. `decide()`
+  remains as an advanced dispatch entry point.
+- Reduced the `Approvable` trait to model-centric members. `withdrawApproval()`,
+  `withdrawalEligibility()`, `canWithdrawApproval()`, `delegationEligibility()`,
+  and `canDelegateApproval()` are removed from the trait; withdrawal is
+  `Approval::withdraw()`, and the three eligibility questions now live together
+  on `ApprovalRequest` as `approvalEligibility()`/`canBeApprovedBy()`,
+  `withdrawalEligibility()`/`canBeWithdrawnBy()`, and
+  `delegationEligibility()`/`canBeDelegatedBy()`.
+- Completed the fake's public contract. Withdrawal, cancellation, delegation,
+  reassignment, resynchronization, conflict resolution, resubmission,
+  attachment, guard bypass, definition sync, and overdue processing are now
+  recorded alongside submission and decisions, each with a positive assertion,
+  so `assertNothingRecorded()` covers every interaction. `assertBulkApproved()`
+  and `assertBulkRejected()` are now `assertApprovedMany()` and
+  `assertRejectedMany()`, and `assertReturned()` is
+  `assertReturnedForRevision()`. `ApprovalInteraction::$type` is now an
+  `InteractionType` enum whose `assertion()` names the covering assertion, and
+  interactions carry the assignment recipient as a first-class field. An omitted
+  submitter now resolves the same way a real submission resolves it.
+- Corrected the documented guarantees. The action history is described as
+  application-enforced append-only and tamper-evident within a stated trust
+  boundary rather than immutable; `approval:verify` documents exactly which rows
+  and recorded metadata it covers and states that stored file bytes are never
+  read. Record-level approval is documented as approval of an already-persisted
+  record, attribute drafts as the built-in hold-until-approved mechanism, and
+  concrete assignments as exact actor identities that never expand a Team, Role,
+  or Position into its members.
+- Rewrote the README, configuration comments, and docblocks in neutral language,
+  removing election, parliamentary, conversational, and anthropomorphic framing.
+- No compatibility aliases, deprecation period, or consumer migration layer is
+  shipped for these renames: the package is unpublished, so removed names are
+  removed outright.
+- The package remains explicitly pre-1.0.

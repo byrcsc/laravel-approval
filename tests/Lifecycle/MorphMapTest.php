@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 /**
  * Hosts that enforce a morph map store aliases in every polymorphic column,
  * and `getMorphClass()` throws for any model left out of the map. The engine
- * touches six morph pairs - approvable, submitter, actor, approver, delegate,
+ * touches six morph pairs - approvable, requester, actor, approver, delegate,
  * and the notification recipients - so an alias that leaks or a class name
  * that sneaks into a column would surface as a request nobody can find.
  */
@@ -35,7 +35,7 @@ it('runs the whole flow on aliases, never class names', function (): void {
     $request = $post->submitForApproval($workflow, ['title' => 'Revised title'], user());
 
     expect($request->getAttributeValue('approvable_type'))->toBe('post')
-        ->and($request->getAttributeValue('submitter_type'))->toBe('user')
+        ->and($request->getAttributeValue('requester_type'))->toBe('user')
         ->and($request->stages()->sole()->assignments()->sole()->getAttributeValue('approver_type'))->toBe('user');
 
     Approval::delegate($request, $approver, $delegate);

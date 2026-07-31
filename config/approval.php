@@ -14,12 +14,12 @@ return [
     | Table names
     |--------------------------------------------------------------------------
     |
-    | Rename any of these to fit your schema conventions - the models read the
-    | same values, so nothing else has to change. Do it before you migrate;
-    | renaming a table that already holds history is your migration to write.
+    | Rename any of these to fit your schema conventions; the models read the
+    | same values, so nothing else has to change. Set them before migrating.
+    | Renaming a table that already holds history requires your own migration.
     |
-    | Every key must be present. A missing one fails at boot rather than the
-    | first time somebody submits something for approval.
+    | Every key must be present. A missing key fails at boot rather than on the
+    | first submission.
     |
     */
 
@@ -39,9 +39,13 @@ return [
     | User model
     |--------------------------------------------------------------------------
     |
-    | The default the package assumes when nothing more specific is given. The
-    | approver columns are polymorphic, so a workflow can point at any model -
-    | a team, a position, a service account.
+    | The default model used when nothing more specific is given, for example by
+    | the `--operator` option on recovery commands.
+    |
+    | Approver columns are polymorphic, so an assignment can name any model. Note
+    | that an assignment always names one exact identity: assigning a Team or
+    | Position model assigns that record itself and does not expand it into its
+    | members. Use an approver resolver to assign the members.
     |
     */
 
@@ -66,9 +70,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | The last place `submitForApproval()` looks. It checks its own argument
-    | first, then the model's `approvalWorkflow()` method, then this - so this
-    | is for wiring up a model you do not own, or for keeping the mapping in one
-    | file when an operations team edits it.
+    | first, then the model's `approvalWorkflow()` method, then this map. Use it
+    | for models you do not own, or to keep the mapping in one file.
     |
     | Keyed by model class, valued by workflow slug.
     |
@@ -114,9 +117,8 @@ return [
     | Self-approval
     |--------------------------------------------------------------------------
     |
-    | Whether a submitter may approve their own request. Off by default: an
-    | approval chain someone can walk themselves is not a control. A workflow's
-    | `settings` column overrides this per workflow.
+    | Whether a requester may approve their own request. Disabled by default; a
+    | workflow's `settings` column overrides this per workflow.
     |
     */
 
@@ -127,18 +129,17 @@ return [
     | Notifications
     |--------------------------------------------------------------------------
     |
-    | Off by default. A package that starts mailing your users the moment it is
-    | installed is a package you uninstall - and your application already has
-    | opinions about who hears what.
+    | Delivery is opt-in and disabled by default, so installing the package
+    | cannot send external messages.
     |
-    | Turn `enabled` on and you get the map below. Set any entry to null to
-    | silence that event, or point it at your own class to change both the
-    | message and who receives it: a notification here declares its own
-    | recipients, so the audience is not stranded in a listener you would have
-    | to fork. Extend ByRcsc\LaravelApproval\Notifications\ApprovalNotification.
+    | Setting `enabled` to true activates the map below. Set an entry to null to
+    | silence that event, or point it at your own class to replace both the
+    | message and its recipients: a notification declares its own recipients, so
+    | the audience is not held in a listener you would have to replace. Extend
+    | ByRcsc\LaravelApproval\Notifications\ApprovalNotification.
     |
-    | Not every event is mapped. The rest are there to be listened to; not
-    | every state change is worth an email.
+    | Not every event is mapped. The mapped events are the ones that leave
+    | someone waiting on an action; the rest are available to listen to.
     |
     */
 
@@ -170,19 +171,19 @@ return [
     | Escalation
     |--------------------------------------------------------------------------
     |
-    | What happens to a stage that passes its deadline. Each stage picks one of
-    | these by name in its `escalation_strategy` column; this map says which
-    | class does the work, and swapping one for your own is the seam.
+    | What happens to a stage that passes its deadline. Each stage names one of
+    | these in its `escalation_strategy` column; this map says which class runs
+    | it, and replacing an entry is the seam for a custom strategy.
     |
-    | Nothing escalates unless `approval:escalate` is scheduled. Deadlines are
-    | recorded either way - the command is what notices them:
+    | Nothing escalates unless `approval:escalate` runs. Deadlines are recorded
+    | either way; the command is what acts on them:
     |
     |     Schedule::command('approval:escalate')->everyFifteenMinutes();
     |
-    | `record_only` records the overdue state and fires StageOverdue, nothing
-    | more - delivery is not promised unless notifications are enabled. It is
-    | the default: a late approval is late, and deciding it automatically is a
-    | policy an organization chooses rather than one this package assumes.
+    | `record_only` is the default: it records the overdue state and emits
+    | StageOverdue, and nothing else. It sends nothing on its own, and a message
+    | reaches an approver only when notifications are enabled. Deciding an
+    | overdue stage automatically is a policy each organization chooses.
     |
     */
 

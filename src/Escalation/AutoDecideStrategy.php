@@ -20,15 +20,14 @@ use ByRcsc\LaravelApproval\Support\Payload;
  * Serves both `auto_approve` and `auto_reject`; which one it is comes in as the
  * action rather than as two near-identical classes.
  *
- * The audit trail records these with no actor, because there was none. That is
- * the honest entry: "the deadline passed and the stage was approved" is a
- * different fact from "somebody approved it", and an audit that could not tell
- * them apart would be worth less than no audit.
+ * These actions are recorded with no actor, because there was none. "The
+ * deadline passed and the stage was approved" is a different fact from "an
+ * approver approved it", and the history has to distinguish them.
  *
- * `auto_approve` completes the stage and lets the request move on exactly as a
- * human approval would, applying the draft if it was the last stage - the same
- * stale check and all. `auto_reject` closes the request; the submitter can
- * resubmit.
+ * `auto_approve` completes the stage and advances the request exactly as an
+ * approver's decision would, applying the draft with the same stale check if it
+ * was the last stage. `auto_reject` closes the request, which the requester may
+ * then revise and resubmit.
  */
 final class AutoDecideStrategy implements EscalationStrategy
 {

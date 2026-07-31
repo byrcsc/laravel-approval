@@ -18,21 +18,20 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
 
 /**
- * Closes an approved request by writing its draft onto the record - or by
- * refusing to, and saying why.
+ * Closes an approved request by writing its draft onto the record, or records a
+ * conflict explaining why it could not.
  *
- * The stale check is the whole point. An approval chain can take days, and
- * nothing stops somebody editing the record while it runs. Applying a
- * three-day-old draft over those edits would silently undo them, so a record
- * that has moved on any of the drafted attributes puts the request into
- * `conflicted` and leaves the record alone.
+ * The stale check is the core of this action. An approval can take days, and the
+ * record may be edited while it runs. Applying an old draft over those edits
+ * would undo them, so a record whose drafted attributes have changed since
+ * submission puts the request into `conflicted` and leaves the record unchanged.
  *
- * That is a state, not an exception: the last approver did nothing wrong, and
- * failing their click would be an odd way to tell them so. The request waits
- * for somebody to decide, through {@see ResolveConflict}.
+ * That is a request state rather than an exception: the final approver's decision
+ * was valid, so it is recorded, and the request then waits for an administrator
+ * to resolve it through {@see ResolveConflict}.
  *
- * Runs inside the caller's transaction. Whoever calls it has the request row
- * locked already; this takes the record's row too, in that order.
+ * Runs inside the caller's transaction, which already holds the request's row
+ * lock. This takes the record's row lock as well, in that order.
  */
 final class ApplyDraft
 {

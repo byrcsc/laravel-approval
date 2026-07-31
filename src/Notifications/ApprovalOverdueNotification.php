@@ -11,10 +11,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * "This has been sitting with you past its deadline."
+ * Tells the approvers a stage is waiting on that its deadline has passed.
  *
- * Goes to whoever the late stage is waiting on - the delivery the record-only
- * policy deliberately leaves to the notification layer.
+ * The record-only overdue policy records the overdue state and emits an event;
+ * delivery is this notification's job, and only when notifications are enabled.
  *
  * Sent once when the stage first goes overdue, and again for each
  * `StageOverdueReminder` at the stage's snapshotted cadence.

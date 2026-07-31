@@ -13,18 +13,18 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use LogicException;
 
 /**
- * A reference to a file somebody put in evidence: supporting documents on the
- * request, or a signature on the decision its `action_id` points at.
+ * A reference to a file put in evidence: a supporting document on the request,
+ * or a signature on the decision its `action_id` points at.
  *
- * References only - `disk` and `path` name a location on a host-owned
- * filesystem disk, and the bytes never pass through this package. The
- * `checksum` the host supplies at attach time is written into the audit line
- * recording the attachment, which is what makes the file's content part of
- * the tamper-evident chain rather than a name that could point anywhere.
+ * A reference only. `disk` and `path` name a location on a host-owned
+ * filesystem disk, and the file's bytes never pass through this package. The
+ * `checksum` the host supplies at attach time is recorded in the action that
+ * logs the attachment, so the recorded checksum is covered by the hash chain.
+ * Verification compares the attachment row against that recorded metadata; it
+ * does not read the stored file or recompute its checksum.
  *
- * Append-only, like the trail it is evidence for. A file attached in error is
- * answered the way it is on paper - with another line saying so - not by
- * making history mutable.
+ * Append-only, like the action history it is evidence for. A file attached in
+ * error is answered by appending another action, not by editing history.
  */
 final class ApprovalAttachment extends Model
 {

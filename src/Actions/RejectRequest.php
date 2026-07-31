@@ -16,14 +16,13 @@ use Illuminate\Support\Facades\DB;
  * Record a rejection and close the request only when its rejection policy says
  * the stage can no longer succeed.
  *
- * There is no sending it back a stage for rework: the request becomes history
- * and resubmitting starts a fresh one at stage one, against a fresh snapshot of
- * the workflow. That keeps a rejected request a thing that happened rather than
- * a thing that is still being negotiated - and it means the stages that already
- * approved get asked again, which is the point.
+ * A rejection does not send the request back one stage. The request is closed,
+ * and revising and resubmitting creates a new request that starts at the first
+ * applicable stage against a fresh workflow snapshot. Stages that already
+ * approved are therefore asked again.
  *
- * Stages that never ran are `skipped`, not `rejected`. They did not decide
- * anything, and recording that they had would be a lie the reports would repeat.
+ * Stages that never ran are recorded as `skipped` rather than `rejected`,
+ * because they did not decide anything.
  */
 final class RejectRequest
 {

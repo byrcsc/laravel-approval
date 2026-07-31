@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Enums;
 
 /**
- * What an approver decided. Narrower than {@see ActionType}, which also covers
- * everything that happens to a request without anybody deciding anything.
+ * An approver's response: approve, reject, or return for revision. Narrower than
+ * {@see ActionType}, which also covers request events that are not decisions.
  *
- * Exists so a controller can take one form submission and hand the engine a
- * whole decision, rather than branching on the verdict itself.
+ * Lets a controller build one `ApprovalDecision` from a form submission instead
+ * of branching on the verdict at the call site.
  */
 enum Verdict: string
 {

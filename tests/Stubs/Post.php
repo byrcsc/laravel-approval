@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Stands in for the host app's approvable record, taking the trait exactly as
- * it ships: no workflow declared, no attribute allow-list, no submitter.
+ * it ships: no workflow declared, no attribute allow-list, no requester.
  * {@see PurchaseOrder} is the same idea with all three seams overridden.
  */
 class Post extends Model

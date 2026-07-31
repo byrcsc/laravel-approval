@@ -179,7 +179,7 @@ it('refuses to let the audit trail be rewritten', function () {
     ]);
 
     expect(fn () => $action->update(['comment' => 'Actually, no.']))
-        ->toThrow(LogicException::class, 'immutable audit trail');
+        ->toThrow(LogicException::class, 'append-only history');
 
     expect($action->fresh()?->comment)->toBe('Looks right to me.');
 });
@@ -188,7 +188,7 @@ it('refuses to let the audit trail be erased', function () {
     $action = approvalRequest()->actions()->create(['action' => ActionType::Approved, 'hash' => str_repeat('0', 64)]);
 
     expect(fn () => $action->delete())
-        ->toThrow(LogicException::class, 'immutable audit trail');
+        ->toThrow(LogicException::class, 'append-only history');
 
     expect(ApprovalAction::query()->whereKey($action->getKey())->exists())->toBeTrue();
 });

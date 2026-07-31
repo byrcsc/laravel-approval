@@ -104,7 +104,7 @@ describe('rejection', function (): void {
 });
 
 describe('withdrawal', function (): void {
-    it('lets the submitter withdraw their own request', function (): void {
+    it('lets the requester withdraw their own request', function (): void {
         $author = user('Author');
         $workflow = workflow([['approvers' => [user('Approver')]]]);
         $request = post()->submitForApproval($workflow, null, $author);
@@ -136,16 +136,19 @@ describe('withdrawal', function (): void {
             ->toThrow(AlreadyDecidedException::class, 'cannot be decided again');
     });
 
-    it('withdraws through the trait and reports whether there was anything to withdraw', function (): void {
+    it('withdraws the model\'s unresolved request through the facade', function (): void {
         $post = post();
         $author = user('Author');
         $workflow = workflow([['approvers' => [user('Approver')]]]);
 
-        expect($post->withdrawApproval($author))->toBeFalse();
-
         $post->submitForApproval($workflow, null, $author);
+        $request = $post->pendingApprovalRequest();
 
-        expect($post->withdrawApproval($author))->toBeTrue()
-            ->and($post->isPendingApproval())->toBeFalse();
+        expect($request)->not->toBeNull()
+            ->and($request?->canBeWithdrawnBy($author))->toBeTrue();
+
+        Approval::withdraw($request, $author);
+
+        expect($post->isPendingApproval())->toBeFalse();
     });
 });

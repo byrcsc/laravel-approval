@@ -15,17 +15,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The way out of a conflicted request, once a person has looked at it.
+ * Administrative resolution of a conflicted request.
  *
- * Reapplying writes the draft over whatever the record now holds, which is a
- * decision somebody has to own - so it is recorded as a forced apply, with the
- * attributes that had drifted kept in the audit trail. Discarding cancels the
- * request and leaves the record as it is; the edit can be raised again as a
- * fresh request against current values.
+ * Reapplying writes the draft over the record's current values. It is recorded
+ * as a forced apply, attributed to the operator, with the attributes that had
+ * drifted kept in the audit history. Discarding cancels the request and leaves
+ * the record unchanged; the same edit can be raised again as a new request
+ * against current values.
  *
- * No re-approval is required for either. The stages already approved this
- * change; what was in doubt was whether it still fit the record, and that is
- * the question being answered here.
+ * Neither resolution requires re-approval. The stages already approved the
+ * change itself; what the conflict raised was whether it still applied to the
+ * record, which is the question this answers.
  */
 final class ResolveConflict
 {

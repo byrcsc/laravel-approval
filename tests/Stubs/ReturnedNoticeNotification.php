@@ -9,8 +9,8 @@ use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * What a host maps `ApprovalReturned` to: the submitter is the one with
- * something to fix, so the submitter is who hears about it.
+ * What a host maps `ApprovalReturned` to: the requester is the one with
+ * something to fix, so the requester is who hears about it.
  */
 final class ReturnedNoticeNotification extends ApprovalNotification
 {
@@ -19,6 +19,6 @@ final class ReturnedNoticeNotification extends ApprovalNotification
      */
     public static function recipients(ApprovalEvent $event): iterable
     {
-        return self::submitterOf($event);
+        return self::requesterOf($event);
     }
 }

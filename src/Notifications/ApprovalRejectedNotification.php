@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * "Your request was turned down, and here is why."
+ * Tells the requester that their request was rejected, and why.
  *
- * The reason is the point - a rejection ends the request and the submitter has
- * to decide whether to resubmit, which they cannot do usefully without it.
+ * A rejection closes the request, so the reason is included: the requester has
+ * to decide whether to revise and resubmit.
  */
 final class ApprovalRejectedNotification extends ApprovalNotification
 {
@@ -22,7 +22,7 @@ final class ApprovalRejectedNotification extends ApprovalNotification
      */
     public static function recipients(ApprovalEvent $event): iterable
     {
-        return self::submitterOf($event);
+        return self::requesterOf($event);
     }
 
     public function toMail(object $notifiable): MailMessage

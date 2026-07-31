@@ -55,7 +55,7 @@ final class SubmitForApproval
         Model $approvable,
         ApprovalWorkflow $workflow,
         ?array $newAttributes,
-        Model $submitter,
+        Model $requester,
         ?string $comment = null,
         array $metadata = [],
     ): ApprovalRequest {
@@ -66,9 +66,9 @@ final class SubmitForApproval
         $this->guardAgainstOpenRequest($approvable);
 
         $draft = $this->draft($approvable, $newAttributes);
-        $plan = $this->plan($workflow, $approvable, $submitter, $draft['new']);
+        $plan = $this->plan($workflow, $approvable, $requester, $draft['new']);
 
-        return DB::transaction(function () use ($approvable, $workflow, $submitter, $plan, $draft, $comment, $metadata): ApprovalRequest {
+        return DB::transaction(function () use ($approvable, $workflow, $requester, $plan, $draft, $comment, $metadata): ApprovalRequest {
             $this->lockApprovable($approvable);
             $this->guardAgainstOpenRequest($approvable);
 
@@ -80,8 +80,8 @@ final class SubmitForApproval
                 'current_stage_sequence' => $plan[0]['snapshot']->sequence,
                 'new_attributes' => $draft['new'],
                 'original_attributes' => $draft['original'],
-                'submitter_type' => $submitter->getMorphClass(),
-                'submitter_id' => $submitter->getKey(),
+                'requester_type' => $requester->getMorphClass(),
+                'requester_id' => $requester->getKey(),
                 'submitted_at' => Date::now(),
             ]);
 
@@ -91,11 +91,11 @@ final class SubmitForApproval
             );
 
             // The engine's key wins over the caller's: which workflow ran is
-            // the trail's fact to record, not the submitter's to claim.
+            // the trail's fact to record, not the requester's to claim.
             ($this->recordAction)(
                 request: $request,
                 action: ActionType::Submitted,
-                actor: $submitter,
+                actor: $requester,
                 comment: $comment,
                 metadata: array_merge($metadata, ['workflow' => Attributes::string($workflow, 'slug')]),
             );
@@ -161,7 +161,7 @@ final class SubmitForApproval
     private function plan(
         ApprovalWorkflow $workflow,
         Model $approvable,
-        Model $submitter,
+        Model $requester,
         ?array $newAttributes,
     ): array {
         $slug = Attributes::string($workflow, 'slug');
@@ -182,9 +182,9 @@ final class SubmitForApproval
         foreach ($stages as $stage) {
             $this->guardRejectionPolicy($slug, $stage);
             $snapshot = StageSnapshot::fromWorkflowStage($stage);
-            $passes = ($this->evaluateCondition)($snapshot, $proposed, $submitter, $slug);
+            $passes = ($this->evaluateCondition)($snapshot, $proposed, $requester, $slug);
             $snapshot = $snapshot->withConditionResult($passes);
-            $approvers = ($this->resolveApprovers)($stage, $snapshot, $approvable, $submitter, $slug);
+            $approvers = ($this->resolveApprovers)($stage, $snapshot, $approvable, $requester, $slug);
 
             if ($passes && $approvers === []) {
                 throw InvalidWorkflowException::stageHasNoApprovers($slug, $snapshot->sequence);

@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Notification;
 // scopes, and the notification map.
 
 /**
- * A one-approver request over `amount`, already returned to its submitter.
+ * A one-approver request over `amount`, already returned to its requester.
  *
  * @return array{ApprovalRequest, PurchaseOrder, User}
  */
@@ -32,7 +32,7 @@ function returnedRequest(): array
     $order = purchaseOrder();
     $request = $order->submitForApproval(workflow([['approvers' => [$approver]]]), ['amount' => 900], user('Author'));
 
-    Approval::returnToSubmitter($request, $approver, 'Correct the total.');
+    Approval::returnForRevision($request, $approver, 'Correct the total.');
 
     return [$request->refresh(), $order, $approver];
 }
@@ -47,7 +47,7 @@ it('refuses to return a conflicted request', function (): void {
     Approval::approve($request, $approver);
 
     expect($request->refresh()->state)->toBe(RequestState::Conflicted)
-        ->and(fn () => Approval::returnToSubmitter($request, $approver, 'Send it back.'))
+        ->and(fn () => Approval::returnForRevision($request, $approver, 'Send it back.'))
         ->toThrow(AlreadyDecidedException::class, 'conflicted');
 });
 
@@ -106,7 +106,7 @@ it('lets a revision introduce a draft where the returned request gated the recor
     $approver = user('Approver');
     $request = purchaseOrder()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user('Author'));
 
-    Approval::returnToSubmitter($request, $approver, 'Not yet.');
+    Approval::returnForRevision($request, $approver, 'Not yet.');
 
     $replacement = Approval::reviseAndResubmit($request, RevisedDraft::withAttributes(['amount' => 100]));
 
@@ -119,10 +119,10 @@ it('traces a return, revise, return chain through resubmitted_from_id', function
     $order = purchaseOrder();
     $first = $order->submitForApproval(workflow([['approvers' => [$approver]]]), ['amount' => 900], user('Author'));
 
-    Approval::returnToSubmitter($first, $approver, 'Once.');
+    Approval::returnForRevision($first, $approver, 'Once.');
     $second = Approval::reviseAndResubmit($first, RevisedDraft::withAttributes(['amount' => 800]));
 
-    Approval::returnToSubmitter($second, $approver, 'Twice.');
+    Approval::returnForRevision($second, $approver, 'Twice.');
     $third = Approval::reviseAndResubmit($second, RevisedDraft::withAttributes(['amount' => 700]));
 
     expect($third->resubmittedFrom?->is($second))->toBeTrue()
@@ -146,7 +146,7 @@ it('drops a returned request out of every open-work scope', function (): void {
 
     expect(Approval::awaiting($approver)->count())->toBe(1);
 
-    Approval::returnToSubmitter($request, $approver, 'Fix it first.');
+    Approval::returnForRevision($request, $approver, 'Fix it first.');
     $this->travel(2)->hours();
 
     expect(Approval::awaiting($approver)->count())->toBe(0)
@@ -166,7 +166,7 @@ it('notifies through a host-mapped ApprovalReturned entry', function (): void {
     $author = user('Author');
     $request = purchaseOrder()->submitForApproval(workflow([['approvers' => [$approver]]]), ['amount' => 900], $author);
 
-    Approval::returnToSubmitter($request, $approver, 'Correct the total.');
+    Approval::returnForRevision($request, $approver, 'Correct the total.');
 
     Notification::assertSentTo($author, ReturnedNoticeNotification::class);
     Notification::assertNotSentTo($approver, ReturnedNoticeNotification::class);
@@ -182,7 +182,7 @@ it('notifies through a host-mapped ApprovalResubmitted entry', function (): void
     $approver = user('Approver');
     $request = purchaseOrder()->submitForApproval(workflow([['approvers' => [$approver]]]), ['amount' => 900], user('Author'));
 
-    Approval::returnToSubmitter($request, $approver, 'Correct the total.');
+    Approval::returnForRevision($request, $approver, 'Correct the total.');
     Approval::reviseAndResubmit($request, RevisedDraft::withAttributes(['amount' => 750]));
 
     Notification::assertSentTo($approver, ResubmittedNoticeNotification::class);

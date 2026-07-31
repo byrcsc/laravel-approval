@@ -14,28 +14,26 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notification;
 
 /**
- * The base every approval notification extends, including any you write.
+ * The base class every approval notification extends, including replacements
+ * written by the host application.
  *
- * It carries one unusual responsibility: a notification says who it goes to.
- * That is not the Laravel convention, and the reason it is done here is that
- * the audience is the part hosts most often want to change - "tell the
- * requester's manager too", "only mail the finance approvers". Keeping the
- * recipients on the class means swapping one map entry changes both the message
- * and who reads it, rather than leaving the audience stranded in a listener the
- * host would have to fork.
+ * Unusually for Laravel, a notification declares its own recipients. Recipients
+ * are the part applications most often change, so keeping them on the class
+ * means one entry in the notification map replaces both the message and its
+ * audience, without having to replace a listener.
  *
- * Nothing is sent unless `approval.notifications.enabled` is true, and each
- * event's entry in the map can be set to null to silence just that one.
+ * Nothing is sent unless `approval.notifications.enabled` is true. Each event's
+ * entry in the map can be set to null to silence that event alone.
  */
 abstract class ApprovalNotification extends Notification
 {
     public function __construct(public readonly ApprovalEvent $event) {}
 
     /**
-     * Who should hear about this.
+     * The recipients of this notification.
      *
-     * Returning nothing is fine and means nobody is told - a stage whose
-     * approvers have all been deleted, say.
+     * An empty result is valid and sends nothing, which is what happens when a
+     * stage's approver records have all been deleted.
      *
      * @return iterable<int, Model>
      */
@@ -72,8 +70,8 @@ abstract class ApprovalNotification extends Notification
     }
 
     /**
-     * A human-readable name for the record. Falls back to the class and key,
-     * because a subject line naming nothing is worse than an ugly one.
+     * A readable name for the record under approval, falling back to its class
+     * and key so the subject always identifies something.
      */
     public function subject(): string
     {
@@ -110,8 +108,8 @@ abstract class ApprovalNotification extends Notification
     }
 
     /**
-     * The people who can act on a stage: the delegate where an assignment was handed
-     * over, the original approver everywhere else.
+     * The assignment holders for a stage: the delegate where an assignment was
+     * delegated, and the assigned approver otherwise.
      *
      * @return list<Model>
      */
@@ -123,11 +121,11 @@ abstract class ApprovalNotification extends Notification
     /**
      * @return list<Model>
      */
-    protected static function submitterOf(ApprovalEvent $event): array
+    protected static function requesterOf(ApprovalEvent $event): array
     {
-        $submitter = $event->request->submitter;
+        $requester = $event->request->requester;
 
-        return $submitter instanceof Model ? [$submitter] : [];
+        return $requester instanceof Model ? [$requester] : [];
     }
 
     protected function requestUlid(): string

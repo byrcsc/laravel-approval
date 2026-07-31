@@ -16,7 +16,7 @@ final readonly class AutoSubmission
     public function __construct(
         public ApprovalWorkflow|string|null $workflow = null,
         public ?array $newAttributes = null,
-        public ?Model $submitter = null,
+        public ?Model $requester = null,
         public ?string $comment = null,
         public array $metadata = [],
     ) {}

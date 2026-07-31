@@ -33,7 +33,7 @@ function requestWithApprover(): array
 
 it('records an attachment as a row and a chained audit line', function (): void {
     [$request] = requestWithApprover();
-    $author = $request->submitter;
+    $author = $request->requester;
 
     $attachment = Approval::attach(new AttachmentEvidence(
         request: $request,

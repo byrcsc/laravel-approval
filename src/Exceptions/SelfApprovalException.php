@@ -8,12 +8,13 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * An approval chain somebody can walk themselves is not a control. Off by
- * default, and a workflow that genuinely wants it says so in its `settings`.
+ * Raised when a requester tries to approve their own request. Self-approval is
+ * disallowed by default; a workflow that permits it sets `allow_self_approval`
+ * in its `settings`.
  */
 final class SelfApprovalException extends ApprovalException
 {
-    public static function forSubmitter(Model $actor, ApprovalRequest $request): self
+    public static function forRequester(Model $actor, ApprovalRequest $request): self
     {
         $ulid = $request->getAttributeValue('ulid');
 

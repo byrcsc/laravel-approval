@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * "Your request was returned for revision, and here is what to fix."
+ * Tells the requester that their request was returned for revision, and what
+ * the approver asked to be changed.
  *
- * Goes to the requester: a returned request waits on them to revise and
- * resubmit it, and nothing moves until they do.
+ * A returned request waits on the requester to revise and resubmit it.
  */
 final class ApprovalReturnedNotification extends ApprovalNotification
 {
@@ -22,7 +22,7 @@ final class ApprovalReturnedNotification extends ApprovalNotification
      */
     public static function recipients(ApprovalEvent $event): iterable
     {
-        return self::submitterOf($event);
+        return self::requesterOf($event);
     }
 
     public function toMail(object $notifiable): MailMessage
