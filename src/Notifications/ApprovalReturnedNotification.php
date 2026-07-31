@@ -27,15 +27,7 @@ final class ApprovalReturnedNotification extends ApprovalNotification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $message = (new MailMessage)
-            ->subject('Returned for revision: '.$this->subject())
-            ->line($this->subject().' was returned to you for revision.');
-
-        if ($this->reason() !== null) {
-            $message->line('Reason: '.$this->reason());
-        }
-
-        return $message->line('Reference: '.$this->requestUlid().'.');
+        return $this->mailFor('returned', ['reason' => $this->reason()]);
     }
 
     /**

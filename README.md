@@ -45,6 +45,14 @@ Set `APPROVAL_USER_KEY_TYPE` to `uuid`, `ulid`, or `string` as needed. The
 approvable model key is independent; adjust `approvable_id` in the published
 migration when those models do not use integer keys.
 
+Notification wording and its mail views publish separately, and only when you
+want to change them:
+
+```bash
+php artisan vendor:publish --tag="approval-translations"
+php artisan vendor:publish --tag="approval-views"
+```
+
 ## What the package approves
 
 An **approval request** is one execution of an **approval workflow** for one

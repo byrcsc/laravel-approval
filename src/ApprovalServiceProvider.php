@@ -29,6 +29,8 @@ final class ApprovalServiceProvider extends PackageServiceProvider
         $package
             ->name('laravel-approval')
             ->hasConfigFile('approval')
+            ->hasTranslations()
+            ->hasViews()
             ->hasMigration('create_approval_tables')
             ->hasCommands([
                 EscalateOverdueCommand::class,

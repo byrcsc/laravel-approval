@@ -39,10 +39,7 @@ final class ApprovalAssignedNotification extends ApprovalNotification
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject('Approval assigned to you: '.$this->subject())
-            ->line('An approval assignment for '.$this->subject().' is now yours.')
-            ->line('Reference: '.$this->requestUlid().'.');
+        return $this->mailFor('assigned');
     }
 
     /**

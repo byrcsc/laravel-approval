@@ -33,10 +33,7 @@ final class ApprovalOverdueNotification extends ApprovalNotification
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject('Overdue: '.$this->subject())
-            ->line('An approval waiting on you has passed its deadline: '.$this->subject().'.')
-            ->line('Reference: '.$this->requestUlid().'.');
+        return $this->mailFor('overdue');
     }
 
     /**
