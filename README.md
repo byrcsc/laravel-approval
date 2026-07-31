@@ -239,6 +239,81 @@ Approval::attach(new AttachmentEvidence(
 ));
 ```
 
+### Choosing the workflow
+
+The workflow argument is optional. With nothing named, the package asks four
+sources in order and takes the first that answers:
+
+1. the argument at the call site;
+2. the model's `approvalWorkflow()` method;
+3. the `approval.workflows` config map, where one slug names one workflow and a
+   list of slugs is a preference order;
+4. the workflows whose `approvable_type` column names the model.
+
+A workflow named at the call site is used as named. Everything the package
+gathers for itself is filtered first: an inactive workflow is out, and so is one
+whose condition says it does not apply to the submission in hand.
+
+That is what lets one model have more than one workflow. Register them against
+the model type, give each the condition that selects it, and order whatever is
+left by priority:
+
+```php
+use ByRcsc\LaravelApproval\Contracts\WorkflowCondition;
+use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
+use Illuminate\Database\Eloquent\Model;
+
+final class AmountAbove implements WorkflowCondition
+{
+    public function applies(
+        ApprovalWorkflow $workflow,
+        Model $approvable,
+        ?Model $requester,
+        array $config,
+    ): bool {
+        return $approvable->amount > $config['amount'];
+    }
+}
+
+ApprovalWorkflow::create([
+    'name' => 'Executive purchase orders',
+    'slug' => 'purchase-order-executive',
+    'approvable_type' => PurchaseOrder::class,
+    'condition' => AmountAbove::class,
+    'condition_config' => ['amount' => 10_000],
+    'priority' => 10,
+]);
+```
+
+A condition judges the proposal rather than the record behind it: a purchase
+order submitted with a draft raising its amount to 20,000 is judged on 20,000.
+The requester is passed too, and is null when nobody is submitting yet.
+
+The highest priority wins. Two applicable workflows sharing a priority are
+refused with an `AmbiguousWorkflowException` rather than resolved arbitrarily,
+since otherwise which one ran would come down to insertion order.
+
+Ask what applies before submitting anything - this is the query behind a
+workflow picker:
+
+```php
+Approval::workflowsFor($order);                       // applicable, best first
+Approval::workflowsFor($order, $requester, $draft);   // for this submission
+Approval::workflowFor($order);                        // the one it would use
+Approval::workflows();                                // every active workflow
+```
+
+The fluent definition builder registers the same thing, so this stays under
+version control with the rest of the workflow:
+
+```php
+WorkflowBuilder::make('purchase-order-executive')
+    ->forApprovable(PurchaseOrder::class)
+    ->when(AmountAbove::class, ['amount' => 10_000])
+    ->priority(10)
+    ->stage('Finance', fn ($stage) => $stage->approver($cfo));
+```
+
 ### Deciding many at once
 
 Bulk operations use one naming convention, the `Many` suffix. Each request is
@@ -343,7 +418,8 @@ only model-side alias, for the one operation that starts on the model.
 | `Approval::overdue()` | Open requests past their stage deadline |
 | `Approval::pendingFor()` | A model's one unresolved request, or null |
 | `Approval::requestsFor()` | A model's request history, newest first |
-| `Approval::workflow()` / `findWorkflow()` / `workflowFor()` | Workflow lookup |
+| `Approval::workflow()` / `findWorkflow()` | Workflow lookup by slug |
+| `Approval::workflows()` / `workflowsFor()` / `workflowFor()` | Which workflows apply, and the one a submission would use |
 
 The `canX()` forms return the boolean; the eligibility forms return the reason
 too. The request-level equivalents (`$request->canBeApprovedBy()` and friends)
@@ -472,6 +548,9 @@ Nothing is written to the approval tables while the fake is active.
   organization-specific rules.
 - Snapshotted workflows, conditional stages, and version-controlled workflow
   definitions with safe preview and sync commands.
+- Several workflows per model, registered against the model type and chosen by
+  workflow-level conditions and priority, with the applicable set queryable
+  before anything is submitted.
 - Attribute drafts, cast-aware stale checks, explicit conflict resolution, and
   revise-and-resubmit flows.
 - Eligibility read models, a Laravel policy, bulk decisions, delegation,

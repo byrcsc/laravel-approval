@@ -177,7 +177,10 @@ final class SubmitForApproval
         }
 
         $plan = [];
-        $proposed = $this->proposed($approvable, $newAttributes);
+
+        // Conditions judge the proposal, including held draft values, without
+        // mutating the real model or changing what approver resolvers receive.
+        $proposed = Attributes::proposed($approvable, $newAttributes);
 
         foreach ($stages as $stage) {
             $this->guardRejectionPolicy($slug, $stage);
@@ -205,24 +208,6 @@ final class SubmitForApproval
         assert($plan !== []);
 
         return $plan;
-    }
-
-    /**
-     * Conditions judge the proposal, including held draft values, without
-     * mutating the real model or changing what approver resolvers receive.
-     *
-     * @param  array<string, mixed>|null  $newAttributes
-     */
-    private function proposed(Model $approvable, ?array $newAttributes): Model
-    {
-        if ($newAttributes === null) {
-            return $approvable;
-        }
-
-        $proposed = clone $approvable;
-        $proposed->forceFill($newAttributes);
-
-        return $proposed;
     }
 
     private function guardApprovalRule(string $slug, StageSnapshot $snapshot, int $available): void

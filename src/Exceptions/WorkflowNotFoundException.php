@@ -35,8 +35,23 @@ final class WorkflowNotFoundException extends ApprovalException
     public static function forApprovable(Model $approvable): self
     {
         return new self(sprintf(
-            'No approval workflow could be resolved for [%s]. Pass one to submitForApproval(), return one from approvalWorkflow(), or map the model in the [approval.workflows] config.',
+            'No approval workflow could be resolved for [%s]. Pass one to submitForApproval(), return one from approvalWorkflow(), map the model in the [approval.workflows] config, or register a workflow against the model type.',
             $approvable::class,
+        ));
+    }
+
+    /**
+     * Workflows were found for the model and every one of them was ruled out,
+     * which is a different problem from finding none at all.
+     *
+     * @param  list<string>  $considered
+     */
+    public static function noneApplicable(Model $approvable, array $considered): self
+    {
+        return new self(sprintf(
+            'No approval workflow applies to [%s]. Considered and ruled out as inactive or not applicable: [%s].',
+            $approvable::class,
+            implode('], [', $considered),
         ));
     }
 }

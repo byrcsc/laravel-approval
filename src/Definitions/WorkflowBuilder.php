@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Definitions;
 
+use ByRcsc\LaravelApproval\Contracts\WorkflowCondition;
 use Closure;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 final class WorkflowBuilder
@@ -37,6 +39,47 @@ final class WorkflowBuilder
     public function active(bool $active = true): self
     {
         $this->definition['active'] = $active;
+
+        return $this;
+    }
+
+    /**
+     * Register this workflow against a model type, which is what lets a model
+     * have more than one and lets the package choose between them.
+     *
+     * @param  Model|class-string<Model>  $approvable
+     */
+    public function forApprovable(Model|string $approvable): self
+    {
+        $this->definition['approvable_type'] = $approvable instanceof Model
+            ? $approvable->getMorphClass()
+            : $approvable;
+
+        return $this;
+    }
+
+    /**
+     * The condition that decides whether this workflow applies to a submission.
+     * Only consulted while a workflow is being chosen.
+     *
+     * @param  class-string<WorkflowCondition>  $condition
+     * @param  array<string, mixed>  $config
+     */
+    public function when(string $condition, array $config = []): self
+    {
+        $this->definition['condition'] = $condition;
+        $this->definition['condition_config'] = $config === [] ? null : $config;
+
+        return $this;
+    }
+
+    /**
+     * Which of two applicable workflows wins. Highest first; equal priorities
+     * are refused at submit time rather than resolved arbitrarily.
+     */
+    public function priority(int $priority): self
+    {
+        $this->definition['priority'] = $priority;
 
         return $this;
     }

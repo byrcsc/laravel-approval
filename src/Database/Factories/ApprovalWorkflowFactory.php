@@ -7,6 +7,7 @@ namespace ByRcsc\LaravelApproval\Database\Factories;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\Sequence;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 /**
@@ -28,6 +29,10 @@ final class ApprovalWorkflowFactory extends Factory
             'slug' => Str::slug($name).'-'.Str::lower(Str::random(6)),
             'description' => fake()->sentence(),
             'active' => true,
+            'approvable_type' => null,
+            'condition' => null,
+            'condition_config' => null,
+            'priority' => 0,
             'settings' => null,
         ];
     }
@@ -35,6 +40,17 @@ final class ApprovalWorkflowFactory extends Factory
     public function inactive(): self
     {
         return $this->state(['active' => false]);
+    }
+
+    /**
+     * @param  Model|class-string<Model>  $approvable
+     */
+    public function forApprovable(Model|string $approvable, int $priority = 0): self
+    {
+        return $this->state([
+            'approvable_type' => $approvable instanceof Model ? $approvable->getMorphClass() : $approvable,
+            'priority' => $priority,
+        ]);
     }
 
     public function withStages(int $count = 1): self

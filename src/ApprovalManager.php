@@ -17,6 +17,7 @@ use ByRcsc\LaravelApproval\Actions\EscalateOverdueStages;
 use ByRcsc\LaravelApproval\Actions\ReassignApprover;
 use ByRcsc\LaravelApproval\Actions\RejectRequest;
 use ByRcsc\LaravelApproval\Actions\ResolveConflict;
+use ByRcsc\LaravelApproval\Actions\ResolveWorkflows;
 use ByRcsc\LaravelApproval\Actions\ResyncRequestApprovers;
 use ByRcsc\LaravelApproval\Actions\ReturnRequest;
 use ByRcsc\LaravelApproval\Actions\ReviseAndResubmitRequest;
@@ -34,6 +35,7 @@ use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
+use ByRcsc\LaravelApproval\Exceptions\AmbiguousWorkflowException;
 use ByRcsc\LaravelApproval\Exceptions\MissingRequesterException;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
 use ByRcsc\LaravelApproval\Facades\Approval;
@@ -41,10 +43,12 @@ use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
+use ByRcsc\LaravelApproval\Support\Attributes;
 use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -81,17 +85,72 @@ class ApprovalManager
     }
 
     /**
-     * Resolves a workflow from three sources, most specific first: the argument,
-     * the model's `approvalWorkflow()`, then the `approval.workflows` config
-     * map. The first source that answers is used.
+     * Every active workflow, by name. The query to build a maintenance screen
+     * or an administrative list from; {@see self::workflowsFor()} is the one to
+     * offer a requester.
+     *
+     * @return Builder<ApprovalWorkflow>
      */
-    public function workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null): ApprovalWorkflow
+    public function workflows(): Builder
     {
-        $resolved = $this->coerceWorkflow($given)
-            ?? $this->coerceWorkflow($this->declaredWorkflow($approvable))
-            ?? $this->coerceWorkflow($this->mappedWorkflow($approvable));
+        return ApprovalWorkflow::query()->active()->orderBy('name')->orderBy('id');
+    }
 
-        return $resolved ?? throw WorkflowNotFoundException::forApprovable($approvable);
+    /**
+     * The workflows this record could be submitted against, best first.
+     *
+     * Inactive workflows are absent, and so are workflows whose condition rules
+     * them out for this submission. This is the query a form builds a choice
+     * from, and {@see self::workflowFor()} is its first entry.
+     *
+     * @param  array<string, mixed>|null  $newAttributes  the draft the submission would hold, which conditions judge
+     * @return Collection<int, ApprovalWorkflow>
+     */
+    public function workflowsFor(
+        Model $approvable,
+        ?Model $requester = null,
+        ?array $newAttributes = null,
+    ): Collection {
+        $resolved = $this->resolveWorkflows($approvable, $requester, $newAttributes);
+
+        return collect($resolved['applicable'])
+            ->map(fn (array $candidate): ApprovalWorkflow => $candidate['workflow']);
+    }
+
+    /**
+     * The one workflow a submission runs under.
+     *
+     * The argument wins outright: a workflow named at the call site is used as
+     * named, active or not, condition or not. With nothing named, this is the
+     * first of {@see self::workflowsFor()} - and when two workflows are equally
+     * specific, it refuses rather than picking one.
+     *
+     * @param  array<string, mixed>|null  $newAttributes  the draft the submission would hold, which conditions judge
+     */
+    public function workflowFor(
+        Model $approvable,
+        ApprovalWorkflow|string|null $given = null,
+        ?Model $requester = null,
+        ?array $newAttributes = null,
+    ): ApprovalWorkflow {
+        $named = $this->coerceWorkflow($given);
+
+        if ($named !== null) {
+            return $named;
+        }
+
+        $resolved = $this->resolveWorkflows($approvable, $requester, $newAttributes);
+        $applicable = $resolved['applicable'];
+
+        if ($applicable === []) {
+            throw $resolved['considered'] === []
+                ? WorkflowNotFoundException::forApprovable($approvable)
+                : WorkflowNotFoundException::noneApplicable($approvable, $resolved['considered']);
+        }
+
+        $this->guardAmbiguity($approvable, $applicable);
+
+        return $applicable[0]['workflow'];
     }
 
     /**
@@ -109,11 +168,15 @@ class ApprovalManager
         /** @var SubmitForApproval $submit */
         $submit = $this->container->make(SubmitForApproval::class);
 
+        // The requester is resolved first: a workflow condition may be about
+        // who is submitting, so it cannot be chosen before that is known.
+        $requester ??= $this->requesterFor($approvable);
+
         return $submit(
             $approvable,
-            $this->workflowFor($approvable, $workflow),
+            $this->workflowFor($approvable, $workflow, $requester, $newAttributes),
             $newAttributes,
-            $requester ?? $this->requesterFor($approvable),
+            $requester,
             $comment,
             $metadata,
         );
@@ -513,35 +576,41 @@ class ApprovalManager
         };
     }
 
-    private function declaredWorkflow(Model $approvable): ApprovalWorkflow|string|null
+    /**
+     * @param  array<string, mixed>|null  $newAttributes
+     * @return array{applicable: list<array{workflow: ApprovalWorkflow, tier: int}>, considered: list<string>}
+     */
+    private function resolveWorkflows(Model $approvable, ?Model $requester, ?array $newAttributes): array
     {
-        if (! method_exists($approvable, 'approvalWorkflow')) {
-            return null;
-        }
-
-        /** @var mixed $declared */
-        $declared = $approvable->approvalWorkflow();
-
-        return $declared instanceof ApprovalWorkflow || is_string($declared) ? $declared : null;
+        return $this->container->make(ResolveWorkflows::class)($approvable, $requester, $newAttributes);
     }
 
     /**
-     * The `approval.workflows` map, keyed by model class. The class name is
-     * matched first and the morph alias second, so configuration can be written
-     * in either form.
+     * Two workflows that are equally specific and equally prioritized are a
+     * configuration the package cannot resolve, and picking one of them would
+     * make which workflow ran a matter of insertion order.
+     *
+     * @param  non-empty-list<array{workflow: ApprovalWorkflow, tier: int}>  $applicable
      */
-    private function mappedWorkflow(Model $approvable): ?string
+    private function guardAmbiguity(Model $approvable, array $applicable): void
     {
-        /** @var mixed $map */
-        $map = config('approval.workflows');
+        $first = $applicable[0];
+        $priority = Attributes::int($first['workflow'], 'priority');
 
-        if (! is_array($map)) {
-            return null;
+        $tied = array_values(array_filter(
+            $applicable,
+            fn (array $candidate): bool => $candidate['tier'] === $first['tier']
+                && Attributes::int($candidate['workflow'], 'priority') === $priority,
+        ));
+
+        if (count($tied) < 2) {
+            return;
         }
 
-        /** @var mixed $slug */
-        $slug = $map[$approvable::class] ?? $map[$approvable->getMorphClass()] ?? null;
-
-        return is_string($slug) && $slug !== '' ? $slug : null;
+        throw AmbiguousWorkflowException::forApprovable(
+            $approvable,
+            array_map(fn (array $candidate): string => Attributes::string($candidate['workflow'], 'slug'), $tied),
+            $priority,
+        );
     }
 }
