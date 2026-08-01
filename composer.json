@@ -51,7 +51,10 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "ByRcsc\\LaravelApproval\\Tests\\": "tests/"
+            "ByRcsc\\LaravelApproval\\Tests\\": "tests/",
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
         }
     },
     "scripts": {
@@ -60,7 +63,9 @@
         "analyse": "vendor/bin/phpstan analyse",
         "test": "vendor/bin/pest",
         "test-coverage": "vendor/bin/pest --coverage",
-        "format": "vendor/bin/pint"
+        "format": "vendor/bin/pint",
+        "build": "@php vendor/bin/testbench workbench:build --ansi",
+        "clear": "@php vendor/bin/testbench package:purge-skeleton --ansi"
     },
     "config": {
         "sort-packages": true,
