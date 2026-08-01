@@ -137,14 +137,15 @@ change to them in the pull request:
   storage**, and no reading of storage disks to recompute attachment checksums.
 - **No arbitrary BPMN branching, parallel stage graphs, or loops.** Stages are
   sequential.
-- **No compatibility aliases for pre-1.0 names.** Removed names are removed.
+- **No compatibility aliases or deprecation shims.** A removed name is removed
+  in the major release that removes it, and documented in the changelog.
 
 ## Commits and branches
 
 Branch off `main` as `feat/…`, `fix/…`, `docs/…`, `refactor/…`, or `chore/…`,
 and write [Conventional Commits](https://www.conventionalcommits.org/)
 (`feat:`, `fix:`, `docs:`, `refactor:`, `chore:`). Mark breaking changes with
-`!`, which matters while the package is pre-1.0 and changing shape.
+`!`, which is what decides whether a release is a major one.
 
 ## Security
 

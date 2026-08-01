@@ -12,10 +12,6 @@ until approval, and a verifiable action history.
 The package provides the approval engine. Your application keeps ownership of
 its UI, users, roles, and organizational rules.
 
-> [!WARNING]
-> **Pre-1.0.** The public API may change without notice. Names removed before
-> 1.0 are removed outright; no compatibility aliases are shipped.
-
 | Laravel | Tested PHP versions |
 |---|---|
 | 12.x | 8.3, 8.4 |
@@ -228,7 +224,7 @@ and none of it as ruled out forever.
 - **An approval UI.** No admin screens and no approver inbox. The package ships
   the queries an inbox is built from; the interface is yours.
 - **Roles, teams, org charts, or tenancy.** An approver entry names one exact
-  actor. A `Team` or `Role` model is never expanded into its members — use an
+  actor. A `Team` or `Role` model is never expanded into its members; use an
   approver resolver to do that. Workflow slugs share one global namespace.
 - **A publication or visibility state machine.** Approving a request changes the
   request, never the record's lifecycle. Attribute drafts are the one built-in
@@ -245,17 +241,17 @@ and none of it as ruled out forever.
 
 ## Documentation
 
-- [Installation and setup](https://docs.rcsc.dev/laravel-approval/v0/installation)
-- [Quick start](https://docs.rcsc.dev/laravel-approval/v0/quick-start)
-- [Workflows and stages](https://docs.rcsc.dev/laravel-approval/v0/workflows-and-stages)
-- [Choosing the workflow](https://docs.rcsc.dev/laravel-approval/v0/choosing-the-workflow)
-- [Approvers and resolvers](https://docs.rcsc.dev/laravel-approval/v0/approvers-and-resolvers)
-- [Recording decisions](https://docs.rcsc.dev/laravel-approval/v0/decisions)
-- [Attribute drafts](https://docs.rcsc.dev/laravel-approval/v0/attribute-drafts)
-- [Notifications](https://docs.rcsc.dev/laravel-approval/v0/notifications)
-- [Audit trail and evidence](https://docs.rcsc.dev/laravel-approval/v0/audit-trail)
-- [Testing](https://docs.rcsc.dev/laravel-approval/v0/testing)
-- [Troubleshooting](https://docs.rcsc.dev/laravel-approval/v0/troubleshooting)
+- [Installation and setup](https://docs.rcsc.dev/laravel-approval/v1/installation)
+- [Quick start](https://docs.rcsc.dev/laravel-approval/v1/quick-start)
+- [Workflows and stages](https://docs.rcsc.dev/laravel-approval/v1/workflows-and-stages)
+- [Choosing the workflow](https://docs.rcsc.dev/laravel-approval/v1/choosing-the-workflow)
+- [Approvers and resolvers](https://docs.rcsc.dev/laravel-approval/v1/approvers-and-resolvers)
+- [Recording decisions](https://docs.rcsc.dev/laravel-approval/v1/decisions)
+- [Attribute drafts](https://docs.rcsc.dev/laravel-approval/v1/attribute-drafts)
+- [Notifications](https://docs.rcsc.dev/laravel-approval/v1/notifications)
+- [Audit trail and evidence](https://docs.rcsc.dev/laravel-approval/v1/audit-trail)
+- [Testing](https://docs.rcsc.dev/laravel-approval/v1/testing)
+- [Troubleshooting](https://docs.rcsc.dev/laravel-approval/v1/troubleshooting)
 
 ## Development
 
@@ -270,8 +266,8 @@ vendor/bin/pint --test
 
 PHPStan runs at `max` with no baseline. Tests use SQLite locally and run against
 MySQL and PostgreSQL in CI. `tests/Release/` pins the public surface and the
-documented guarantees — a failure there is asking whether you meant to change
-the API. See [CONTRIBUTING.md](CONTRIBUTING.md).
+documented guarantees. A failure there is asking whether you meant to change the
+API. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 `workbench/` is a bootable demo application that installs the package the way a
 real application would, and exercises every integration seam: resolvers,
@@ -280,15 +276,33 @@ delegation, evidence, notifications, and a policy above this package's.
 `composer build` sets it up; see
 [workbench/README.md](workbench/README.md) for the demo loop.
 
-## Support and contributing
+## Versioning
 
-Ask usage questions in
-[GitHub Discussions](https://github.com/byrcsc/laravel-approval/discussions).
-For reproducible package bugs,
-[open an issue](https://github.com/byrcsc/laravel-approval/issues).
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+The package follows [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-Report vulnerabilities privately by following [SECURITY.md](SECURITY.md).
+- Upgrading within `1.x` is safe. Nothing you use will break.
+- Only a new major version, like `2.0.0`, can break your code.
+- If the README or the documentation describes it, it is safe to build on.
+  If they don't, treat it as internal and expect it to change.
+
+Bug fixes go into the newest version only. To get a fix, upgrade to it.
+
+## Questions and issues
+
+- **Stuck, or have an idea?** Start a
+  [discussion](https://github.com/byrcsc/laravel-approval/discussions). Usage
+  questions and feature ideas both live there.
+- **Found a bug you can reproduce?**
+  [Open an issue](https://github.com/byrcsc/laravel-approval/issues). A failing
+  test is the fastest way to a fix, and a short reproduction is the next best
+  thing.
+- **Found a security problem?** Please don't open a public issue. See
+  [SECURITY.md](SECURITY.md) for how to report it privately.
+- **Planning a pull request?** [CONTRIBUTING.md](CONTRIBUTING.md) covers the
+  setup and the three checks it needs to pass.
+
+This package is maintained by one person, so replies can take a while.
+Everything gets read.
 
 ## Credits
 

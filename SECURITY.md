@@ -17,7 +17,9 @@ issue is being actively exploited, say so in the title.
 ## Supported versions
 
 Security fixes are released for the latest package version and are not
-backported. The package is pre-1.0, so keep your dependency constraint current.
+backported, and neither are ordinary bug fixes. Only the current major receives
+either; when a new major is released, the previous one stops receiving fixes.
+Keep your dependency constraint current.
 
 ## What this package does and does not protect
 
