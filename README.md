@@ -12,13 +12,6 @@ until approval, and a verifiable action history.
 The package provides the approval engine. Your application keeps ownership of
 its UI, users, roles, and organizational rules.
 
-**Full documentation is a work in progress.** Until it is published, this README
-covers installation, usage, the feature set, and the operational notes.
-
-> [!WARNING]
-> **Pre-1.0.** The public API may change without notice. Names removed before
-> 1.0 are removed outright; no compatibility aliases are shipped.
-
 | Laravel | Tested PHP versions |
 |---|---|
 | 12.x | 8.3, 8.4 |
@@ -116,427 +109,24 @@ it to null, and every resolved assignment must approve. Fluent definitions,
 array definitions, persisted rows, and request snapshots all read omission the
 same way.
 
-### Approver identity
-
-An approver entry names **one exact actor identity**. The model named on the
-entry is the only identity that may decide it.
-
-A `Team`, `Role`, `Position`, or other container model is **not** expanded into
-its members. Assigning a team assigns the team record itself, and only something
-acting as that team can approve. To assign the members, use an approver
-resolver, which is resolved once at submission and must return persisted actor
-models:
-
-```php
-use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
-use ByRcsc\LaravelApproval\Data\StageSnapshot;
-use Illuminate\Database\Eloquent\Model;
-
-final class FinanceTeamMembers implements ApproverResolver
-{
-    public function resolve(
-        StageSnapshot $stage,
-        Model $approvable,
-        Model $requester,
-        array $config,
-    ): iterable {
-        return Team::findOrFail($config['team'])->members;
-    }
-}
-
-$stage->approvers()->create([
-    'resolver' => FinanceTeamMembers::class,
-    'resolver_config' => ['team' => $financeTeam->getKey()],
-]);
-```
-
-Resolvers are the seam for roles, teams, reporting lines, and any other
-organizational rule. Their answer is snapshotted onto the request, so a later
-organizational change does not rewrite in-flight work.
-
-### Fetching a workflow's configured approvers
-
-Load the stages, approver entries, and concrete approver models together:
-
-```php
-$workflow = ApprovalWorkflow::query()
-    ->with('stages.approvers.approver')
-    ->where('slug', 'purchase-order')
-    ->firstOrFail();
-
-$approversByStage = $workflow->stages->mapWithKeys(
-    fn ($stage) => [
-        $stage->sequence => $stage->approvers->map(
-            fn ($entry) => $entry->approver ?? $entry->resolver,
-        ),
-    ],
-);
-```
-
-Each value is either a concrete approver model or a resolver class-string. A
-resolver-backed entry cannot name its approvers from the workflow alone: it needs
-the approvable model, the requester, and the stage configuration. Its approvers
-are resolved and snapshotted when a request is submitted.
-
-### Submitting and deciding
-
-Submit the record, optionally holding proposed attribute changes until the
-workflow completes:
+Submit the record, optionally with the attribute changes the approval is for,
+and record a decision:
 
 ```php
 use ByRcsc\LaravelApproval\Facades\Approval;
 
-$request = $order->submitForApproval(
-    'purchase-order',
-    ['amount' => 10_000],
-);
-```
+$request = $order->submitForApproval('purchase-order', ['amount' => 10_000]);
 
-Omit the second argument for a record-level request. Drafted attributes are not
-written to the model until the last required approval; use
-`$order->pendingDraft()` to inspect the proposed values.
-
-The three decisions are on the facade:
-
-```php
 Approval::approve($request, $financeUser);
-Approval::reject($request, $financeUser, $reason);
-Approval::returnForRevision($request, $financeUser, $whatToFix);
 ```
 
-A returned request waits on its requester, who revises the draft and resubmits.
-That creates a new linked request starting from the first applicable stage of a
-fresh workflow snapshot:
-
-```php
-use ByRcsc\LaravelApproval\Data\RevisedDraft;
-
-Approval::reviseAndResubmit($request, RevisedDraft::withAttributes([
-    'amount' => 8_000,
-]));
-```
-
-`RevisedDraft::inherit()` carries the previous draft forward unchanged, and
-`RevisedDraft::none()` submits the record itself. Revised attributes are
-revalidated against the model's `approvableAttributes()`.
-
-A requester withdraws their own pending request; an approver hands their
-assignment to someone else; either may attach supporting evidence:
-
-```php
-use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
-
-Approval::withdraw($request, $requester, 'Raised in error');
-Approval::delegate($request, $financeUser, $deputy, 'On leave this week');
-
-Approval::attach(new AttachmentEvidence(
-    request: $request,
-    disk: 's3',
-    path: 'quotes/PO-1001.pdf',
-    checksum: hash_file('sha256', $localPath),
-    name: 'Supplier quote.pdf',
-    uploader: $requester,
-));
-```
-
-### Choosing the workflow
-
-The workflow argument is optional. With nothing named, the package asks four
-sources in order and takes the first that answers:
-
-1. the argument at the call site;
-2. the model's `approvalWorkflow()` method;
-3. the `approval.workflows` config map, where one slug names one workflow and a
-   list of slugs is a preference order;
-4. the workflows whose `approvable_type` column names the model.
-
-A workflow named at the call site is used as named. Everything the package
-gathers for itself is filtered first: an inactive workflow is out, and so is one
-whose condition says it does not apply to the submission in hand.
-
-That is what lets one model have more than one workflow. Register them against
-the model type, give each the condition that selects it, and order whatever is
-left by priority:
-
-```php
-use ByRcsc\LaravelApproval\Contracts\WorkflowCondition;
-use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
-use Illuminate\Database\Eloquent\Model;
-
-final class AmountAbove implements WorkflowCondition
-{
-    public function applies(
-        ApprovalWorkflow $workflow,
-        Model $approvable,
-        ?Model $requester,
-        array $config,
-    ): bool {
-        return $approvable->amount > $config['amount'];
-    }
-}
-
-ApprovalWorkflow::create([
-    'name' => 'Executive purchase orders',
-    'slug' => 'purchase-order-executive',
-    'approvable_type' => PurchaseOrder::class,
-    'condition' => AmountAbove::class,
-    'condition_config' => ['amount' => 10_000],
-    'priority' => 10,
-]);
-```
-
-A condition judges the proposal rather than the record behind it: a purchase
-order submitted with a draft raising its amount to 20,000 is judged on 20,000.
-The requester is passed too, and is null when nobody is submitting yet.
-
-The highest priority wins. Two applicable workflows sharing a priority are
-refused with an `AmbiguousWorkflowException` rather than resolved arbitrarily,
-since otherwise which one ran would come down to insertion order.
-
-Ask what applies before submitting anything - this is the query behind a
-workflow picker:
-
-```php
-Approval::workflowsFor($order);                       // applicable, best first
-Approval::workflowsFor($order, $requester, $draft);   // for this submission
-Approval::workflowFor($order);                        // the one it would use
-Approval::workflows();                                // every active workflow
-```
-
-The fluent definition builder registers the same thing, so this stays under
-version control with the rest of the workflow:
-
-```php
-WorkflowBuilder::make('purchase-order-executive')
-    ->forApprovable(PurchaseOrder::class)
-    ->when(AmountAbove::class, ['amount' => 10_000])
-    ->priority(10)
-    ->stage('Finance', fn ($stage) => $stage->approver($cfo));
-```
-
-### Deciding many at once
-
-Bulk operations use one naming convention, the `Many` suffix. Each request is
-decided in its own transaction, so one failure does not roll back the rest:
-
-```php
-$result = Approval::approveMany($requests, $financeUser);
-$result = Approval::rejectMany($requests, $financeUser, 'Over budget');
-
-$result->successful();   // list<BulkDecisionOutcome>
-$result->failed();       // each carrying the request and its exception
-```
-
-`Approval::decideMany($requests, fn ($request) => $decision)` is the advanced
-form, for building a different decision per request.
-
-### Reading the active request
-
-```php
-$request = Approval::pendingFor($order);
-
-$currentStage = $request?->currentStage();
-$pendingApprovers = $request?->pendingApprovers() ?? collect();
-
-// Equivalent model-side helpers:
-$currentStage = $order->currentApprovalStage();
-$pendingApprovers = $order->pendingApprovalApprovers();
-```
-
-`pendingApprovers()` lists only the assignment holders who may still respond,
-accounting for delegation. `currentStageApprovers()` lists every holder of the
-current stage, including those who have already responded. For every stage and
-its progress, use `$request->timeline()`.
-
-Build an approver inbox with the package query:
-
-```php
-$requests = Approval::awaiting($user)
-    ->withProgress()
-    ->get();
-```
-
-Ask before rendering or executing a decision. The eligibility result uses the
-same calculation as the command and explains a refusal:
-
-```php
-$eligibility = Approval::eligibility($request, $user);
-
-if ($eligibility->eligible) {
-    Approval::approve($request, $user);
-}
-
-$eligibility->reason;          // null, or an Ineligibility enum
-$progress = $request->stageProgress();
-
-$progress?->assignedApprovers;
-$progress?->decisionsRecorded;
-$progress?->approvalsReceived;
-$progress?->approvalsRequired;
-$progress?->remainingApprovals;
-$progress?->rejectionsReceived;
-$progress?->status;
-$progress?->isSatisfied();
-```
-
-Withdrawal and delegation eligibility are request-level questions:
-
-```php
-$request->canBeWithdrawnBy($requester);
-$request->canBeDelegatedBy($approver);
-$request->canBeApprovedBy($approver);
-```
-
-Use `$user->can('approve', $request)` when authorizing through the shipped
-policy. Its abilities are `view`, `approve`, `reject`, `returnForRevision`,
-`withdraw`, `delegate`, and `cancel`. `cancel` denies by default because
-administrative cancellation is host-owned; grant it in your own policy. Extend
-the shipped policy when your application has additional organizational rules.
-
-### The routine facade surface
-
-One path per routine command and query. `$model->submitForApproval(...)` is the
-only model-side alias, for the one operation that starts on the model.
-
-| Command | |
-|---|---|
-| `Approval::submit()` | Submit a persisted record, optionally with a draft |
-| `Approval::approve()` / `reject()` / `returnForRevision()` | The three decisions |
-| `Approval::decide()` | Advanced: record a decision built elsewhere |
-| `Approval::approveMany()` / `rejectMany()` / `decideMany()` | The same, in bulk |
-| `Approval::withdraw()` | Requester withdrawal |
-| `Approval::delegate()` | An approver hands their assignment on |
-| `Approval::reviseAndResubmit()` | Revise a closed request into a new linked one |
-| `Approval::attach()` | Put a file in evidence |
-
-| Query | |
-|---|---|
-| `Approval::eligibility()` / `canApprove()` | May this actor decide, and why not |
-| `Approval::withdrawalEligibility()` / `canWithdraw()` | May this actor withdraw |
-| `Approval::delegationEligibility()` / `canDelegate()` | May this actor delegate |
-| `Approval::awaiting()` | The approver inbox |
-| `Approval::overdue()` | Open requests past their stage deadline |
-| `Approval::pendingFor()` | A model's one unresolved request, or null |
-| `Approval::requestsFor()` | A model's request history, newest first |
-| `Approval::workflow()` / `findWorkflow()` | Workflow lookup by slug |
-| `Approval::workflows()` / `workflowsFor()` / `workflowFor()` | Which workflows apply, and the one a submission would use |
-
-The `canX()` forms return the boolean; the eligibility forms return the reason
-too. The request-level equivalents (`$request->canBeApprovedBy()` and friends)
-answer the same questions when you already hold the request.
-
-### Administrative and operational operations
-
-These are not part of routine approval flow. Keep them behind administrative
-authorization, a console command, or a scheduled job:
-
-| Operation | What it does |
-|---|---|
-| `Approval::cancel()` | Administrative cancellation; requires an attributable actor |
-| `Approval::reassign()` | Rewrites which approver an assignment belongs to |
-| `Approval::resync()` | Rebuilds a live request's assignments from the current workflow |
-| `Approval::resolve()` | Reapplies or discards a conflicted draft |
-| `Approval::withoutGuard()` | Runs a correction while guard mode holds a draft |
-| `Approval::syncDefinitions()` | Creates, updates, or previews persisted workflows |
-| `Approval::verifyTrail()` | Walks the action history's hash chains |
-| `Approval::escalateOverdue()` | Applies each overdue stage's escalation policy |
-
-The console equivalents are `approval:status`, `approval:sync`,
-`approval:escalate`, `approval:verify`, `approval:resync`, and
-`approval:doctor`. `approval:resync` takes `--operator` so the assignment change
-is attributed to a person rather than to shell history.
-
-### Notification content
-
-Notification delivery is off until you turn it on:
-
-```php
-'notifications' => ['enabled' => true, 'channels' => ['mail']],
-```
-
-There are three ways to change what those messages say, and the cheapest one
-that fits is the right one.
-
-**Reword or translate them.** Every user-facing string lives in one file:
-
-```bash
-php artisan vendor:publish --tag="approval-translations"
-```
-
-That writes `lang/vendor/approval/en/approval.php`. Edit it in place, or copy
-the directory to `es`, `fr`, and so on — messages follow the application locale
-at send time, so a request routed to a French-speaking approver reads in French
-without any work here. Placeholders may sit anywhere in a line:
-
-```php
-'requested' => [
-    'subject' => 'Approbation requise : :subject',
-    'body' => 'Il vous est demandé d\'approuver :subject.',
-],
-```
-
-`:subject` is the record's readable name, taken from its `name`, `title`,
-`reference`, or `label` attribute, and falling back to its class and key.
-
-**Restructure the emails.** To add a button linking into your own UI, change the
-layout, or drop a line entirely:
-
-```bash
-php artisan vendor:publish --tag="approval-views"
-```
-
-That writes `resources/views/vendor/approval/mail/*.blade.php`, one per message.
-Each is a normal markdown mail view that reads the translations, so publishing
-views does not freeze the wording:
-
-```blade
-<x-mail::message>
-{{ __('approval::approval.requested.body', ['subject' => $subject]) }}
-
-<x-mail::button :url="route('approvals.show', $request)">
-{{ __('Review it') }}
-</x-mail::button>
-</x-mail::message>
-```
-
-Each view receives `$subject`, `$reference`, `$request`, `$approvable` (null
-once the record is deleted), and `$notification`; the rejected and returned
-views also receive `$reason`.
-
-**Replace the message and its recipients.** When the audience is wrong, not just
-the words, point the event at your own class in `approval.notifications.map`:
-
-```php
-Events\ApprovalSubmitted::class => App\Notifications\ApprovalRequest::class,
-```
-
-Extend `ApprovalNotification`, implement `recipients()`, and use `mailFor()` to
-keep the publishable content path. Setting an entry to `null` silences that
-event instead.
-
-### Testing
-
-`Approval::fake()` records every public mutation instead of performing it, and
-provides an assertion for each:
-
-```php
-$fake = Approval::fake();
-
-$order->submitForApproval('purchase-order', ['amount' => 10_000]);
-
-$fake->assertSubmitted(
-    $order,
-    fn ($recorded) => $recorded->metadata['new_attributes'] === ['amount' => 10_000],
-);
-
-$fake->restore();
-```
-
-Recorded operations cover submission, decisions, bulk decisions, withdrawal,
-cancellation, delegation, reassignment, resynchronization, conflict resolution,
-resubmission, attachment, guard bypass, definition sync, and overdue processing.
-Each has a matching assertion, and `assertNothingRecorded()` covers all of them.
-Nothing is written to the approval tables while the fake is active.
+The new `amount` is not written to the order until the last required approval is
+recorded. Until then it is held on the request and readable through
+`$order->pendingDraft()->new`.
+
+That is the whole loop. Approver resolvers, drafts, delegation, escalation,
+authorization, and the rest are in the
+[documentation](#documentation).
 
 ## What is included
 
@@ -625,29 +215,94 @@ A clean result does **not** cover:
 The package provides no cryptographic signatures, HMAC protection, external hash
 anchoring, or write-once storage.
 
+## Out of scope
+
+The package draws its edges deliberately. What follows describes what it sets
+out to do rather than what it might do later: treat none of it as planned work,
+and none of it as ruled out forever.
+
+- **An approval UI.** No admin screens and no approver inbox. The package ships
+  the queries an inbox is built from; the interface is yours.
+- **Roles, teams, org charts, or tenancy.** An approver entry names one exact
+  actor. A `Team` or `Role` model is never expanded into its members; use an
+  approver resolver to do that. Workflow slugs share one global namespace.
+- **A publication or visibility state machine.** Approving a request changes the
+  request, never the record's lifecycle. Attribute drafts are the one built-in
+  hold-until-approved mechanism.
+- **Relationship drafts.** Drafts cover model attributes. Relationship changes
+  and uploaded file contents stay with the application.
+- **BPMN-style branching.** Stages are sequential. There are no parallel stage
+  graphs, loops, or arbitrary transitions.
+- **Cryptographic audit protection.** No signatures, HMAC, external anchoring,
+  or write-once storage, and the verifier never reads a storage disk. See
+  [Audit guarantees](#audit-guarantees) for what is and is not covered.
+- **Blocking every write path.** Guard mode covers Eloquent model events. Raw
+  SQL and query-builder writes are not intercepted.
+
 ## Documentation
 
-The full documentation is currently **WIP**. It will cover:
+- [Installation and setup](https://docs.rcsc.dev/laravel-approval/v1/installation)
+- [Quick start](https://docs.rcsc.dev/laravel-approval/v1/quick-start)
+- [Workflows and stages](https://docs.rcsc.dev/laravel-approval/v1/workflows-and-stages)
+- [Choosing the workflow](https://docs.rcsc.dev/laravel-approval/v1/choosing-the-workflow)
+- [Approvers and resolvers](https://docs.rcsc.dev/laravel-approval/v1/approvers-and-resolvers)
+- [Recording decisions](https://docs.rcsc.dev/laravel-approval/v1/decisions)
+- [Attribute drafts](https://docs.rcsc.dev/laravel-approval/v1/attribute-drafts)
+- [Notifications](https://docs.rcsc.dev/laravel-approval/v1/notifications)
+- [Audit trail and evidence](https://docs.rcsc.dev/laravel-approval/v1/audit-trail)
+- [Testing](https://docs.rcsc.dev/laravel-approval/v1/testing)
+- [Troubleshooting](https://docs.rcsc.dev/laravel-approval/v1/troubleshooting)
 
-- Installation, identity keys, migrations, and configuration.
-- Workflow definitions, resolvers, conditional stages, and synchronization.
-- Submission, decisions, drafts, conflicts, returns, and guard mode.
-- Delegation, reassignment, bulk decisions, SLAs, and escalation.
-- Authorization, querying, timelines, notifications, and events.
-- Audit verification, attachment evidence, testing, and operations.
+## Development
 
-Until then, the notes above describe the package boundaries, and the complete
-in-progress reference remains under local development.
+The local checks mirror CI:
 
-## Support and contributing
+```bash
+composer install
+composer test
+composer analyse
+vendor/bin/pint --test
+```
 
-Ask usage questions in
-[GitHub Discussions](https://github.com/byrcsc/laravel-approval/discussions).
-For reproducible package bugs,
-[open an issue](https://github.com/byrcsc/laravel-approval/issues).
+PHPStan runs at `max` with no baseline. Tests use SQLite locally and run against
+MySQL and PostgreSQL in CI. `tests/Release/` pins the public surface and the
+documented guarantees. A failure there is asking whether you meant to change the
+API. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Report vulnerabilities privately through the repository's
-[security advisory form](https://github.com/byrcsc/laravel-approval/security/advisories/new).
+`workbench/` is a bootable demo application that installs the package the way a
+real application would, and exercises every integration seam: resolvers,
+workflow and stage conditions, guard mode, drafts and conflicts, escalation,
+delegation, evidence, notifications, and a policy above this package's.
+`composer build` sets it up; see
+[workbench/README.md](workbench/README.md) for the demo loop.
+
+## Versioning
+
+The package follows [semantic versioning](https://semver.org/spec/v2.0.0.html).
+
+- Upgrading within `1.x` is safe. Nothing you use will break.
+- Only a new major version, like `2.0.0`, can break your code.
+- If the README or the documentation describes it, it is safe to build on.
+  If they don't, treat it as internal and expect it to change.
+
+Bug fixes go into the newest version only. To get a fix, upgrade to it.
+
+## Questions and issues
+
+- **Stuck, or have an idea?** Start a
+  [discussion](https://github.com/byrcsc/laravel-approval/discussions). Usage
+  questions and feature ideas both live there.
+- **Found a bug you can reproduce?**
+  [Open an issue](https://github.com/byrcsc/laravel-approval/issues). A failing
+  test is the fastest way to a fix, and a short reproduction is the next best
+  thing.
+- **Found a security problem?** Please don't open a public issue. See
+  [SECURITY.md](SECURITY.md) for how to report it privately.
+- **Planning a pull request?** [CONTRIBUTING.md](CONTRIBUTING.md) covers the
+  setup and the three checks it needs to pass.
+
+This package is maintained by one person, so replies can take a while.
+Everything gets read.
 
 ## Credits
 

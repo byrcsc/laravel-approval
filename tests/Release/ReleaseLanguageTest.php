@@ -38,6 +38,27 @@ function shippedFiles(): array
 }
 
 /**
+ * The governance documents are export-ignored, so they never reach a vendor
+ * install, but they are the first thing a contributor or a security reporter
+ * reads. They restate the audit boundary, so they are held to the same claim
+ * checks as the README. They are exempt from the vocabulary checks, because
+ * CONTRIBUTING.md names the retired words precisely in order to forbid them.
+ *
+ * @return array<string, string>
+ */
+function governanceFiles(): array
+{
+    $root = dirname(__DIR__, 2);
+    $files = [];
+
+    foreach (['SECURITY.md', 'CONTRIBUTING.md'] as $name) {
+        $files[$name] = (string) file_get_contents($root.'/'.$name);
+    }
+
+    return $files;
+}
+
+/**
  * @param  list<string>  $allowed  "path:needle" pairs that are intentional
  * @param  (callable(string): bool)|null  $only  limits the scan to matching paths
  * @return list<string>
@@ -138,6 +159,20 @@ it('documents record-level approval and attribute drafts truthfully', function (
     expect($readme)->toContain('already-persisted record')
         ->and($readme)->toContain('built-in hold-until-approved mechanism')
         ->and($readme)->toContain('does not hide, publish, activate,');
+});
+
+it('does not claim an immutable audit history in the governance documents', function (): void {
+    foreach (governanceFiles() as $name => $contents) {
+        expect($contents)->not->toMatch('/\b(immutable|tamper[- ]?proof|unalterable)\s+(audit|history|trail|log|actions?|record)/i', $name);
+    }
+});
+
+it('states the audit boundary in the security policy', function (): void {
+    $policy = governanceFiles()['SECURITY.md'];
+
+    expect($policy)->toContain('tamper-proof')
+        ->and($policy)->toContain('not against a database')
+        ->and($policy)->toContain('never reads a storage disk');
 });
 
 it('does not offer a compatibility or deprecation layer for the unpublished API', function (): void {

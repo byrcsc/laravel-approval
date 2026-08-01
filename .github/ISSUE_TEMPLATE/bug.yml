@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible problem with the package
+title: "[Bug]: "
+labels: ["bug"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for helping improve Laravel Approval. Remove personal information and any business data from workflow definitions, drafts, and logs before sharing them.
+    - type: textarea
+      id: what-happened
+      attributes:
+          label: What happened?
+          description: Tell us what happened and what you expected instead.
+          placeholder: I expected X, but Y happened.
+      validations:
+          required: true
+    - type: textarea
+      id: how-to-reproduce
+      attributes:
+          label: How to reproduce the bug
+          description: Provide the smallest code sample or sequence of steps that reliably reproduces the problem. A workflow definition and the decisions made against it is usually the clearest form.
+          placeholder: "1. Define a workflow with...\n2. Submit...\n3. Approve as...\n4. Observe..."
+      validations:
+          required: true
+    - type: input
+      id: package-version
+      attributes:
+          label: Package version
+          description: Which Laravel Approval version are you using?
+          placeholder: 0.1.0
+      validations:
+          required: true
+    - type: input
+      id: php-version
+      attributes:
+          label: PHP version
+          description: Which PHP version are you using?
+          placeholder: 8.3.0
+      validations:
+          required: true
+    - type: input
+      id: laravel-version
+      attributes:
+          label: Laravel version
+          description: Which Laravel version are you using?
+          placeholder: 12.0.0
+      validations:
+          required: true
+    - type: dropdown
+      id: database
+      attributes:
+          label: Which database are you using?
+          options:
+              - SQLite
+              - MySQL / MariaDB
+              - PostgreSQL
+              - Other
+      validations:
+          required: true
+    - type: dropdown
+      id: operating-systems
+      attributes:
+          label: Which operating systems does this happen with?
+          description: You may select more than one.
+          multiple: true
+          options:
+              - macOS
+              - Windows
+              - Linux
+    - type: textarea
+      id: notes
+      attributes:
+          label: Notes
+          description: Add any other relevant context, such as the relevant config, stack traces, or `approval:doctor` output.
+      validations:
+          required: false

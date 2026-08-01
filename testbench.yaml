@@ -1,0 +1,45 @@
+laravel: '@testbench'
+
+providers:
+  - Workbench\App\Providers\WorkbenchServiceProvider
+  - ByRcsc\LaravelApproval\ApprovalServiceProvider
+
+migrations:
+  - workbench/database/migrations
+
+seeders:
+  - Workbench\Database\Seeders\DatabaseSeeder
+
+workbench:
+  install: true
+  health: false
+  discovers:
+    config: false
+    # The demo models are seeded through factories, so these are discovered.
+    factories: true
+    # The demo's own commands are registered by WorkbenchServiceProvider, in
+    # the one file that stands in for an application's config edits.
+    commands: false
+    components: false
+    views: false
+    web: false
+    api: false
+  build:
+    - create-sqlite-db
+    # The package publishes its migration rather than loading it, exactly as a
+    # real application installs it. The published file is gitignored.
+    - vendor-publish:
+        --tag: approval-migrations
+        --force: true
+    - migrate-fresh
+    # `article-review` is built by the seeder out of ordinary Eloquent models,
+    # the way the README's quick start does. The two purchase-order workflows
+    # are version-controlled definitions in `WorkbenchServiceProvider`, and
+    # this is the step that writes them. Both paths ship a workflow; the demo
+    # runs one of each so neither goes untried.
+    - approval-sync
+
+# Environment lives in `workbench/.env`, which Testbench copies into the
+# skeleton on every run. Keeping it there rather than in an `env:` block below
+# means one source of truth, and that file explains why its values are what
+# they are.
