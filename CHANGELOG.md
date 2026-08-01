@@ -2,10 +2,31 @@
 
 All notable changes to `byrcsc/laravel-approval` will be documented in this file.
 
-## Unreleased
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The complete approval engine and its installation schema, currently under
-pre-release testing and compatibility review.
+## [Unreleased]
+
+### Added
+
+- **Workbench demo application** — `workbench/` is a bootable Laravel app that
+  installs the package the way a real application would and exercises every
+  integration seam: approver resolvers, workflow and stage conditions, guard
+  mode and its bypass, drafts and conflict resolution, SLA escalation with a
+  replaced strategy, delegation and administrative reassignment, attachment
+  evidence, opt-in notifications with a replaced message and audience, and a
+  policy extending the package's. Set it up with `composer build`; see
+  `workbench/README.md`. Development tooling only — it is excluded from the
+  Composer dist archive and is not covered by CI.
+
+## [0.1.0] - 2026-07-31
+
+First release. The complete approval engine and its installation schema.
+
+The package is pre-1.0: the public API may still change without notice, and
+names removed before 1.0 are removed outright rather than aliased. The
+`Changed` section below is the migration guide for installs that tracked a
+development branch before this release.
 
 ### Added
 
@@ -194,6 +215,9 @@ pre-release testing and compatibility review.
 - Rewrote the README, configuration comments, and docblocks in neutral language,
   removing election, parliamentary, conversational, and anthropomorphic framing.
 - No compatibility aliases, deprecation period, or consumer migration layer is
-  shipped for these renames: the package is unpublished, so removed names are
-  removed outright.
+  shipped for these renames: the package was unpublished when they were made, so
+  removed names are removed outright.
 - The package remains explicitly pre-1.0.
+
+[Unreleased]: https://github.com/byrcsc/laravel-approval/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/byrcsc/laravel-approval/releases/tag/v0.1.0
