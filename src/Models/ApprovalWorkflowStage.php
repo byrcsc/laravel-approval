@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalWorkflowStageFactory;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * One rung of a workflow: who signs off, how many of them are needed, and what
  * happens if nobody does in time.
  */
-final class ApprovalWorkflowStage extends Model
+class ApprovalWorkflowStage extends Model
 {
     /** @use HasFactory<ApprovalWorkflowStageFactory> */
     use HasFactory;
@@ -39,7 +40,7 @@ final class ApprovalWorkflowStage extends Model
      */
     public function workflow(): BelongsTo
     {
-        return $this->belongsTo(ApprovalWorkflow::class, 'workflow_id');
+        return $this->belongsTo(ApprovalModels::workflow(), 'workflow_id');
     }
 
     /**
@@ -47,7 +48,7 @@ final class ApprovalWorkflowStage extends Model
      */
     public function approvers(): HasMany
     {
-        return $this->hasMany(ApprovalWorkflowStageApprover::class, 'stage_id');
+        return $this->hasMany(ApprovalModels::workflowStageApprover(), 'stage_id');
     }
 
     /**

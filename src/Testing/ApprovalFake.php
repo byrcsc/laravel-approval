@@ -12,6 +12,8 @@ use ByRcsc\LaravelApproval\Data\BulkDecisionOutcome;
 use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
 use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
+use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
+use ByRcsc\LaravelApproval\Definitions\WorkflowDefinition;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\InteractionType;
 use ByRcsc\LaravelApproval\Enums\Verdict;
@@ -77,7 +79,7 @@ final class ApprovalFake extends ApprovalManager
      */
     public function submit(
         Model $approvable,
-        ApprovalWorkflow|string|null $workflow = null,
+        ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null,
         ?array $newAttributes = null,
         ?Model $requester = null,
         ?string $comment = null,
@@ -190,7 +192,7 @@ final class ApprovalFake extends ApprovalManager
         ApprovalRequest $request,
         RevisedDraft $draft,
         ?Model $requester = null,
-        ApprovalWorkflow|string|null $workflow = null,
+        ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null,
     ): ApprovalRequest {
         $this->interactions[] = new ApprovalInteraction(
             InteractionType::Resubmitted,

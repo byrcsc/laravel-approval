@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Support\Attributes;
@@ -169,7 +170,7 @@ final class ResolveWorkflows
     private function registered(Model $approvable): array
     {
         return array_values(
-            ApprovalWorkflow::query()
+            ApprovalModels::workflow()::query()
                 ->forApprovable($approvable)
                 ->inResolutionOrder()
                 ->get()
@@ -180,7 +181,7 @@ final class ResolveWorkflows
     private function bySlug(string $slug): ApprovalWorkflow
     {
         /** @var ApprovalWorkflow|null $workflow */
-        $workflow = ApprovalWorkflow::query()->where('slug', $slug)->first();
+        $workflow = ApprovalModels::workflow()::query()->where('slug', $slug)->first();
 
         return $workflow ?? throw WorkflowNotFoundException::forSlug($slug);
     }

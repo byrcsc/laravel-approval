@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Data\Draft;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\RequestState;
@@ -72,7 +73,7 @@ final class ResolveConflict
         $approvable->newQuery()->whereKey($approvable->getKey())->lockForUpdate()->get();
 
         /** @var ApprovalRequest|null $other */
-        $other = ApprovalRequest::query()
+        $other = ApprovalModels::request()::query()
             ->forApprovable($approvable)
             ->unresolved()
             ->whereKeyNot($request->getKey())

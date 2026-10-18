@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
 use ByRcsc\LaravelApproval\Definitions\StageDefinition;
 use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
@@ -32,7 +33,7 @@ final class SyncWorkflowDefinitions
         $refused = [];
 
         foreach ($normalized as $definition) {
-            $workflow = ApprovalWorkflow::withTrashed()
+            $workflow = ApprovalModels::workflow()::withTrashed()
                 ->with(['stages.approvers'])
                 ->where('slug', $definition->slug)
                 ->first();
@@ -185,7 +186,7 @@ final class SyncWorkflowDefinitions
 
     private function create(WorkflowDefinition $definition): ApprovalWorkflow
     {
-        $workflow = ApprovalWorkflow::create($definition->attributes());
+        $workflow = ApprovalModels::workflow()::create($definition->attributes());
 
         foreach ($definition->stages as $stage) {
             $this->createLevel($workflow, $stage);

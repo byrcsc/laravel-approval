@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Data\AttachmentEvidence;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
-use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Support\AttachmentSnapshot;
 use ByRcsc\LaravelApproval\Support\Labels;
 use Illuminate\Support\Facades\Date;
@@ -33,7 +33,7 @@ final class AttachFile
     public function __invoke(AttachmentEvidence $evidence): ApprovalAttachment
     {
         return DB::transaction(function () use ($evidence): ApprovalAttachment {
-            ApprovalRequest::query()
+            ApprovalModels::request()::query()
                 ->whereKey($evidence->request->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -55,7 +55,7 @@ final class AttachFile
                 createdAt: $createdAt->format('Y-m-d H:i:s'),
             );
 
-            $attachment = ApprovalAttachment::create([
+            $attachment = ApprovalModels::attachment()::create([
                 'request_id' => $evidence->request->getKey(),
                 ...$snapshot->fields(),
                 'created_at' => $createdAt,

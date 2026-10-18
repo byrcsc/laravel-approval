@@ -22,6 +22,7 @@ use ByRcsc\LaravelApproval\Testing\ApprovalFake;
  */
 it('pins the facade and manager command and query surface', function (): void {
     expect(declaredMethods(ApprovalManager::class))->toBe([
+        'applyDelegations',
         'approve',
         'approveMany',
         'attach',
@@ -34,10 +35,12 @@ it('pins the facade and manager command and query surface', function (): void {
         'decideMany',
         'delegate',
         'delegationEligibility',
+        'delegationsFrom',
         'eligibility',
         'escalateOverdue',
         'fake',
         'findWorkflow',
+        'grantDelegation',
         'overdue',
         'pendingFor',
         'reassign',
@@ -49,6 +52,7 @@ it('pins the facade and manager command and query surface', function (): void {
         'resync',
         'returnForRevision',
         'reviseAndResubmit',
+        'revokeDelegation',
         'submit',
         'syncDefinitions',
         'verifyTrail',
@@ -310,7 +314,7 @@ it('pins the public enums and their cases', function (): void {
 
     expect($cases)->toBe([
         'ActionType' => [
-            'submitted', 'approved', 'rejected', 'delegated', 'reassigned', 'escalated',
+            'submitted', 'approved', 'rejected', 'delegated', 'delegation_ended', 'reassigned', 'escalated',
             'commented', 'withdrawn', 'cancelled', 'system_closed', 'superseded',
             'resubmitted', 'applied', 'conflicted', 'resynced', 'guard_bypassed',
             'returned', 'stage_skipped', 'reminded', 'attachment_added',
@@ -372,6 +376,7 @@ it('pins the public events and the facts each one carries', function (): void {
         'ApproverReassigned' => ['actor', 'assignment', 'from', 'request', 'to'],
         'ApproversEscalated' => ['assignments', 'request', 'stage'],
         'ApproversResynced' => ['actor', 'addedAssignments', 'changes', 'request'],
+        'DelegationEnded' => ['approver', 'assignment', 'delegate', 'request'],
         'DraftApplied' => ['approvable', 'draft', 'request'],
         'DraftConflicted' => ['approvable', 'attributes', 'request'],
         'StageApprovalRecorded' => ['actor', 'approvalsReceived', 'approvalsRequired', 'request', 'stage'],

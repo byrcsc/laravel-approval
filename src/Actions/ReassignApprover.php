@@ -16,6 +16,7 @@ use ByRcsc\LaravelApproval\Exceptions\DelegationException;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Support\Attributes;
+use ByRcsc\LaravelApproval\Support\DelegationsTable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -91,6 +92,7 @@ final class ReassignApprover
                 'approver_id' => $to->getKey(),
                 'delegated_to_type' => null,
                 'delegated_to_id' => null,
+                ...(DelegationsTable::installed() ? ['delegation_id' => null] : []),
                 'source' => ApproverSource::Reassigned,
             ])->save();
 

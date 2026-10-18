@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
+use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
@@ -36,6 +37,22 @@ it('gives every model a table that exists', function (string $model) {
     ApprovalRequestAssignment::class,
     ApprovalAction::class,
     ApprovalAttachment::class,
+    ApprovalDelegation::class,
+]);
+
+it('types the approvable key from config, independently of user keys', function (string $keyType, bool $integer) {
+    $this->rebootWith(['approval.approvable_key_type' => $keyType]);
+
+    // Compared with an integer user column rather than a type name, which
+    // differs between the drivers CI runs against.
+    $userColumn = Schema::getColumnType('approval_request_assignments', 'approver_id');
+
+    expect(Schema::getColumnType('approval_requests', 'approvable_id') === $userColumn)->toBe($integer);
+})->with([
+    'int' => ['int', true],
+    'uuid' => ['uuid', false],
+    'ulid' => ['ulid', false],
+    'string' => ['string', false],
 ]);
 
 it('describes a workflow and its stages', function () {
@@ -159,6 +176,7 @@ it('creates its tables under whatever names the config gives them', function () 
         'assignments' => 'sign_off_request_assignments',
         'actions' => 'sign_off_actions',
         'attachments' => 'sign_off_attachments',
+        'delegations' => 'sign_off_delegations',
     ];
 
     config()->set('approval.table_names', $renamed);

@@ -13,12 +13,16 @@ use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
+use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
+use ByRcsc\LaravelApproval\Definitions\WorkflowDefinition;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
+use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Testing\ApprovalFake;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -37,8 +41,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static ApprovalWorkflow workflow(string $slug)
  * @method static Builder<ApprovalWorkflow> workflows()
  * @method static Collection<int, ApprovalWorkflow> workflowsFor(Model $approvable, Model|null $requester = null, array<string, mixed>|null $newAttributes = null)
- * @method static ApprovalWorkflow workflowFor(Model $approvable, ApprovalWorkflow|string|null $given = null, Model|null $requester = null, array<string, mixed>|null $newAttributes = null)
- * @method static ApprovalRequest submit(Model $approvable, ApprovalWorkflow|string|null $workflow = null, array<string, mixed>|null $newAttributes = null, Model|null $requester = null, string|null $comment = null, array<string, mixed> $metadata = [])
+ * @method static ApprovalWorkflow workflowFor(Model $approvable, ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $given = null, Model|null $requester = null, array<string, mixed>|null $newAttributes = null)
+ * @method static ApprovalRequest submit(Model $approvable, ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null, array<string, mixed>|null $newAttributes = null, Model|null $requester = null, string|null $comment = null, array<string, mixed> $metadata = [])
  * @method static Eligibility eligibility(ApprovalRequest $request, Model $actor)
  * @method static bool canApprove(ApprovalRequest $request, Model $actor)
  * @method static WithdrawalEligibility withdrawalEligibility(ApprovalRequest $request, Model $actor)
@@ -54,7 +58,11 @@ use Illuminate\Support\Facades\Facade;
  * @method static BulkDecisionResult rejectMany(iterable<int, ApprovalRequest> $requests, Model $actor, string $comment, array<string, mixed> $metadata = [])
  * @method static ApprovalRequest withdraw(ApprovalRequest $request, Model $actor, string|null $comment = null)
  * @method static ApprovalRequestAssignment delegate(ApprovalRequest $request, Model $approver, Model $delegate, string|null $comment = null)
- * @method static ApprovalRequest reviseAndResubmit(ApprovalRequest $request, RevisedDraft $draft, Model|null $requester = null, ApprovalWorkflow|string|null $workflow = null)
+ * @method static ApprovalDelegation grantDelegation(Model $delegator, Model $delegate, DateTimeInterface|null $startsAt = null, DateTimeInterface|null $endsAt = null, string|null $comment = null)
+ * @method static ApprovalDelegation revokeDelegation(ApprovalDelegation $delegation)
+ * @method static Builder<ApprovalDelegation> delegationsFrom(Model $delegator)
+ * @method static int applyDelegations()
+ * @method static ApprovalRequest reviseAndResubmit(ApprovalRequest $request, RevisedDraft $draft, Model|null $requester = null, ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null)
  * @method static ApprovalAttachment attach(AttachmentEvidence $evidence)
  * @method static Builder<ApprovalRequest> overdue()
  * @method static Builder<ApprovalRequest> awaiting(Model $user)

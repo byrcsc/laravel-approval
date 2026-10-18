@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Upgrade note:** standing delegations need a second migration. Run
+`php artisan vendor:publish --tag="approval-migrations"` and then
+`php artisan migrate`. Until it has run, the rest of the engine works as it did
+in 1.0, and `Approval::grantDelegation()` throws an exception that says what to
+run. A config published for 1.0 keeps booting; the new keys fall back to their
+defaults.
+
+### Added
+
+- **Standing delegations.** `Approval::grantDelegation($approver, $deputy, $from,
+  $until)` routes the approver's undecided assignments to the deputy for a
+  window of time, and `Approval::revokeDelegation()` ends it early. Assignments
+  move when the delegation is granted or revoked and when a stage becomes
+  active. Schedule `approval:delegations` to move them when a window opens or
+  closes later. Each move is recorded in the request's audit trail as
+  `delegated` or `delegation_ended`. Returned assignments fire
+  `DelegationEnded`, which notifies the approver when notifications are on.
+- **Inline workflows.** `submit()`, `submitForApproval()`, `workflowFor()`, and
+  `reviseAndResubmit()` accept a `WorkflowDefinition` or `WorkflowBuilder`. The
+  definition is snapshotted like a stored workflow, and the request records no
+  `workflow_id`. Inline definitions cannot carry `settings`.
+- **Swappable models.** `approval.model_classes` names a subclass for any
+  package model, keyed like `approval.table_names`. The package models are no
+  longer `final`.
+- **`approval.approvable_key_type`** sets the type of `approvable_id` in the
+  first migration, so UUID, ULID, and string-keyed approvables no longer need a
+  hand-edited migration.
+- `@pendingApproval` and `@canApprove` Blade directives, and a section in
+  `php artisan about`.
+
+### Changed
+
+- A missing key in `approval.table_names` now falls back to its default instead
+  of refusing to boot, so a config published before a table existed still
+  boots. A key that is present must still name a table.
+
 ## [1.0.0] - 2026-08-01
 
 First release. The complete approval engine and its installation schema.

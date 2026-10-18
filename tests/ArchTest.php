@@ -7,6 +7,7 @@ use ByRcsc\LaravelApproval\Actions\RecordAction;
 use ByRcsc\LaravelApproval\Actions\VerifyActionChain;
 use ByRcsc\LaravelApproval\Actions\VerifyAttachments;
 use ByRcsc\LaravelApproval\ApprovalManager;
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Commands\Command;
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
@@ -46,10 +47,10 @@ arch('only the base exception is extendable')
     ->toBeFinal()
     ->ignoring(ApprovalException::class);
 
-arch('models are final Eloquent models')
+// Not final: `approval.model_classes` lets a host swap in a subclass.
+arch('models are Eloquent models')
     ->expect('ByRcsc\LaravelApproval\Models')
-    ->toExtend(Model::class)
-    ->toBeFinal();
+    ->toExtend(Model::class);
 
 arch('the facade is final')
     ->expect('ByRcsc\LaravelApproval\Facades')
@@ -136,6 +137,7 @@ arch('only actions write the audit trail')
         VerifyAttachments::class,
         AttachmentEvidence::class,
         AttachmentException::class,
+        ApprovalModels::class,
         ApprovalAction::class,
         ApprovalAttachment::class,
         ApprovalRequest::class,
@@ -152,6 +154,7 @@ arch('only actions write attachments')
         VerifyAttachments::class,
         ApprovalManager::class,
         Approval::class,
+        ApprovalModels::class,
         ApprovalAction::class,
         ApprovalAttachment::class,
         ApprovalRequest::class,
@@ -174,8 +177,8 @@ it('keeps evidence creation behind its designated actions', function (): void {
             ->all();
     };
 
-    expect($writers('ApprovalAction::create('))->toBe(['RecordAction.php'])
-        ->and($writers('ApprovalAttachment::create('))->toBe(['AttachFile.php']);
+    expect($writers('ApprovalModels::action()::create('))->toBe(['RecordAction.php'])
+        ->and($writers('ApprovalModels::attachment()::create('))->toBe(['AttachFile.php']);
 });
 
 // Models describe the schema. Transactions and dispatching belong to the

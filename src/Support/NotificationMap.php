@@ -12,6 +12,7 @@ use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
 use ByRcsc\LaravelApproval\Events\ApproverReassigned;
 use ByRcsc\LaravelApproval\Events\ApproversEscalated;
 use ByRcsc\LaravelApproval\Events\ApproversResynced;
+use ByRcsc\LaravelApproval\Events\DelegationEnded;
 use ByRcsc\LaravelApproval\Events\DraftConflicted;
 use ByRcsc\LaravelApproval\Events\StageCompleted;
 use ByRcsc\LaravelApproval\Events\StageOverdue;
@@ -53,6 +54,7 @@ final class NotificationMap
         ApprovalRejected::class => ApprovalRejectedNotification::class,
         ApprovalReturned::class => ApprovalReturnedNotification::class,
         ApprovalDelegated::class => ApprovalAssignedNotification::class,
+        DelegationEnded::class => ApprovalAssignedNotification::class,
         ApproverReassigned::class => ApprovalAssignedNotification::class,
         ApproversResynced::class => ApprovalAssignedNotification::class,
         ApproversEscalated::class => ApprovalAssignedNotification::class,

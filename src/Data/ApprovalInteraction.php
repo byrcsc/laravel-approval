@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Data;
 
+use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
+use ByRcsc\LaravelApproval\Definitions\WorkflowDefinition;
 use ByRcsc\LaravelApproval\Enums\InteractionType;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -31,7 +33,7 @@ final readonly class ApprovalInteraction
         public InteractionType $type,
         public Model|ApprovalRequest|array|null $target = null,
         public ?Model $actor = null,
-        public ApprovalWorkflow|string|null $workflow = null,
+        public ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null,
         public ?Verdict $verdict = null,
         public ?string $comment = null,
         public array $metadata = [],

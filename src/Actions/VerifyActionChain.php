@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Support\ActionHash;
@@ -23,7 +24,7 @@ final class VerifyActionChain
         $findings = [];
         $previous = null;
 
-        $actions = ApprovalAction::query()
+        $actions = ApprovalModels::action()::query()
             ->where('request_id', $request->getKey())
             ->lazyById(self::CHUNK);
 

@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Schema\ColumnDefinition;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -14,11 +15,10 @@ use Illuminate\Support\Facades\Schema;
  *  - Table names. Set them in `config/approval.php`, not here; the models read
  *    the same config, so renaming in one place is all it takes.
  *
- *  - The key type of the polymorphic identity columns. Set
- *    `approval.user_key_type` to int, uuid, ulid, or string before migrating.
- *    The approvable columns on requests are independent and written by hand
- *    (see the note there), so change `approvable_id` directly when approvable
- *    models themselves do not use integers.
+ *  - The key types of the polymorphic columns. Set `approval.user_key_type`
+ *    for the people who submit and decide, and `approval.approvable_key_type`
+ *    for the records submitted for approval. Each takes int, uuid, ulid, or
+ *    string.
  *
  * `state`, `action`, and `source` are plain strings rather than database enums,
  * so adding a case is a package upgrade rather than an ALTER TABLE.
@@ -107,12 +107,9 @@ return new class extends Migration
             $table->ulid('ulid')->unique();
 
             // Written out rather than `morphs()`, whose (type, id) index would
-            // be a redundant prefix of the composite index below. This is the
-            // one polymorphic pair with no `morphs()` call to swap for UUID
-            // models - change this column's type instead (`uuid`, `ulid`, or
-            // `string`), and leave the composite index as it is.
+            // be a redundant prefix of the composite index below.
             $table->string('approvable_type');
-            $table->unsignedBigInteger('approvable_id');
+            $this->keyColumn($table, 'approvable_id', config('approval.approvable_key_type', 'int'));
 
             // A reference, not a source of behavior. Nullable so that deleting
             // a workflow never destroys the history of what it approved.
@@ -325,20 +322,10 @@ return new class extends Migration
         ?string $indexName = null,
     ): void {
         $type = $table->string($name.'_type');
-        $keyType = config('approval.user_key_type', 'int');
-        $id = match ($keyType) {
-            'uuid' => $table->uuid($name.'_id'),
-            'ulid' => $table->ulid($name.'_id'),
-            'string' => $table->string($name.'_id'),
-            default => $table->unsignedBigInteger($name.'_id'),
-        };
+        $id = $this->keyColumn($table, $name.'_id', config('approval.user_key_type', 'int'));
 
         if (DB::getDriverName() === 'mysql') {
             $type->collation('utf8mb4_bin');
-
-            if ($keyType !== 'int') {
-                $id->collation('utf8mb4_bin');
-            }
         }
 
         if ($nullable) {
@@ -347,5 +334,21 @@ return new class extends Migration
         }
 
         $table->index([$name.'_type', $name.'_id'], $indexName);
+    }
+
+    private function keyColumn(Blueprint $table, string $column, mixed $keyType): ColumnDefinition
+    {
+        $id = match ($keyType) {
+            'uuid' => $table->uuid($column),
+            'ulid' => $table->ulid($column),
+            'string' => $table->string($column),
+            default => $table->unsignedBigInteger($column),
+        };
+
+        if (DB::getDriverName() === 'mysql' && $keyType !== 'int') {
+            $id->collation('utf8mb4_bin');
+        }
+
+        return $id;
     }
 };

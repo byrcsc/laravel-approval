@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval;
 
+use ByRcsc\LaravelApproval\Commands\ApplyDelegationsCommand;
 use ByRcsc\LaravelApproval\Commands\DoctorCommand;
 use ByRcsc\LaravelApproval\Commands\EscalateOverdueCommand;
 use ByRcsc\LaravelApproval\Commands\ResyncRequestCommand;
@@ -14,11 +15,16 @@ use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
 use ByRcsc\LaravelApproval\Enums\ApprovalMode;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Exceptions\InvalidConfigurationException;
+use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Listeners\SendApprovalNotification;
+use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Support\NotificationMap;
 use ByRcsc\LaravelApproval\Support\Payload;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Console\AboutCommand;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\View\Compilers\BladeCompiler;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -31,8 +37,9 @@ final class ApprovalServiceProvider extends PackageServiceProvider
             ->hasConfigFile('approval')
             ->hasTranslations()
             ->hasViews()
-            ->hasMigration('create_approval_tables')
+            ->hasMigrations(['create_approval_tables', 'create_approval_delegations_table'])
             ->hasCommands([
+                ApplyDelegationsCommand::class,
                 EscalateOverdueCommand::class,
                 DoctorCommand::class,
                 ResyncRequestCommand::class,
@@ -55,13 +62,59 @@ final class ApprovalServiceProvider extends PackageServiceProvider
 
         $this->validateTableNames(Payload::object($config, 'table_names') ?? []);
         $this->validateUserModel(Payload::string($config, 'user_model'));
-        $this->validateUserKeyType(Payload::string($config, 'user_key_type'));
+        $this->validateKeyType('user_key_type', Payload::string($config, 'user_key_type'));
+        $this->validateKeyType('approvable_key_type', Payload::string($config, 'approvable_key_type', 'int'));
+        ApprovalModels::validate(Payload::object($config, 'model_classes') ?? []);
         $this->validateModelModes(Payload::object($config, 'models') ?? []);
         $this->validateEscalationStrategies(Payload::object($config, 'escalation') ?? []);
 
         NotificationMap::validate(Payload::object($config, 'notifications') ?? []);
 
         $this->registerNotificationListeners();
+        $this->registerBladeDirectives();
+        $this->registerAboutSection();
+    }
+
+    /**
+     * `@pendingApproval($model)` and `@canApprove($requestOrModel)`, which
+     * checks the signed-in user unless another one is passed. Both ask the same
+     * questions as the facade.
+     */
+    private function registerBladeDirectives(): void
+    {
+        $this->callAfterResolving('blade.compiler', function (BladeCompiler $blade): void {
+            $blade->if('pendingApproval', fn (Model $approvable): bool => Approval::pendingFor($approvable) !== null);
+
+            $blade->if('canApprove', function (Model $subject, ?Model $user = null): bool {
+                $user ??= Auth::user();
+                $request = $subject instanceof ApprovalRequest ? $subject : Approval::pendingFor($subject);
+
+                return $user instanceof Model && $request !== null && Approval::canApprove($request, $user);
+            });
+        });
+    }
+
+    /**
+     * Settings that change engine behavior, for `php artisan about`. Read from
+     * config only, so the command works before the tables exist.
+     */
+    private function registerAboutSection(): void
+    {
+        if (! class_exists(AboutCommand::class)) {
+            return;
+        }
+
+        AboutCommand::add('Laravel Approval', function (): array {
+            $config = Payload::asObject(config('approval')) ?? [];
+
+            return [
+                'Notifications' => NotificationMap::enabled() ? '<fg=green;options=bold>ENABLED</>' : 'OFF',
+                'Self-approval' => Payload::bool($config, 'allow_self_approval') ? '<fg=yellow;options=bold>ALLOWED</>' : 'BLOCKED',
+                'User key type' => Payload::string($config, 'user_key_type', 'int'),
+                'Approvable key type' => Payload::string($config, 'approvable_key_type', 'int'),
+                'Custom models' => implode(', ', array_keys(ApprovalModels::overridden())) ?: 'NONE',
+            ];
+        });
     }
 
     /**
@@ -102,16 +155,15 @@ final class ApprovalServiceProvider extends PackageServiceProvider
     }
 
     /**
+     * An absent key falls back to its default, so a config published before a
+     * table existed keeps booting. A key that is present must name a table.
+     *
      * @param  array<string, mixed>  $tableNames
      */
     private function validateTableNames(array $tableNames): void
     {
-        $missing = [];
-
         foreach (TableNames::keys() as $key) {
             if (! array_key_exists($key, $tableNames)) {
-                $missing[] = $key;
-
                 continue;
             }
 
@@ -120,10 +172,6 @@ final class ApprovalServiceProvider extends PackageServiceProvider
             if (! is_string($name) || trim($name) === '') {
                 throw InvalidConfigurationException::blankTableName($key);
             }
-        }
-
-        if ($missing !== []) {
-            throw InvalidConfigurationException::missingTableNames($missing);
         }
     }
 
@@ -144,10 +192,10 @@ final class ApprovalServiceProvider extends PackageServiceProvider
         }
     }
 
-    private function validateUserKeyType(string $type): void
+    private function validateKeyType(string $key, string $type): void
     {
         if (! in_array($type, ['int', 'uuid', 'ulid', 'string'], true)) {
-            throw InvalidConfigurationException::invalidUserKeyType($type);
+            throw InvalidConfigurationException::invalidKeyType($key, $type);
         }
     }
 

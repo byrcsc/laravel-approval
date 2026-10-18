@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalAttachmentFactory;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,7 +27,7 @@ use LogicException;
  * Append-only, like the action history it is evidence for. A file attached in
  * error is answered by appending another action, not by editing history.
  */
-final class ApprovalAttachment extends Model
+class ApprovalAttachment extends Model
 {
     /** @use HasFactory<ApprovalAttachmentFactory> */
     use HasFactory;
@@ -73,7 +74,7 @@ final class ApprovalAttachment extends Model
      */
     public function request(): BelongsTo
     {
-        return $this->belongsTo(ApprovalRequest::class, 'request_id');
+        return $this->belongsTo(ApprovalModels::request(), 'request_id');
     }
 
     /**
@@ -84,7 +85,7 @@ final class ApprovalAttachment extends Model
      */
     public function action(): BelongsTo
     {
-        return $this->belongsTo(ApprovalAction::class, 'action_id');
+        return $this->belongsTo(ApprovalModels::action(), 'action_id');
     }
 
     /**

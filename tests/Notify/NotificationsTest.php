@@ -12,6 +12,7 @@ use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
 use ByRcsc\LaravelApproval\Events\ApproverReassigned;
 use ByRcsc\LaravelApproval\Events\ApproversEscalated;
 use ByRcsc\LaravelApproval\Events\ApproversResynced;
+use ByRcsc\LaravelApproval\Events\DelegationEnded;
 use ByRcsc\LaravelApproval\Events\DraftConflicted;
 use ByRcsc\LaravelApproval\Events\StageCompleted;
 use ByRcsc\LaravelApproval\Events\StageOverdue;
@@ -297,6 +298,7 @@ describe('the map', function (): void {
             ApprovalRejected::class,
             ApprovalReturned::class,
             ApprovalDelegated::class,
+            DelegationEnded::class,
             ApproverReassigned::class,
             ApproversResynced::class,
             ApproversEscalated::class,

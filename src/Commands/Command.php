@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Commands;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use Illuminate\Console\Command as BaseCommand;
 
@@ -20,14 +21,14 @@ abstract class Command extends BaseCommand
     protected function findRequest(string $identifier): ?ApprovalRequest
     {
         /** @var ApprovalRequest|null $request */
-        $request = ApprovalRequest::query()->where('ulid', $identifier)->first();
+        $request = ApprovalModels::request()::query()->where('ulid', $identifier)->first();
 
         if ($request !== null) {
             return $request;
         }
 
         return ctype_digit($identifier)
-            ? ApprovalRequest::query()->find((int) $identifier)
+            ? ApprovalModels::request()::query()->find((int) $identifier)
             : null;
     }
 }

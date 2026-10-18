@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Enums\ActionType;
-use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Support\AttachmentSnapshot;
@@ -25,7 +25,7 @@ final class VerifyAttachments
         $claimed = [];
         $rows = $this->rowsFor($request);
 
-        $recorded = ApprovalAction::query()
+        $recorded = ApprovalModels::action()::query()
             ->where('request_id', $request->getKey())
             ->where('action', ActionType::AttachmentAdded->value)
             ->orderBy('id')
@@ -89,7 +89,7 @@ final class VerifyAttachments
     {
         $rows = [];
 
-        foreach (ApprovalAttachment::query()->where('request_id', $request->getKey())->orderBy('id')->get() as $row) {
+        foreach (ApprovalModels::attachment()::query()->where('request_id', $request->getKey())->orderBy('id')->get() as $row) {
             $key = $row->getKey();
 
             if (is_int($key)) {

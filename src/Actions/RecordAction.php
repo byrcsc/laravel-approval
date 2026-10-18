@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -44,7 +45,7 @@ final class RecordAction
         array $metadata = [],
     ): ApprovalAction {
         return DB::transaction(function () use ($request, $action, $actor, $stage, $comment, $metadata): ApprovalAction {
-            $lockedRequest = ApprovalRequest::query()
+            $lockedRequest = ApprovalModels::request()::query()
                 ->whereKey($request->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -69,7 +70,7 @@ final class RecordAction
                 createdAt: $createdAt->format('Y-m-d H:i:s'),
             ));
 
-            $record = ApprovalAction::create([
+            $record = ApprovalModels::action()::create([
                 'request_id' => $lockedRequest->getKey(),
                 'stage_id' => $stage?->getKey(),
                 'actor_type' => $actor?->getMorphClass(),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalRequestStageFactory;
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\RejectionPolicy;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * run the stage is copied here, so the stage it came from can be edited,
  * reordered, or deleted without changing the rules this request is judged by.
  */
-final class ApprovalRequestStage extends Model
+class ApprovalRequestStage extends Model
 {
     /** @use HasFactory<ApprovalRequestStageFactory> */
     use HasFactory;
@@ -41,7 +42,7 @@ final class ApprovalRequestStage extends Model
      */
     public function request(): BelongsTo
     {
-        return $this->belongsTo(ApprovalRequest::class, 'request_id');
+        return $this->belongsTo(ApprovalModels::request(), 'request_id');
     }
 
     /**
@@ -49,7 +50,7 @@ final class ApprovalRequestStage extends Model
      */
     public function assignments(): HasMany
     {
-        return $this->hasMany(ApprovalRequestAssignment::class, 'stage_id');
+        return $this->hasMany(ApprovalModels::assignment(), 'stage_id');
     }
 
     /**
@@ -57,7 +58,7 @@ final class ApprovalRequestStage extends Model
      */
     public function actions(): HasMany
     {
-        return $this->hasMany(ApprovalAction::class, 'stage_id')
+        return $this->hasMany(ApprovalModels::action(), 'stage_id')
             ->orderBy('id');
     }
 

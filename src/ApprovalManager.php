@@ -14,6 +14,7 @@ use ByRcsc\LaravelApproval\Actions\CheckWithdrawalEligibility;
 use ByRcsc\LaravelApproval\Actions\DecideInBulk;
 use ByRcsc\LaravelApproval\Actions\DelegateApproval;
 use ByRcsc\LaravelApproval\Actions\EscalateOverdueStages;
+use ByRcsc\LaravelApproval\Actions\GrantDelegation;
 use ByRcsc\LaravelApproval\Actions\ReassignApprover;
 use ByRcsc\LaravelApproval\Actions\RejectRequest;
 use ByRcsc\LaravelApproval\Actions\ResolveConflict;
@@ -21,7 +22,9 @@ use ByRcsc\LaravelApproval\Actions\ResolveWorkflows;
 use ByRcsc\LaravelApproval\Actions\ResyncRequestApprovers;
 use ByRcsc\LaravelApproval\Actions\ReturnRequest;
 use ByRcsc\LaravelApproval\Actions\ReviseAndResubmitRequest;
+use ByRcsc\LaravelApproval\Actions\RevokeDelegation;
 use ByRcsc\LaravelApproval\Actions\SubmitForApproval;
+use ByRcsc\LaravelApproval\Actions\SweepDelegations;
 use ByRcsc\LaravelApproval\Actions\SyncWorkflowDefinitions;
 use ByRcsc\LaravelApproval\Actions\VerifyAuditTrail;
 use ByRcsc\LaravelApproval\Actions\WithdrawRequest;
@@ -33,18 +36,23 @@ use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Data\WithdrawalEligibility;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
+use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
+use ByRcsc\LaravelApproval\Definitions\WorkflowDefinition;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Exceptions\AmbiguousWorkflowException;
+use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowDefinitionException;
 use ByRcsc\LaravelApproval\Exceptions\MissingRequesterException;
 use ByRcsc\LaravelApproval\Exceptions\WorkflowNotFoundException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
+use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use ByRcsc\LaravelApproval\Testing\ApprovalFake;
+use DateTimeInterface;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -76,7 +84,7 @@ class ApprovalManager
     public function findWorkflow(string $slug): ?ApprovalWorkflow
     {
         /** @var ApprovalWorkflow|null */
-        return ApprovalWorkflow::query()->where('slug', $slug)->first();
+        return ApprovalModels::workflow()::query()->where('slug', $slug)->first();
     }
 
     public function workflow(string $slug): ApprovalWorkflow
@@ -93,7 +101,7 @@ class ApprovalManager
      */
     public function workflows(): Builder
     {
-        return ApprovalWorkflow::query()->active()->orderBy('name')->orderBy('id');
+        return ApprovalModels::workflow()::query()->active()->orderBy('name')->orderBy('id');
     }
 
     /**
@@ -121,7 +129,8 @@ class ApprovalManager
      * The one workflow a submission runs under.
      *
      * The argument wins outright: a workflow named at the call site is used as
-     * named, active or not, condition or not. With nothing named, this is the
+     * named, active or not, condition or not. A definition or builder runs
+     * inline, without rows of its own. With nothing named, this is the
      * first of {@see self::workflowsFor()} - and when two workflows are equally
      * specific, it refuses rather than picking one.
      *
@@ -129,7 +138,7 @@ class ApprovalManager
      */
     public function workflowFor(
         Model $approvable,
-        ApprovalWorkflow|string|null $given = null,
+        ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $given = null,
         ?Model $requester = null,
         ?array $newAttributes = null,
     ): ApprovalWorkflow {
@@ -159,7 +168,7 @@ class ApprovalManager
      */
     public function submit(
         Model $approvable,
-        ApprovalWorkflow|string|null $workflow = null,
+        ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null,
         ?array $newAttributes = null,
         ?Model $requester = null,
         ?string $comment = null,
@@ -340,6 +349,65 @@ class ApprovalManager
     }
 
     /**
+     * Route the delegator's approvals to the delegate for a window of time,
+     * open-ended on either side when a bound is null. Undecided assignments on
+     * active stages move as soon as the window opens; schedule
+     * `approval:delegations` for windows that open or close later.
+     */
+    public function grantDelegation(
+        Model $delegator,
+        Model $delegate,
+        ?DateTimeInterface $startsAt = null,
+        ?DateTimeInterface $endsAt = null,
+        ?string $comment = null,
+    ): ApprovalDelegation {
+        /** @var GrantDelegation $grant */
+        $grant = $this->container->make(GrantDelegation::class);
+
+        return $grant($delegator, $delegate, $startsAt, $endsAt, $comment);
+    }
+
+    /**
+     * End a delegation now and hand its undecided assignments back.
+     */
+    public function revokeDelegation(ApprovalDelegation $delegation): ApprovalDelegation
+    {
+        /** @var RevokeDelegation $revoke */
+        $revoke = $this->container->make(RevokeDelegation::class);
+
+        return $revoke($delegation);
+    }
+
+    /**
+     * The delegator's delegations that have not ended or been revoked,
+     * earliest first.
+     *
+     * @return Builder<ApprovalDelegation>
+     */
+    public function delegationsFrom(Model $delegator): Builder
+    {
+        return ApprovalModels::delegation()::query()
+            ->current()
+            ->fromDelegator($delegator)
+            ->orderBy('starts_at')
+            ->orderBy('id');
+    }
+
+    /**
+     * Scheduled delegation processing: move assignments as delegation windows
+     * open and close. Usually driven by `approval:delegations`.
+     *
+     * @return int how many assignments moved
+     */
+    public function applyDelegations(): int
+    {
+        /** @var SweepDelegations $sweep */
+        $sweep = $this->container->make(SweepDelegations::class);
+
+        return $sweep();
+    }
+
+    /**
      * Revise a closed request and resubmit it as a new linked request, started
      * from the first applicable stage of a fresh workflow snapshot. The draft
      * is the caller's explicit choice; the requester and workflow are
@@ -349,12 +417,12 @@ class ApprovalManager
         ApprovalRequest $request,
         RevisedDraft $draft,
         ?Model $requester = null,
-        ApprovalWorkflow|string|null $workflow = null,
+        ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null,
     ): ApprovalRequest {
         /** @var ReviseAndResubmitRequest $revise */
         $revise = $this->container->make(ReviseAndResubmitRequest::class);
 
-        return $revise($request, $draft, $requester, $workflow);
+        return $revise($request, $draft, $requester, $this->coerceWorkflow($workflow));
     }
 
     public function attach(AttachmentEvidence $evidence): ApprovalAttachment
@@ -372,7 +440,7 @@ class ApprovalManager
      */
     public function overdue(): Builder
     {
-        return ApprovalRequest::query()->overdue()->orderBy('id');
+        return ApprovalModels::request()::query()->overdue()->orderBy('id');
     }
 
     /**
@@ -383,7 +451,7 @@ class ApprovalManager
      */
     public function awaiting(Model $user): Builder
     {
-        return ApprovalRequest::query()->awaitingUser($user)->orderBy('id');
+        return ApprovalModels::request()::query()->awaitingUser($user)->orderBy('id');
     }
 
     /**
@@ -391,7 +459,7 @@ class ApprovalManager
      */
     public function requestsFor(Model $approvable): Builder
     {
-        return ApprovalRequest::query()
+        return ApprovalModels::request()::query()
             ->forApprovable($approvable)
             ->orderByDesc('id');
     }
@@ -567,13 +635,34 @@ class ApprovalManager
         return $user instanceof Model ? $user : null;
     }
 
-    private function coerceWorkflow(ApprovalWorkflow|string|null $workflow): ?ApprovalWorkflow
+    private function coerceWorkflow(ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow): ?ApprovalWorkflow
     {
+        if ($workflow instanceof WorkflowBuilder) {
+            $workflow = $workflow->definition();
+        }
+
         return match (true) {
             $workflow instanceof ApprovalWorkflow => $workflow,
+            $workflow instanceof WorkflowDefinition => $this->inlineWorkflow($workflow),
             is_string($workflow) && $workflow !== '' => $this->workflow($workflow),
             default => null,
         };
+    }
+
+    /**
+     * Settings such as `allow_self_approval` are read from the stored workflow
+     * when a decision is made, and an inline workflow has none to read them
+     * from. Refusing them is better than ignoring them.
+     */
+    private function inlineWorkflow(WorkflowDefinition $definition): ApprovalWorkflow
+    {
+        if ($definition->settings !== null) {
+            throw InvalidWorkflowDefinitionException::because(
+                "workflow [{$definition->slug}] runs inline and cannot carry settings. Store it with `approval:sync` to use them."
+            );
+        }
+
+        return ApprovalWorkflow::fromDefinition($definition);
     }
 
     /**
