@@ -19,9 +19,11 @@ use ByRcsc\LaravelApproval\Enums\InteractionType;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
+use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
+use DateTimeInterface;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\Assert;
@@ -186,6 +188,47 @@ final class ApprovalFake extends ApprovalManager
             'delegated_to_type' => $delegate->getMorphClass(),
             'delegated_to_id' => $delegate->getKey(),
         ]);
+    }
+
+    public function grantDelegation(
+        Model $delegator,
+        Model $delegate,
+        ?DateTimeInterface $startsAt = null,
+        ?DateTimeInterface $endsAt = null,
+        ?string $comment = null,
+    ): ApprovalDelegation {
+        $this->interactions[] = new ApprovalInteraction(
+            InteractionType::DelegationGranted,
+            $delegator,
+            $delegator,
+            comment: $comment,
+            metadata: ['starts_at' => $startsAt, 'ends_at' => $endsAt],
+            recipient: $delegate,
+        );
+
+        return new ApprovalDelegation([
+            'delegator_type' => $delegator->getMorphClass(),
+            'delegator_id' => $delegator->getKey(),
+            'delegate_type' => $delegate->getMorphClass(),
+            'delegate_id' => $delegate->getKey(),
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'comment' => $comment,
+        ]);
+    }
+
+    public function revokeDelegation(ApprovalDelegation $delegation): ApprovalDelegation
+    {
+        $this->interactions[] = new ApprovalInteraction(InteractionType::DelegationRevoked, $delegation);
+
+        return $delegation;
+    }
+
+    public function applyDelegations(): int
+    {
+        $this->interactions[] = new ApprovalInteraction(InteractionType::DelegationsApplied);
+
+        return 0;
     }
 
     public function reviseAndResubmit(
@@ -411,6 +454,21 @@ final class ApprovalFake extends ApprovalManager
     public function assertDelegated(ApprovalRequest $request, ?callable $callback = null): void
     {
         $this->assertRecorded(InteractionType::Delegated, $request, $callback);
+    }
+
+    public function assertDelegationGranted(Model $delegator, ?callable $callback = null): void
+    {
+        $this->assertRecorded(InteractionType::DelegationGranted, $delegator, $callback);
+    }
+
+    public function assertDelegationRevoked(ApprovalDelegation $delegation, ?callable $callback = null): void
+    {
+        $this->assertRecorded(InteractionType::DelegationRevoked, $delegation, $callback);
+    }
+
+    public function assertDelegationsApplied(?callable $callback = null): void
+    {
+        $this->assertRecorded(InteractionType::DelegationsApplied, null, $callback);
     }
 
     public function assertReassigned(ApprovalRequest $request, ?callable $callback = null): void

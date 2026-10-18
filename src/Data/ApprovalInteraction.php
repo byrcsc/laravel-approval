@@ -16,12 +16,13 @@ use Illuminate\Database\Eloquent\Model;
  * One approval operation recorded by the approval fake.
  *
  * `type` names the operation and `actor` is whoever performed it. `target` is the
- * request, approvable model, or list of requests the operation acted on, and is
- * null for the operations that act on no single subject: overdue processing and
- * definition synchronization. `recipient` carries the approver an assignment
- * moved to, for delegation and reassignment. Operation-specific input - a
- * conflict resolution, a revised draft, attachment details - is passed through
- * in `metadata`.
+ * request, approvable model, delegator, delegation, or list of requests the
+ * operation acted on, and is null for the operations that act on no single
+ * subject: overdue processing, delegation processing, and definition
+ * synchronization. `recipient` carries the approver an assignment moved to, or
+ * the delegate a standing delegation names, for delegation and reassignment.
+ * Operation-specific input - a conflict resolution, a revised draft, attachment
+ * details - is passed through in `metadata`.
  */
 final readonly class ApprovalInteraction
 {

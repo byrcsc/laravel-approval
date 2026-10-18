@@ -203,6 +203,7 @@ it('pins the shipped policy abilities', function (): void {
 
 it('pins the fake recording and assertion surface', function (): void {
     expect(declaredMethods(ApprovalFake::class))->toBe([
+        'applyDelegations',
         'assertApproved',
         'assertApprovedMany',
         'assertApprovedTimes',
@@ -211,6 +212,9 @@ it('pins the fake recording and assertion surface', function (): void {
         'assertConflictResolved',
         'assertDefinitionsSynced',
         'assertDelegated',
+        'assertDelegationGranted',
+        'assertDelegationRevoked',
+        'assertDelegationsApplied',
         'assertGuardBypassed',
         'assertNotApproved',
         'assertNotSubmitted',
@@ -233,12 +237,14 @@ it('pins the fake recording and assertion surface', function (): void {
         'delegate',
         'escalateOverdue',
         'fake',
+        'grantDelegation',
         'interactions',
         'reassign',
         'resolve',
         'restore',
         'resync',
         'reviseAndResubmit',
+        'revokeDelegation',
         'submit',
         'syncDefinitions',
         'withdraw',
@@ -334,7 +340,8 @@ it('pins the public enums and their cases', function (): void {
         ],
         'InteractionType' => [
             'submitted', 'decision', 'decisions_many', 'withdrawn', 'cancelled',
-            'delegated', 'reassigned', 'resynced', 'conflict_resolved',
+            'delegated', 'delegation_granted', 'delegation_revoked', 'delegations_applied',
+            'reassigned', 'resynced', 'conflict_resolved',
             'resubmitted', 'attached', 'guard_bypassed', 'overdue_processed',
             'definitions_synced',
         ],
