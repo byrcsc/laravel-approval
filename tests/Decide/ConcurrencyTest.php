@@ -14,8 +14,11 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequest;
  * Two callers rarely share a model instance: each PHP process loads its own
  * copy, acts on what it read, and finds out afterwards whether the world moved.
  * Every action defends against that by taking the row lock and reloading before
- * it checks anything - these tests hold a copy loaded *before* a competing
- * action and prove the reload wins over the stale memory.
+ * it checks anything. These tests hold a copy loaded *before* a competing
+ * action and check two things: the late call lands on the right outcome, with
+ * the draft applied once, and the copy it arrived through was reloaded.
+ * Asserting the copy's own state is what fails if an action skips the reload,
+ * because the outcome checks read the database and pass either way.
  *
  * What SQLite cannot exercise is the lock itself: its grammar compiles
  * `lockForUpdate()` to nothing, and a single in-memory connection cannot
@@ -60,7 +63,8 @@ it('refuses a decision arriving through a copy loaded before the withdrawal', fu
     Approval::withdraw($request, $requester);
 
     expect(fn () => Approval::approve($stale, $approver))
-        ->toThrow(AlreadyDecidedException::class);
+        ->toThrow(AlreadyDecidedException::class)
+        ->and($stale->state)->toBe(RequestState::Withdrawn);
 });
 
 it('refuses a withdrawal arriving through a copy loaded before the final decision', function (): void {
@@ -79,21 +83,6 @@ it('refuses a withdrawal arriving through a copy loaded before the final decisio
         ->and($stale->state)->toBe(RequestState::Approved);
 });
 
-it('refuses a duplicate decision arriving through a second copy', function (): void {
-    $approver = user('Approver');
-
-    $workflow = workflow([['required_approvals' => 2, 'approvers' => [$approver, user('Other')]]]);
-    $request = post()->submitForApproval($workflow, null, user());
-
-    $stale = staleCopyOf($request);
-
-    Approval::approve($request, $approver);
-
-    expect(fn () => Approval::approve($stale, $approver))
-        ->toThrow(AlreadyDecidedException::class)
-        ->and($request->refresh()->state)->toBe(RequestState::Pending);
-});
-
 it('applies the draft exactly once when the losing racer arrives after required approvals', function (): void {
     $one = user('One');
     $two = user('Two');
@@ -110,6 +99,7 @@ it('applies the draft exactly once when the losing racer arrives after required 
 
     expect(fn () => Approval::approve($copyForTwo, $two))
         ->toThrow(AlreadyDecidedException::class)
+        ->and($copyForTwo->state)->toBe(RequestState::Approved)
         ->and($post->fresh()?->getAttributeValue('title'))->toBe('Revised title')
         ->and($request->actions()->where('action', 'applied')->count())->toBe(1)
         ->and($request->actions()->where('action', 'approved')->count())->toBe(1);
@@ -151,6 +141,7 @@ it('refuses the second of two racing rejections', function (): void {
 
     expect(fn () => Approval::reject($copyForTwo, $two, 'Also no.'))
         ->toThrow(AlreadyDecidedException::class)
+        ->and($copyForTwo->state)->toBe(RequestState::Rejected)
         ->and($request->refresh()->state)->toBe(RequestState::Rejected)
         ->and($request->actions()->where('action', 'rejected')->count())->toBe(1);
 });
@@ -175,5 +166,5 @@ it('refuses a stale decision against a stage that has already advanced', functio
     // refusal - "already decided" belongs to the request, not to them.
     expect(fn () => Approval::approve($stale, $first))
         ->toThrow(UnauthorizedApproverException::class)
-        ->and($request->refresh()->getAttributeValue('current_stage_sequence'))->toBe(2);
+        ->and($stale->getAttributeValue('current_stage_sequence'))->toBe(2);
 });

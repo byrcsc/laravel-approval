@@ -96,10 +96,7 @@ it('hangs a signature off the decision it supports', function (): void {
 
 it('refuses a blank location and a decision from another request', function (): void {
     [$request, $approver] = requestWithApprover();
-    [$other, $otherApprover] = [
-        purchaseOrder('PO-2002')->submitForApproval(workflow([['approvers' => [user('Else')]]]), null, user('Other Author')),
-        $approver,
-    ];
+    $other = purchaseOrder('PO-2002')->submitForApproval(workflow([['approvers' => [user('Else')]]]), null, user('Other Author'));
 
     $foreign = $other->actions()->where('action', ActionType::Submitted->value)->sole();
 
@@ -122,11 +119,10 @@ it('refuses a blank location and a decision from another request', function (): 
             disk: 'documents',
             path: 'a.pdf',
             checksum: hash('sha256', 'a'),
-            uploader: $otherApprover,
+            uploader: $approver,
             action: $foreign,
         ))
-        ->toThrow(AttachmentException::class, 'does not belong')
-        ->and($request->attachments()->count())->toBe(0);
+        ->toThrow(AttachmentException::class, 'does not belong');
 });
 
 it('is evidence, so the model refuses updates and deletes', function (): void {

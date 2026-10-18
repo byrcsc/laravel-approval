@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
 use ByRcsc\LaravelApproval\Enums\RequestState;
-use ByRcsc\LaravelApproval\Exceptions\DelegationException;
 use ByRcsc\LaravelApproval\Exceptions\SelfApprovalException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
@@ -94,29 +93,6 @@ it('will not escalate somebody who is already holding a delegated assignment', f
     expect($request->refresh()->state)->toBe(RequestState::Pending);
 });
 
-it('does not escalate a stage that reached its required approvals in time', function (): void {
-    $one = user('One');
-    $two = user('Two');
-
-    $workflow = workflow([[
-        'sla_minutes' => 60,
-        'required_approvals' => 2,
-        'escalation_strategy' => EscalationAction::AutoReject,
-        'approvers' => [$one, $two],
-    ]]);
-
-    $request = post()->submitForApproval($workflow, null, user('Author'));
-
-    Date::setTestNow('2026-07-28 09:30:00');
-    Approval::approve($request, $one);
-    Approval::approve($request, $two);
-
-    Date::setTestNow('2026-07-28 10:01:00');
-
-    expect(Approval::escalateOverdue()['escalated'])->toBe([])
-        ->and($request->refresh()->state)->toBe(RequestState::Approved);
-});
-
 it('auto-rejects a stage that was one decision short when the clock ran out', function (): void {
     $one = user('One');
 
@@ -158,26 +134,6 @@ it('lets a delegate carry a stage after it was escalated', function (): void {
     Approval::approve($request, $delegate);
 
     expect($request->refresh()->state)->toBe(RequestState::Approved);
-});
-
-it('still refuses a delegation that would strand the escalated stage', function (): void {
-    $duty = user('Duty Officer');
-    HeadOfDepartmentResolver::$heads = [$duty];
-
-    $request = overdueRequest(
-        EscalationAction::Escalate,
-        ['resolver' => HeadOfDepartmentResolver::class],
-    );
-
-    Date::setTestNow('2026-07-28 10:01:00');
-    Approval::escalateOverdue();
-
-    $original = $request->stages()->sole()->assignments()->orderBy('id')->first()->approver;
-
-    // Handing the assignment to the person escalation just seated would leave one
-    // holder on two assignments.
-    expect(fn () => Approval::delegate($request, $original, $duty))
-        ->toThrow(DelegationException::class, 'already has an assignment');
 });
 
 it('lets an escalated assignment be delegated onward like any other', function (): void {

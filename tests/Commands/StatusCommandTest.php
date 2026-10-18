@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Facades\Approval;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Date;
 
 it('runs against an empty database', function (): void {
@@ -21,11 +22,14 @@ it('counts requests by state', function (): void {
 
     post('Three')->submitForApproval($workflow, null, user());
 
-    $this->artisan('approval:status')
-        ->expectsOutputToContain('pending')
-        ->expectsOutputToContain('approved')
-        ->expectsOutputToContain('rejected')
-        ->assertSuccessful();
+    expect(Artisan::call('approval:status'))->toBe(0);
+
+    // Every state is listed, so the count beside each one is what matters.
+    expect(Artisan::output())
+        ->toMatch('/^\s*pending \.+ 1\s*$/m')
+        ->toMatch('/^\s*approved \.+ 1\s*$/m')
+        ->toMatch('/^\s*rejected \.+ 1\s*$/m')
+        ->toMatch('/^\s*withdrawn \.+ 0\s*$/m');
 });
 
 it('lists the overdue requests', function (): void {

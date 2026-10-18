@@ -6,6 +6,7 @@ use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Exceptions\InvalidConfigurationException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
+use ByRcsc\LaravelApproval\Support\TableNames;
 use ByRcsc\LaravelApproval\Tests\Stubs\CustomApprovalRequest;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
 use Illuminate\Database\Eloquent\Model;
@@ -19,8 +20,7 @@ it('resolves the manager as a singleton behind the facade', function () {
 });
 
 it('publishes a config file that holds every table name', function () {
-    expect(config('approval.table_names'))
-        ->toHaveKeys(['workflows', 'workflow_stages', 'workflow_stage_approvers', 'requests', 'request_stages', 'assignments', 'actions']);
+    expect(config('approval.table_names'))->toBe(TableNames::defaults());
 });
 
 it('boots with a table key the published config predates, using its default name', function () {

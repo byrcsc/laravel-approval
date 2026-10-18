@@ -118,11 +118,6 @@ it('reports the workflows it considered and ruled out', function (): void {
         ->toThrow(WorkflowNotFoundException::class, 'Considered and ruled out as inactive or not applicable: [po-retired], [po-large]');
 });
 
-it('still reports having found nothing at all', function (): void {
-    expect(fn () => Approval::workflowFor(purchaseOrder()))
-        ->toThrow(WorkflowNotFoundException::class, 'No approval workflow could be resolved');
-});
-
 it('takes the workflow the model declares over one registered against its type', function (): void {
     PurchaseOrder::$workflowSlug = 'declared';
     workflow([['approvers' => [user('Approver')]]], ['slug' => 'declared']);

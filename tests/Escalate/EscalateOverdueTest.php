@@ -161,9 +161,12 @@ describe('the notify policy', function (): void {
 
 describe('the artisan command', function (): void {
     it('reports when nothing is overdue', function (): void {
+        // Submitted but not yet past its deadline.
         overdueRequest();
 
-        $this->artisan('approval:escalate')->assertSuccessful();
+        $this->artisan('approval:escalate')
+            ->expectsOutputToContain('Nothing overdue.')
+            ->assertSuccessful();
     });
 
     it('escalates and succeeds', function (): void {

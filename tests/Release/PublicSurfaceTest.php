@@ -7,7 +7,6 @@ use ByRcsc\LaravelApproval\Concerns\Approvable;
 use ByRcsc\LaravelApproval\Data\ApprovalInteraction;
 use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Enums\InteractionType;
-use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Policies\ApprovalRequestPolicy;
@@ -130,23 +129,6 @@ it('keeps commands off the approvable trait and the request model', function ():
         expect(array_intersect(declaredMethods($class), $commands))
             ->toBe([], "[{$class}] must not mirror facade commands.");
     }
-});
-
-it('mirrors exactly one facade operation on the trait, and documents why', function (): void {
-    // Guard mode is a model-level feature - the interception lives on the
-    // model's saving hook - so the bypass is the one operation offered on both
-    // the model and the facade. Any second exception should be argued for here.
-    $trait = new ReflectionClass(Approvable::class);
-    $mirrors = array_values(array_filter(
-        declaredMethods(Approvable::class),
-        fn (string $method): bool => in_array($method, ['withoutApprovalGuard'], true),
-    ));
-
-    expect($mirrors)->toBe(['withoutApprovalGuard'])
-        ->and((string) $trait->getMethod('withoutApprovalGuard')->getDocComment())
-        ->toContain('Approval::withoutGuard(')
-        ->and((string) $trait->getDocComment())
-        ->toContain('one deliberate exception');
 });
 
 it('pins the request model to state, relationships, progress, and authorization', function (): void {
@@ -392,10 +374,4 @@ it('pins the public events and the facts each one carries', function (): void {
         'StageOverdueReminder' => ['action', 'request', 'stage'],
         'StageStranded' => ['livingHolders', 'request', 'requiredApprovals', 'stage'],
     ]);
-
-    foreach (classesIn('Events') as $event) {
-        $class = 'ByRcsc\\LaravelApproval\\Events\\'.$event;
-
-        expect(is_a($class, ApprovalEvent::class, true))->toBeTrue("[{$event}] must be an ApprovalEvent.");
-    }
 });

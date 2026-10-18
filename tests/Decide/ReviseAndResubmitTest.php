@@ -9,6 +9,7 @@ use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
 use ByRcsc\LaravelApproval\Exceptions\CommentRequiredException;
 use ByRcsc\LaravelApproval\Exceptions\InvalidDraftException;
+use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 
 it('returns a request to its requester without rewriting prior approvals', function (): void {
@@ -39,7 +40,10 @@ it('requires a reason and an eligible active approver to return', function (): v
     $request = post()->submitForApproval(workflow([['approvers' => [$approver]]]), null, user('Author'));
 
     expect(fn () => Approval::returnForRevision($request, $approver, ''))
-        ->toThrow(CommentRequiredException::class);
+        ->toThrow(CommentRequiredException::class)
+        ->and(fn () => Approval::returnForRevision($request, user('Stranger'), 'Send it back.'))
+        ->toThrow(UnauthorizedApproverException::class)
+        ->and($request->refresh()->state)->toBe(RequestState::Pending);
 });
 
 it('revises a returned request into a linked replacement at the first stage', function (): void {

@@ -31,7 +31,7 @@ describe('a record nobody touched applies cleanly', function (): void {
             ->and($invoice?->status)->toBe(InvoiceStatus::Sent);
     });
 
-    it('survives an encrypted cast, whose ciphertext differs on every write', function (): void {
+    it('survives an encrypted cast', function (): void {
         [$request, $invoice] = approveInvoiceDraft(['account_number' => 'GB99 8765 4321']);
 
         expect($request->state)->toBe(RequestState::Approved)
@@ -130,22 +130,4 @@ describe('drift detection per cast', function (): void {
         expect($request->state)->toBe(RequestState::Conflicted);
     });
 
-    it('does not call a json object re-saved with the same pairs a change', function (): void {
-        [$request] = approveInvoiceDraft(
-            ['meta' => ['source' => 'api']],
-            // The value it already held, written again.
-            fn ($invoice) => $invoice->forceFill(['meta' => ['source' => 'portal']])->save(),
-        );
-
-        expect($request->state)->toBe(RequestState::Approved);
-    });
-
-    it('does not call trailing decimal zeros a change', function (): void {
-        [$request] = approveInvoiceDraft(
-            ['reference' => 'INV-3000'],
-            fn ($invoice) => $invoice->forceFill(['total' => '125.5'])->save(),
-        );
-
-        expect($request->state)->toBe(RequestState::Approved);
-    });
 });

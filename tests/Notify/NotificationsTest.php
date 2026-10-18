@@ -3,20 +3,8 @@
 declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Enums\EscalationAction;
-use ByRcsc\LaravelApproval\Events\ApprovalApproved;
 use ByRcsc\LaravelApproval\Events\ApprovalCompleted;
-use ByRcsc\LaravelApproval\Events\ApprovalDelegated;
-use ByRcsc\LaravelApproval\Events\ApprovalRejected;
-use ByRcsc\LaravelApproval\Events\ApprovalReturned;
 use ByRcsc\LaravelApproval\Events\ApprovalSubmitted;
-use ByRcsc\LaravelApproval\Events\ApproverReassigned;
-use ByRcsc\LaravelApproval\Events\ApproversEscalated;
-use ByRcsc\LaravelApproval\Events\ApproversResynced;
-use ByRcsc\LaravelApproval\Events\DelegationEnded;
-use ByRcsc\LaravelApproval\Events\DraftConflicted;
-use ByRcsc\LaravelApproval\Events\StageCompleted;
-use ByRcsc\LaravelApproval\Events\StageOverdue;
-use ByRcsc\LaravelApproval\Events\StageOverdueReminder;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Notifications\ApprovalApprovedNotification;
 use ByRcsc\LaravelApproval\Notifications\ApprovalAssignedNotification;
@@ -289,22 +277,10 @@ describe('the map', function (): void {
         expect(NotificationMap::resolved())->toBe([]);
     });
 
-    it('maps the events it ships with', function (): void {
-        expect(array_keys(NotificationMap::defaults()))->toBe([
-            ApprovalSubmitted::class,
-            StageCompleted::class,
-            ApprovalApproved::class,
-            DraftConflicted::class,
-            ApprovalRejected::class,
-            ApprovalReturned::class,
-            ApprovalDelegated::class,
-            DelegationEnded::class,
-            ApproverReassigned::class,
-            ApproversResynced::class,
-            ApproversEscalated::class,
-            StageOverdue::class,
-            StageOverdueReminder::class,
-        ]);
+    it('publishes the map it falls back to', function (): void {
+        // The config file and NotificationMap each hold the shipped map, and the
+        // fallback is only right while the two agree.
+        expect(config('approval.notifications.map'))->toBe(NotificationMap::defaults());
     });
 });
 

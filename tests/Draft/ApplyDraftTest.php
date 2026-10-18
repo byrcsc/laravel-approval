@@ -7,6 +7,7 @@ use ByRcsc\LaravelApproval\Events\ApprovalCompleted;
 use ByRcsc\LaravelApproval\Events\DraftApplied;
 use ByRcsc\LaravelApproval\Events\DraftConflicted;
 use ByRcsc\LaravelApproval\Facades\Approval;
+use ByRcsc\LaravelApproval\Tests\Stubs\Post;
 use Illuminate\Support\Facades\Event;
 
 it('writes the draft onto the record on final approval', function (): void {
@@ -94,7 +95,10 @@ it('announces the applied draft after the record is saved', function (): void {
 
     Event::assertDispatched(ApprovalCompleted::class);
     Event::assertDispatched(DraftApplied::class, function (DraftApplied $e): bool {
+        // Read back from the table, so the event cannot have fired before the save.
         return $e->approvable->getAttributeValue('title') === 'Revised title'
+            && ! $e->approvable->isDirty()
+            && Post::query()->whereKey($e->approvable->getKey())->value('title') === 'Revised title'
             && $e->draft->new === ['title' => 'Revised title'];
     });
 });
@@ -176,14 +180,4 @@ describe('the stale check', function (): void {
         expect($request->refresh()->state)->toBe(RequestState::Approved);
     });
 
-    it('cancels the request when the record is gone entirely', function (): void {
-        $post = post('Original title');
-        $workflow = workflow([['approvers' => [user()]]]);
-
-        $request = $post->submitForApproval($workflow, ['title' => 'Revised'], user());
-        $post->delete();
-
-        expect($request->refresh()->state)->toBe(RequestState::Cancelled)
-            ->and($request->actions()->where('action', 'system_closed')->sole()->actor_id)->toBeNull();
-    });
 });

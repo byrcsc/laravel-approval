@@ -119,7 +119,7 @@ arch('resolvers implement the resolver contract')
     ->toBeFinal()
     ->toImplement(ApproverResolver::class);
 
-arch('events carry a request and nothing else')
+arch('events extend the base approval event')
     ->expect('ByRcsc\LaravelApproval\Events')
     ->toExtend(ApprovalEvent::class)
     ->ignoring(ApprovalEvent::class);

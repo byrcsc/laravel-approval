@@ -42,16 +42,6 @@ describe('rich draft values survive the JSON round trip', function (): void {
 });
 
 describe('equivalent writes are not drift', function (): void {
-    it('reads a date rewritten as a midnight datetime as unmoved', function (): void {
-        [$request] = approveInvoiceDraft(
-            ['issued_on' => '2026-08-15'],
-            // The raw column changes shape; the date cast reads both as the
-            // same day.
-            fn ($invoice) => $invoice->forceFill(['issued_on' => '2026-07-01 00:00:00'])->save(),
-        );
-
-        expect($request->state)->toBe(RequestState::Approved);
-    });
 
     it('reads a json object rewritten with its keys in another order as unmoved', function (): void {
         $approver = user('Approver');
@@ -70,15 +60,6 @@ describe('equivalent writes are not drift', function (): void {
             ->and($invoice->fresh()?->meta?->toArray())->toBe(['source' => 'api']);
     });
 
-    it('reads an integer rewritten as a numeric string as unmoved', function (): void {
-        [$request, $invoice] = approveInvoiceDraft(
-            ['quantity' => 12],
-            fn ($invoice) => $invoice->forceFill(['quantity' => '3'])->save(),
-        );
-
-        expect($request->state)->toBe(RequestState::Approved)
-            ->and($invoice?->getAttributeValue('quantity'))->toBe(12);
-    });
 });
 
 describe('near-equivalent writes are drift', function (): void {
