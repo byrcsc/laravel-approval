@@ -383,7 +383,8 @@ class ApprovalRequest extends Model
     }
 
     /**
-     * Shared with approvable-model inbox scopes.
+     * The constraint behind {@see self::scopeAwaitingUser()}, for callers that
+     * hold a request query rather than a scope.
      *
      * @param  Builder<self>  $query
      */
