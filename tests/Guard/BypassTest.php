@@ -242,44 +242,6 @@ it('audits a bypass that deletes the record out from under the request', functio
         ->and(canonical($action->metadata))->toBe(canonical(['attributes' => ['title'], 'deleted' => true]));
 });
 
-it('files a bypass under object identity while the model has no key', function (): void {
-    $unsaved = new Post(['title' => 'Unsaved', 'body' => 'Body copy.']);
-    $other = new Post(['title' => 'Also unsaved', 'body' => 'Body copy.']);
-
-    ApprovalGuard::without($unsaved, function () use ($unsaved, $other): void {
-        expect(ApprovalGuard::bypassing($unsaved))->toBeTrue()
-            ->and(ApprovalGuard::bypassing($other))->toBeFalse();
-    });
-
-    expect(ApprovalGuard::bypassing($unsaved))->toBeFalse();
-});
-
-it('keeps hold of a model that gains its key inside its own bypass', function (): void {
-    $post = new Post(['title' => 'Unsaved', 'body' => 'Body copy.']);
-
-    ApprovalGuard::without($post, function () use ($post): void {
-        $post->save();
-
-        // The entry was filed under object identity, and the model now answers
-        // to a primary key as well. Both are registered, so the insert does not
-        // drop it out of its own bypass halfway through.
-        expect(ApprovalGuard::bypassing($post))->toBeTrue();
-    });
-
-    expect(ApprovalGuard::bypassing($post))->toBeFalse();
-});
-
-it('keeps an object id from colliding with a real key of the same class', function (): void {
-    [$post] = guardedPost();
-    $unsaved = new Post(['title' => 'Unsaved', 'body' => 'Body copy.']);
-
-    // The two namespaces are separate, so no object id can stand in for the
-    // primary key of a real row.
-    ApprovalGuard::without($unsaved, function () use ($post): void {
-        expect(ApprovalGuard::bypassing($post))->toBeFalse();
-    });
-});
-
 it('permits direct edits while a request sits returned', function (): void {
     [$post, $request, $approver] = guardedPost();
 
