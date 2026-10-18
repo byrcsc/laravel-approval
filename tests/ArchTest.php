@@ -163,22 +163,31 @@ arch('only actions write attachments')
     ]);
 
 it('keeps evidence creation behind its designated actions', function (): void {
-    $files = glob(__DIR__.'/../src/Actions/*.php');
+    // Every shipped file, not just the actions: ApprovalModels resolves the
+    // model class, so code anywhere in src could create through it without
+    // naming ApprovalAction or ApprovalAttachment.
+    $root = __DIR__.'/../src';
+    $files = [
+        ...(glob($root.'/*.php') ?: []),
+        ...(glob($root.'/*/*.php') ?: []),
+        ...(glob($root.'/*/*/*.php') ?: []),
+    ];
 
-    $writers = function (string $creation) use ($files): array {
-        return collect($files === false ? [] : $files)
-            ->filter(fn (string $file): bool => str_contains(
-                (string) file_get_contents($file),
-                $creation,
-            ))
+    $writers = function (array $creations) use ($files): array {
+        return collect($files)
+            ->filter(function (string $file) use ($creations): bool {
+                $source = (string) file_get_contents($file);
+
+                return collect($creations)->contains(fn (string $creation): bool => str_contains($source, $creation));
+            })
             ->map(fn (string $file): string => basename($file))
             ->sort()
             ->values()
             ->all();
     };
 
-    expect($writers('ApprovalModels::action()::create('))->toBe(['RecordAction.php'])
-        ->and($writers('ApprovalModels::attachment()::create('))->toBe(['AttachFile.php']);
+    expect($writers(['ApprovalModels::action()::create(', '->actions()->create(']))->toBe(['RecordAction.php'])
+        ->and($writers(['ApprovalModels::attachment()::create(', '->attachments()->create(']))->toBe(['AttachFile.php']);
 });
 
 // Models describe the schema. Transactions and dispatching belong to the
