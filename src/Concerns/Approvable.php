@@ -215,7 +215,7 @@ trait Approvable
      */
     public function pendingApprovalApprovers(): Collection
     {
-        return $this->pendingApprovalRequest()?->pendingApprovers() ?? collect();
+        return $this->pendingApprovalRequest()?->pendingApprovers() ?? new Collection;
     }
 
     /**
@@ -226,7 +226,7 @@ trait Approvable
      */
     public function currentStageApprovers(): Collection
     {
-        return $this->pendingApprovalRequest()?->currentStageApprovers() ?? collect();
+        return $this->pendingApprovalRequest()?->currentStageApprovers() ?? new Collection;
     }
 
     /**
@@ -238,7 +238,7 @@ trait Approvable
      */
     public function latestApprovalTimeline(): Collection
     {
-        return $this->latestApprovalRequest()->first()?->timeline() ?? collect();
+        return $this->latestApprovalRequest()->first()?->timeline() ?? new Collection;
     }
 
     /**

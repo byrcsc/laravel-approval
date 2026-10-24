@@ -96,6 +96,7 @@ abstract class ApprovalNotification extends Notification
     }
 
     /**
+     * @param  'approved'|'assigned'|'conflicted'|'overdue'|'rejected'|'requested'|'returned'  $key
      * @param  array<string, mixed>  $with
      */
     protected function mailFor(string $key, array $with = []): MailMessage
