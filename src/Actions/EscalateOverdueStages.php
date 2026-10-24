@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
 use ByRcsc\LaravelApproval\Data\StageHealth;
 use ByRcsc\LaravelApproval\Enums\ActionType;
@@ -168,7 +169,7 @@ final class EscalateOverdueStages
     private function overdueStages(): iterable
     {
         /** @var iterable<int, ApprovalRequestStage> */
-        return ApprovalRequestStage::query()
+        return ApprovalModels::requestStage()::query()
             ->where('state', StageStatus::Active->value)
             ->whereNotNull('deadline_at')
             ->where('deadline_at', '<=', Date::now())

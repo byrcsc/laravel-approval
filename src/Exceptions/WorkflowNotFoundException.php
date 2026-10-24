@@ -19,15 +19,16 @@ final class WorkflowNotFoundException extends ApprovalException
     }
 
     /**
-     * The workflow a request ran under has been deleted, so a retry has nothing
-     * to run against. Name one explicitly to revise and resubmit anyway.
+     * The request has no stored workflow: it was deleted, or the request ran
+     * under an inline definition. A retry has nothing to run against, so name
+     * one explicitly to revise and resubmit anyway.
      */
     public static function forRequest(ApprovalRequest $request): self
     {
         $ulid = $request->getAttributeValue('ulid');
 
         return new self(sprintf(
-            'The workflow approval request %s ran under no longer exists. Pass a workflow to resubmit it under a different one.',
+            'Approval request %s has no stored workflow: it was deleted, or the request ran under an inline definition. Pass a workflow to resubmit it.',
             is_scalar($ulid) ? (string) $ulid : 'unsaved',
         ));
     }

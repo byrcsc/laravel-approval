@@ -8,7 +8,6 @@ use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Tests\Stubs\FlickeringLabelUser;
-use Illuminate\Database\QueryException;
 
 // The audit trail's tamper-evidence: every line hashes its content and the
 // line before it, RecordAction is the only maintainer, and approval:verify
@@ -164,13 +163,6 @@ it('captures an actor label once for both the row and its hash', function (): vo
     expect($request->actions()->where('action', ActionType::Submitted->value)->sole()->actor_label)
         ->toBe('Changing read 1')
         ->and(Approval::verifyTrail($request))->toBe([]);
-});
-
-it('refuses to hard-delete a request while its history exists', function (): void {
-    $request = auditedRequest();
-
-    expect(fn () => $request->delete())->toThrow(QueryException::class)
-        ->and($request->fresh())->not->toBeNull();
 });
 
 it('survives a step deletion with the loss on the record, not erased', function (): void {

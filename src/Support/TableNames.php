@@ -23,6 +23,7 @@ final class TableNames
         'assignments' => 'approval_request_assignments',
         'actions' => 'approval_actions',
         'attachments' => 'approval_attachments',
+        'delegations' => 'approval_delegations',
     ];
 
     /**

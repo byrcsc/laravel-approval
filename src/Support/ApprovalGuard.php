@@ -17,13 +17,9 @@ final class ApprovalGuard
 
     public static function bypassing(Model $model): bool
     {
-        foreach (self::keys($model) as $key) {
-            if ((self::$bypasses[$key] ?? 0) > 0) {
-                return true;
-            }
-        }
+        $key = self::key($model);
 
-        return false;
+        return $key !== null && (self::$bypasses[$key] ?? 0) > 0;
     }
 
     /**
@@ -37,46 +33,32 @@ final class ApprovalGuard
      */
     public static function without(Model $model, callable $callback): mixed
     {
-        $keys = self::keys($model);
+        $key = self::key($model);
 
-        foreach ($keys as $key) {
-            self::$bypasses[$key] = (self::$bypasses[$key] ?? 0) + 1;
+        if ($key === null) {
+            return $callback();
         }
+
+        self::$bypasses[$key] = (self::$bypasses[$key] ?? 0) + 1;
 
         try {
             return $callback();
         } finally {
-            foreach ($keys as $key) {
-                self::$bypasses[$key]--;
-
-                if (self::$bypasses[$key] === 0) {
-                    unset(self::$bypasses[$key]);
-                }
+            if (--self::$bypasses[$key] === 0) {
+                unset(self::$bypasses[$key]);
             }
         }
     }
 
     /**
-     * Both the row the model stands for and the object in hand: the row key so
-     * that a second instance of the same record is covered by the same bypass,
-     * the object key so that a model which gains its key mid-bypass - it was
-     * inserted inside the callback - is not lost track of halfway through.
-     *
-     * The two live in separate namespaces on purpose. Keying an unsaved model
-     * by `spl_object_id` under the morph class, as this once did, lets an
-     * object id collide with a real primary key of the same class.
-     *
-     * @return list<string>
+     * The row the model stands for, so that a second instance of the same
+     * record is covered by the same bypass. A model without a key has no row
+     * to bypass, and the guard ignores unsaved models anyway.
      */
-    private static function keys(Model $model): array
+    private static function key(Model $model): ?string
     {
-        $keys = ['object:'.spl_object_id($model)];
         $key = $model->getKey();
 
-        if (is_scalar($key)) {
-            $keys[] = 'row:'.$model->getMorphClass().':'.$key;
-        }
-
-        return $keys;
+        return is_scalar($key) ? $model->getMorphClass().':'.$key : null;
     }
 }

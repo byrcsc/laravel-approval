@@ -129,9 +129,11 @@ abstract class TestCase extends Orchestra
      */
     protected function runApprovalMigration(): void
     {
-        $migration = require __DIR__.'/../database/migrations/create_approval_tables.php.stub';
+        foreach (['create_approval_tables', 'create_approval_delegations_table'] as $stub) {
+            $migration = require __DIR__."/../database/migrations/{$stub}.php.stub";
 
-        $migration->up();
+            $migration->up();
+        }
     }
 
     /**

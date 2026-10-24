@@ -37,7 +37,7 @@ phpstan.neon
 /workbench/database/database.sqlite
 /workbench/database/database.sqlite-shm
 /workbench/database/database.sqlite-wal
-/workbench/database/migrations/*_create_approval_tables.php
+/workbench/database/migrations/*_create_approval_*.php
 /workbench/storage/app/evidence
 
 # Secrets

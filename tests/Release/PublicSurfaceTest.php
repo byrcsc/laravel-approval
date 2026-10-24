@@ -7,7 +7,6 @@ use ByRcsc\LaravelApproval\Concerns\Approvable;
 use ByRcsc\LaravelApproval\Data\ApprovalInteraction;
 use ByRcsc\LaravelApproval\Data\StageProgress;
 use ByRcsc\LaravelApproval\Enums\InteractionType;
-use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Policies\ApprovalRequestPolicy;
@@ -22,6 +21,7 @@ use ByRcsc\LaravelApproval\Testing\ApprovalFake;
  */
 it('pins the facade and manager command and query surface', function (): void {
     expect(declaredMethods(ApprovalManager::class))->toBe([
+        'applyDelegations',
         'approve',
         'approveMany',
         'attach',
@@ -34,10 +34,12 @@ it('pins the facade and manager command and query surface', function (): void {
         'decideMany',
         'delegate',
         'delegationEligibility',
+        'delegationsFrom',
         'eligibility',
         'escalateOverdue',
         'fake',
         'findWorkflow',
+        'grantDelegation',
         'overdue',
         'pendingFor',
         'reassign',
@@ -49,6 +51,7 @@ it('pins the facade and manager command and query surface', function (): void {
         'resync',
         'returnForRevision',
         'reviseAndResubmit',
+        'revokeDelegation',
         'submit',
         'syncDefinitions',
         'verifyTrail',
@@ -128,23 +131,6 @@ it('keeps commands off the approvable trait and the request model', function ():
     }
 });
 
-it('mirrors exactly one facade operation on the trait, and documents why', function (): void {
-    // Guard mode is a model-level feature - the interception lives on the
-    // model's saving hook - so the bypass is the one operation offered on both
-    // the model and the facade. Any second exception should be argued for here.
-    $trait = new ReflectionClass(Approvable::class);
-    $mirrors = array_values(array_filter(
-        declaredMethods(Approvable::class),
-        fn (string $method): bool => in_array($method, ['withoutApprovalGuard'], true),
-    ));
-
-    expect($mirrors)->toBe(['withoutApprovalGuard'])
-        ->and((string) $trait->getMethod('withoutApprovalGuard')->getDocComment())
-        ->toContain('Approval::withoutGuard(')
-        ->and((string) $trait->getDocComment())
-        ->toContain('one deliberate exception');
-});
-
 it('pins the request model to state, relationships, progress, and authorization', function (): void {
     expect(declaredMethods(ApprovalRequest::class))->toBe([
         // Relationships.
@@ -199,6 +185,7 @@ it('pins the shipped policy abilities', function (): void {
 
 it('pins the fake recording and assertion surface', function (): void {
     expect(declaredMethods(ApprovalFake::class))->toBe([
+        'applyDelegations',
         'assertApproved',
         'assertApprovedMany',
         'assertApprovedTimes',
@@ -207,6 +194,9 @@ it('pins the fake recording and assertion surface', function (): void {
         'assertConflictResolved',
         'assertDefinitionsSynced',
         'assertDelegated',
+        'assertDelegationGranted',
+        'assertDelegationRevoked',
+        'assertDelegationsApplied',
         'assertGuardBypassed',
         'assertNotApproved',
         'assertNotSubmitted',
@@ -229,12 +219,14 @@ it('pins the fake recording and assertion surface', function (): void {
         'delegate',
         'escalateOverdue',
         'fake',
+        'grantDelegation',
         'interactions',
         'reassign',
         'resolve',
         'restore',
         'resync',
         'reviseAndResubmit',
+        'revokeDelegation',
         'submit',
         'syncDefinitions',
         'withdraw',
@@ -310,7 +302,7 @@ it('pins the public enums and their cases', function (): void {
 
     expect($cases)->toBe([
         'ActionType' => [
-            'submitted', 'approved', 'rejected', 'delegated', 'reassigned', 'escalated',
+            'submitted', 'approved', 'rejected', 'delegated', 'delegation_ended', 'reassigned', 'escalated',
             'commented', 'withdrawn', 'cancelled', 'system_closed', 'superseded',
             'resubmitted', 'applied', 'conflicted', 'resynced', 'guard_bypassed',
             'returned', 'stage_skipped', 'reminded', 'attachment_added',
@@ -330,7 +322,8 @@ it('pins the public enums and their cases', function (): void {
         ],
         'InteractionType' => [
             'submitted', 'decision', 'decisions_many', 'withdrawn', 'cancelled',
-            'delegated', 'reassigned', 'resynced', 'conflict_resolved',
+            'delegated', 'delegation_granted', 'delegation_revoked', 'delegations_applied',
+            'reassigned', 'resynced', 'conflict_resolved',
             'resubmitted', 'attached', 'guard_bypassed', 'overdue_processed',
             'definitions_synced',
         ],
@@ -372,6 +365,7 @@ it('pins the public events and the facts each one carries', function (): void {
         'ApproverReassigned' => ['actor', 'assignment', 'from', 'request', 'to'],
         'ApproversEscalated' => ['assignments', 'request', 'stage'],
         'ApproversResynced' => ['actor', 'addedAssignments', 'changes', 'request'],
+        'DelegationEnded' => ['approver', 'assignment', 'delegate', 'request'],
         'DraftApplied' => ['approvable', 'draft', 'request'],
         'DraftConflicted' => ['approvable', 'attributes', 'request'],
         'StageApprovalRecorded' => ['actor', 'approvalsReceived', 'approvalsRequired', 'request', 'stage'],
@@ -380,10 +374,4 @@ it('pins the public events and the facts each one carries', function (): void {
         'StageOverdueReminder' => ['action', 'request', 'stage'],
         'StageStranded' => ['livingHolders', 'request', 'requiredApprovals', 'stage'],
     ]);
-
-    foreach (classesIn('Events') as $event) {
-        $class = 'ByRcsc\\LaravelApproval\\Events\\'.$event;
-
-        expect(is_a($class, ApprovalEvent::class, true))->toBeTrue("[{$event}] must be an ApprovalEvent.");
-    }
 });

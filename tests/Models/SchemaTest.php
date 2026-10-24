@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
+use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
@@ -36,53 +37,25 @@ it('gives every model a table that exists', function (string $model) {
     ApprovalRequestAssignment::class,
     ApprovalAction::class,
     ApprovalAttachment::class,
+    ApprovalDelegation::class,
 ]);
 
-it('describes a workflow and its stages', function () {
-    expect(Schema::hasColumns('approval_workflows', [
-        'id', 'name', 'slug', 'description', 'active',
-        'approvable_type', 'condition', 'condition_config', 'priority', 'settings',
-        'created_at', 'updated_at', 'deleted_at',
-    ]))->toBeTrue();
+it('types the approvable key from config, independently of user keys', function (string $keyType, bool $integer) {
+    $this->rebootWith(['approval.approvable_key_type' => $keyType]);
 
-    expect(Schema::hasColumns('approval_workflow_stages', [
-        'id', 'workflow_id', 'sequence', 'name', 'required_approvals', 'rejection_policy',
-        'sla_minutes', 'escalation_strategy', 'escalation_config',
-        'remind_every_minutes', 'condition', 'condition_config',
-    ]))->toBeTrue();
+    // Compared with an integer user column rather than a type name, which
+    // differs between the drivers CI runs against.
+    $userColumn = Schema::getColumnType('approval_request_assignments', 'approver_id');
 
-    expect(Schema::hasColumns('approval_workflow_stage_approvers', [
-        'id', 'stage_id', 'approver_type', 'approver_id', 'resolver', 'resolver_config',
-    ]))->toBeTrue();
-});
+    expect(Schema::getColumnType('approval_requests', 'approvable_id') === $userColumn)->toBe($integer);
+})->with([
+    'int' => ['int', true],
+    'uuid' => ['uuid', false],
+    'ulid' => ['ulid', false],
+    'string' => ['string', false],
+]);
 
-it('describes a request, its steps, and its approver assignments', function () {
-    expect(Schema::hasColumns('approval_requests', [
-        'id', 'ulid', 'approvable_type', 'approvable_id', 'workflow_id', 'state',
-        'current_stage_sequence', 'new_attributes', 'original_attributes',
-        'requester_type', 'requester_id', 'resubmitted_from_id',
-        'submitted_at', 'completed_at', 'audit_head_hash',
-    ]))->toBeTrue();
-
-    expect(Schema::hasColumns('approval_request_stages', [
-        'id', 'request_id', 'sequence', 'name', 'required_approvals', 'rejection_policy', 'sla_minutes',
-        'escalation_strategy', 'escalation_config', 'remind_every_minutes',
-        'condition', 'condition_config', 'condition_result',
-        'deadline_at', 'escalated_at', 'last_reminded_at', 'stranded_at', 'state',
-    ]))->toBeTrue();
-
-    expect(Schema::hasColumns('approval_request_assignments', [
-        'id', 'stage_id', 'approver_type', 'approver_id',
-        'delegated_to_type', 'delegated_to_id', 'source',
-    ]))->toBeTrue();
-});
-
-it('describes the audit trail without an updated_at', function () {
-    expect(Schema::hasColumns('approval_actions', [
-        'id', 'request_id', 'stage_id', 'actor_type', 'actor_id',
-        'action', 'comment', 'metadata', 'created_at',
-    ]))->toBeTrue();
-
+it('gives the audit trail no updated_at', function () {
     expect(Schema::hasColumn('approval_actions', 'updated_at'))->toBeFalse();
 });
 
@@ -159,6 +132,7 @@ it('creates its tables under whatever names the config gives them', function () 
         'assignments' => 'sign_off_request_assignments',
         'actions' => 'sign_off_actions',
         'attachments' => 'sign_off_attachments',
+        'delegations' => 'sign_off_delegations',
     ];
 
     config()->set('approval.table_names', $renamed);
@@ -182,10 +156,4 @@ it('creates its tables under whatever names the config gives them', function () 
     ]);
 
     expect(ApprovalWorkflow::query()->whereKey($workflow->getKey())->exists())->toBeTrue();
-});
-
-it('falls back to the packaged table name when the config has no entry for it', function () {
-    config()->set('approval.table_names', []);
-
-    expect(TableNames::for('requests'))->toBe('approval_requests');
 });

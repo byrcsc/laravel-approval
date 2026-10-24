@@ -61,21 +61,3 @@ it('drops closed requests off the list entirely', function (): void {
 
     expect(Approval::awaiting($approver)->count())->toBe(0);
 });
-
-it('hands a delegated assignment to the delegate and takes it from the original', function (): void {
-    $approver = user('Approver');
-    $delegate = user('Delegate');
-
-    $workflow = workflow([['approvers' => [$approver]]]);
-    $request = post()->submitForApproval($workflow, null, user());
-
-    // Written directly: delegation gets its own action in a later phase, and
-    // the inbox query should already read the column correctly.
-    $request->stages()->sole()->assignments()->sole()->forceFill([
-        'delegated_to_type' => $delegate->getMorphClass(),
-        'delegated_to_id' => $delegate->getKey(),
-    ])->save();
-
-    expect(Approval::awaiting($delegate)->count())->toBe(1)
-        ->and(Approval::awaiting($approver)->count())->toBe(0);
-});

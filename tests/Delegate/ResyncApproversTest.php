@@ -74,7 +74,7 @@ it('drops stale approvers when pruning', function (): void {
         ->and($changes[1]['removed'])->toBe([$head->getMorphClass().':'.$head->getKey()]);
 });
 
-it('never prunes an assignment that has decided', function (): void {
+it('never prunes an assignment that has decided, and keeps counting its decision', function (): void {
     $one = user('One');
     HeadOfDepartmentResolver::$heads = [$one, user('Two')];
 
@@ -85,13 +85,19 @@ it('never prunes an assignment that has decided', function (): void {
     $request = post()->submitForApproval($workflow, null, user());
     Approval::approve($request, $one);
 
-    HeadOfDepartmentResolver::$heads = [user('Replacement A'), user('Replacement B')];
+    $replacement = user('Replacement A');
+    HeadOfDepartmentResolver::$heads = [$replacement, user('Replacement B')];
 
     Approval::resync($request, user('Operator'), prune: true);
 
     $assignments = $request->stages()->sole()->assignments()->get();
 
     expect($assignments->pluck('approver_id')->all())->toContain($one->getKey());
+
+    // One's approval still counts after the prune, so one more completes the stage.
+    Approval::approve($request, $replacement);
+
+    expect($request->refresh()->state)->toBe(RequestState::Approved);
 });
 
 it('never prunes an assignment that has been delegated', function (): void {
@@ -289,11 +295,12 @@ it('reports an unresolvable operator rather than guessing', function (): void {
     $this->artisan('approval:resync', [
         'request' => $request->getAttributeValue('ulid'),
         '--operator' => '999999',
-    ])->assertFailed();
+    ])->expectsOutputToContain('No operator found for [999999]')->assertFailed();
 });
 
 it('reports an unknown request rather than failing silently', function (): void {
     $this->artisan('approval:resync', ['request' => 'nope', '--operator' => (string) user('Operator')->getKey()])
+        ->expectsOutputToContain('No approval request found for [nope]')
         ->assertFailed();
 });
 

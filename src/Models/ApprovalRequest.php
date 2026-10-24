@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\StageProgress;
@@ -35,7 +36,7 @@ use Illuminate\Support\Str;
  * lifetime of the request. Requests are never reopened: revising and
  * resubmitting creates a new request linked back to this one.
  */
-final class ApprovalRequest extends Model
+class ApprovalRequest extends Model
 {
     /** @use HasFactory<ApprovalRequestFactory> */
     use HasFactory;
@@ -82,7 +83,7 @@ final class ApprovalRequest extends Model
      */
     public function workflow(): BelongsTo
     {
-        return $this->belongsTo(ApprovalWorkflow::class, 'workflow_id');
+        return $this->belongsTo(ApprovalModels::workflow(), 'workflow_id');
     }
 
     /**
@@ -90,7 +91,7 @@ final class ApprovalRequest extends Model
      */
     public function stages(): HasMany
     {
-        return $this->hasMany(ApprovalRequestStage::class, 'request_id')
+        return $this->hasMany(ApprovalModels::requestStage(), 'request_id')
             ->orderBy('sequence');
     }
 
@@ -99,7 +100,7 @@ final class ApprovalRequest extends Model
      */
     public function actions(): HasMany
     {
-        return $this->hasMany(ApprovalAction::class, 'request_id')
+        return $this->hasMany(ApprovalModels::action(), 'request_id')
             ->orderBy('id');
     }
 
@@ -108,7 +109,7 @@ final class ApprovalRequest extends Model
      */
     public function attachments(): HasMany
     {
-        return $this->hasMany(ApprovalAttachment::class, 'request_id')
+        return $this->hasMany(ApprovalModels::attachment(), 'request_id')
             ->orderBy('id');
     }
 
@@ -117,7 +118,7 @@ final class ApprovalRequest extends Model
      */
     public function resubmittedFrom(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'resubmitted_from_id');
+        return $this->belongsTo(ApprovalModels::request(), 'resubmitted_from_id');
     }
 
     /**
@@ -129,7 +130,7 @@ final class ApprovalRequest extends Model
      */
     public function resubmissions(): HasMany
     {
-        return $this->hasMany(self::class, 'resubmitted_from_id');
+        return $this->hasMany(ApprovalModels::request(), 'resubmitted_from_id');
     }
 
     /**
@@ -382,7 +383,8 @@ final class ApprovalRequest extends Model
     }
 
     /**
-     * Shared with approvable-model inbox scopes.
+     * The constraint behind {@see self::scopeAwaitingUser()}, for callers that
+     * hold a request query rather than a scope.
      *
      * @param  Builder<self>  $query
      */

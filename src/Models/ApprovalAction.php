@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalActionFactory;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Support\TableNames;
@@ -27,7 +28,7 @@ use LogicException;
  * runtime condition to handle, hence `LogicException` rather than one of this
  * package's own exceptions.
  */
-final class ApprovalAction extends Model
+class ApprovalAction extends Model
 {
     /** @use HasFactory<ApprovalActionFactory> */
     use HasFactory;
@@ -74,7 +75,7 @@ final class ApprovalAction extends Model
      */
     public function request(): BelongsTo
     {
-        return $this->belongsTo(ApprovalRequest::class, 'request_id');
+        return $this->belongsTo(ApprovalModels::request(), 'request_id');
     }
 
     /**
@@ -85,7 +86,7 @@ final class ApprovalAction extends Model
      */
     public function stage(): BelongsTo
     {
-        return $this->belongsTo(ApprovalRequestStage::class, 'stage_id');
+        return $this->belongsTo(ApprovalModels::requestStage(), 'stage_id');
     }
 
     /**
@@ -105,7 +106,7 @@ final class ApprovalAction extends Model
      */
     public function attachments(): HasMany
     {
-        return $this->hasMany(ApprovalAttachment::class, 'action_id')
+        return $this->hasMany(ApprovalModels::attachment(), 'action_id')
             ->orderBy('id');
     }
 

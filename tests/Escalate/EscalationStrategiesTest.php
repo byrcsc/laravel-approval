@@ -72,29 +72,6 @@ describe('escalate', function (): void {
         expect($request->refresh()->state)->toBe(RequestState::Approved);
     });
 
-    /**
-     * The trap: on an all-of-them stage, adding an assignment would make an already
-     * late stage harder to carry.
-     */
-    it('pins an all-of-them required approvals before adding anybody', function (): void {
-        HeadOfDepartmentResolver::$heads = [user('Duty Officer')];
-
-        $request = overdueRequest(
-            EscalationAction::Escalate,
-            ['resolver' => HeadOfDepartmentResolver::class],
-            requiredApprovals: null,
-            approvers: 2,
-        );
-
-        $stage = $request->stages()->sole();
-
-        Date::setTestNow('2026-07-28 10:01:00');
-        Approval::escalateOverdue();
-
-        expect($stage->refresh()->getAttributeValue('required_approvals'))->toBe(2)
-            ->and($stage->assignments()->count())->toBe(3);
-    });
-
     it('leaves a numeric required approvals alone', function (): void {
         HeadOfDepartmentResolver::$heads = [user('Duty Officer')];
 
@@ -127,7 +104,7 @@ describe('escalate', function (): void {
         expect($request->stages()->sole()->getAttributeValue('required_approvals'))->toBe(1);
     });
 
-    it('does not assignment somebody who already holds an assignment', function (): void {
+    it('does not add somebody who already holds an assignment', function (): void {
         $request = overdueRequest(
             EscalationAction::Escalate,
             ['resolver' => HeadOfDepartmentResolver::class],

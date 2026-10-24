@@ -15,17 +15,6 @@ use ByRcsc\LaravelApproval\Notifications\ApprovalNotification;
  */
 final class InvalidConfigurationException extends ApprovalException
 {
-    /**
-     * @param  list<string>  $missing
-     */
-    public static function missingTableNames(array $missing): self
-    {
-        return new self(sprintf(
-            'The [approval.table_names] config is missing an entry for: %s. Re-publish the package config with `php artisan vendor:publish --tag="laravel-approval-config"`.',
-            implode(', ', $missing),
-        ));
-    }
-
     public static function blankTableName(string $key): self
     {
         return new self("The [approval.table_names.{$key}] config must be a non-empty table name.");
@@ -85,9 +74,24 @@ final class InvalidConfigurationException extends ApprovalException
         return new self("The [approval.user_model] config points at [{$model}], which is not an Eloquent model.");
     }
 
-    public static function invalidUserKeyType(string $type): self
+    public static function invalidKeyType(string $key, string $type): self
     {
-        return new self("The [approval.user_key_type] config is [{$type}]. Expected one of: int, uuid, ulid, string.");
+        return new self("The [approval.{$key}] config is [{$type}]. Expected one of: int, uuid, ulid, string.");
+    }
+
+    public static function unknownModelClassKey(string $key): self
+    {
+        return new self("The [approval.model_classes] config has an entry for [{$key}], which is not a package model. Use the keys of [approval.table_names].");
+    }
+
+    public static function modelClassMustExtend(string $key, mixed $class, string $base): self
+    {
+        return new self(sprintf(
+            'The [approval.model_classes.%s] config is [%s], which does not extend %s.',
+            $key,
+            is_scalar($class) ? (string) $class : get_debug_type($class),
+            $base,
+        ));
     }
 
     public static function invalidModelMode(string $model, mixed $mode): self

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Data\StageHealth;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StageStatus;
@@ -37,7 +38,7 @@ final class ScanActiveStageHealth
     {
         $continue = true;
 
-        ApprovalRequestStage::query()
+        ApprovalModels::requestStage()::query()
             ->where('state', StageStatus::Active->value)
             ->whereHas('request', fn ($query) => $query->where('state', RequestState::Pending->value))
             ->with([

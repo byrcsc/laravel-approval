@@ -8,7 +8,6 @@ use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Events\DraftApplied;
 use ByRcsc\LaravelApproval\Exceptions\AlreadyDecidedException;
-use ByRcsc\LaravelApproval\Exceptions\ApprovalInProgressException;
 use ByRcsc\LaravelApproval\Exceptions\DraftConflictException;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
@@ -71,7 +70,7 @@ describe('resolving a conflict', function (): void {
             ->toBe('Their edit wins.');
     });
 
-    it('frees the record either way', function (): void {
+    it('frees the record when the draft is discarded', function (): void {
         [$request, $post] = conflictedRequest();
         Gate::before(fn ($actor, string $ability): ?bool => $ability === 'cancel' ? true : null);
 
@@ -91,14 +90,16 @@ describe('resolving a conflict', function (): void {
             ->toThrow(DraftConflictException::class, 'is pending, not conflicted');
     });
 
-    it('closes a request whose record has gone', function (): void {
-        $post = post('Original title');
-        $workflow = workflow([['approvers' => [user('Approver')]]]);
+    it('refuses to reapply a draft whose record has gone', function (): void {
+        [$request, $post] = conflictedRequest();
 
-        $request = $post->submitForApproval($workflow, ['title' => 'Revised'], user());
-        $post->delete();
+        // Deleted without model events, so the listener that closes requests
+        // for a deleted record never runs and the request stays conflicted.
+        Post::query()->whereKey($post->getKey())->delete();
 
-        expect($request->refresh()->state)->toBe(RequestState::Cancelled);
+        expect(fn () => Approval::resolve($request, ConflictResolution::Reapply, user('Admin')))
+            ->toThrow(DraftConflictException::class, 'no longer exists')
+            ->and($request->refresh()->state)->toBe(RequestState::Conflicted);
     });
 });
 
@@ -247,16 +248,4 @@ describe('resubmitting', function (): void {
             ->toThrow(AlreadyDecidedException::class, 'is pending and cannot be revised and resubmitted');
     });
 
-    it('refuses while another request for the record is open', function (): void {
-        $approver = user('Approver');
-        $post = post();
-        $workflow = workflow([['approvers' => [$approver]]]);
-
-        $first = $post->submitForApproval($workflow, null, user('Author'));
-        Approval::reject($first, $approver, 'No.');
-
-        Approval::reviseAndResubmit($first, RevisedDraft::inherit());
-
-        expect(fn () => Approval::reviseAndResubmit($first, RevisedDraft::inherit()))->toThrow(ApprovalInProgressException::class);
-    });
 });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 
 /**
@@ -44,7 +45,7 @@ final class VerifyAuditTrail
     {
         $findings = [];
 
-        $query = ApprovalRequest::query()->orderBy('id');
+        $query = ApprovalModels::request()::query()->orderBy('id');
 
         if ($only !== null) {
             $query->whereKey($only->getKey());

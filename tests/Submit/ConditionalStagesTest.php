@@ -8,7 +8,7 @@ use ByRcsc\LaravelApproval\Enums\StageStatus;
 use ByRcsc\LaravelApproval\Exceptions\InvalidWorkflowException;
 use ByRcsc\LaravelApproval\Tests\Stubs\AmountExceedsCondition;
 
-it('evaluates conditions once and snapshots skipped stages visibly', function (): void {
+it('snapshots a skipped stage with its condition, config, and result', function (): void {
     $finance = user('Finance');
     $workflow = workflow([
         [

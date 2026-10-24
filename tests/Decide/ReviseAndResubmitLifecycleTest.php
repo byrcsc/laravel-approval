@@ -89,7 +89,7 @@ it('refuses to revise implicitly under a workflow that has been deleted', functi
     $returned->workflow?->delete();
 
     expect(fn () => Approval::reviseAndResubmit($returned, RevisedDraft::inherit()))
-        ->toThrow(WorkflowNotFoundException::class, 'no longer exists');
+        ->toThrow(WorkflowNotFoundException::class, 'has no stored workflow');
 });
 
 it('reports an unknown workflow slug as an approval exception on resubmit', function (): void {

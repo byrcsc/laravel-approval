@@ -77,7 +77,7 @@ describe('rejection', function (): void {
         );
     });
 
-    it('holds a rejected request to the same eligibility rules', function (): void {
+    it('holds a rejection to the same eligibility rules', function (): void {
         $workflow = workflow([['approvers' => [user('Approver')]]]);
         $request = post()->submitForApproval($workflow, null, user());
 

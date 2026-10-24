@@ -10,6 +10,7 @@ use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAction;
+use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Testing\ApprovalFake;
 use Illuminate\Database\Eloquent\Model;
@@ -46,6 +47,9 @@ function retainedMutations(): array
         )],
         'withdraw' => ['state' => 'pending', 'run' => fn (array $fixture) => Approval::withdraw($fixture['request'], $fixture['requester'], 'Not yet')],
         'delegate' => ['state' => 'pending', 'run' => fn (array $fixture) => Approval::delegate($fixture['request'], $fixture['approver'], $fixture['delegate'], 'Away')],
+        'grantDelegation' => ['state' => 'pending', 'run' => fn (array $fixture) => Approval::grantDelegation($fixture['approver'], $fixture['delegate'], comment: 'On leave')],
+        'revokeDelegation' => ['state' => 'delegated', 'run' => fn (array $fixture) => Approval::revokeDelegation($fixture['delegation'])],
+        'applyDelegations' => ['state' => 'pending', 'run' => fn (array $fixture) => Approval::applyDelegations()],
         'attach' => ['state' => 'pending', 'run' => fn (array $fixture) => Approval::attach(new AttachmentEvidence(
             request: $fixture['request'],
             disk: 'local',
@@ -97,10 +101,15 @@ function contractFixture(string $state): array
         Approval::returnForRevision($request, $approver, 'Revise this.');
     }
 
+    $delegation = $state === 'delegated'
+        ? Approval::grantDelegation($approver, user('Delegate'))
+        : null;
+
     return [
         'approver' => $approver,
         'requester' => $requester,
-        'delegate' => user('Delegate'),
+        'delegate' => $delegation?->delegate ?? user('Delegate'),
+        'delegation' => $delegation,
         'operator' => user('Operator'),
         'approvable' => $approvable,
         'fresh' => post('Fresh post'),
@@ -111,11 +120,18 @@ function contractFixture(string $state): array
 }
 
 it('overrides every public mutation the manager exposes', function (): void {
-    $mutating = [
-        'submit', 'decide', 'decideMany', 'withdraw', 'delegate', 'reviseAndResubmit',
-        'attach', 'cancel', 'reassign', 'resync', 'resolve', 'withoutGuard',
-        'syncDefinitions', 'escalateOverdue',
+    // Everything the manager exposes is a mutation unless it is named here. A new
+    // manager method has to be either overridden by the fake or listed as a read.
+    $reads = [
+        'awaiting', 'canApprove', 'canDelegate', 'canWithdraw', 'delegationEligibility',
+        'delegationsFrom', 'eligibility', 'fake', 'findWorkflow', 'overdue', 'pendingFor',
+        'requesterFor', 'requestsFor', 'verifyTrail', 'withdrawalEligibility', 'workflow',
+        'workflowFor', 'workflows', 'workflowsFor',
     ];
+    // Shorthands that build a decision and hand it to an overridden method.
+    $shorthands = ['approve', 'approveMany', 'reject', 'rejectMany', 'returnForRevision'];
+
+    $mutating = array_diff(declaredMethods(ApprovalManager::class), $reads, $shorthands);
 
     foreach ($mutating as $method) {
         $fake = new ReflectionMethod(ApprovalFake::class, $method);
@@ -149,6 +165,7 @@ it('records every retained mutation on the fake without writing approval state',
     $state = $fixture['request']->state;
     $actions = ApprovalAction::query()->count();
     $requests = ApprovalRequest::query()->count();
+    $delegations = ApprovalDelegation::query()->whereNull('revoked_at')->count();
 
     $fake = Approval::fake();
     $fake->assertNothingRecorded();
@@ -159,7 +176,8 @@ it('records every retained mutation on the fake without writing approval state',
         ->and(fn () => $fake->assertNothingRecorded())->toThrow(AssertionFailedError::class)
         ->and($fixture['request']->fresh()?->state)->toBe($state)
         ->and(ApprovalAction::query()->count())->toBe($actions)
-        ->and(ApprovalRequest::query()->count())->toBe($requests);
+        ->and(ApprovalRequest::query()->count())->toBe($requests)
+        ->and(ApprovalDelegation::query()->whereNull('revoked_at')->count())->toBe($delegations);
 
     Approval::restore();
 })->with(array_keys(retainedMutations()));
@@ -167,6 +185,7 @@ it('records every retained mutation on the fake without writing approval state',
 it('asserts each recorded interaction and distinguishes its actor and input', function (): void {
     $fixture = contractFixture('pending');
     $run = fn (string $name): mixed => retainedMutations()[$name]['run']($fixture);
+    $delegation = Approval::grantDelegation(user('Away'), user('Cover'));
     $fake = Approval::fake();
 
     $run('submit');
@@ -201,6 +220,19 @@ it('asserts each recorded interaction and distinguishes its actor and input', fu
 
     $run('delegate');
     $fake->assertDelegated($fixture['request'], fn (ApprovalInteraction $recorded): bool => $recorded->recipient?->is($fixture['delegate']) === true);
+
+    $run('grantDelegation');
+    $fake->assertDelegationGranted(
+        $fixture['approver'],
+        fn (ApprovalInteraction $recorded): bool => $recorded->recipient?->is($fixture['delegate']) === true
+            && $recorded->comment === 'On leave',
+    );
+
+    Approval::revokeDelegation($delegation);
+    $fake->assertDelegationRevoked($delegation);
+
+    $run('applyDelegations');
+    $fake->assertDelegationsApplied();
 
     $run('reviseAndResubmit');
     $fake->assertResubmitted($fixture['request'], fn (ApprovalInteraction $recorded): bool => $recorded->metadata['draft'] instanceof RevisedDraft);

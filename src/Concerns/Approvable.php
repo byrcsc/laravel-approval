@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Concerns;
 
 use ByRcsc\LaravelApproval\Actions\SystemCloseRequest;
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Contracts\AutoSubmitsForApproval;
 use ByRcsc\LaravelApproval\Data\AutoSubmission;
 use ByRcsc\LaravelApproval\Data\Draft;
 use ByRcsc\LaravelApproval\Data\Eligibility;
 use ByRcsc\LaravelApproval\Data\TimelineEntry;
+use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
+use ByRcsc\LaravelApproval\Definitions\WorkflowDefinition;
 use ByRcsc\LaravelApproval\Enums\ApprovalMode;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\ApprovalGuardException;
@@ -129,7 +132,7 @@ trait Approvable
      */
     public function approvalRequests(): MorphMany
     {
-        return $this->morphMany(ApprovalRequest::class, 'approvable')->orderByDesc('id');
+        return $this->morphMany(ApprovalModels::request(), 'approvable')->orderByDesc('id');
     }
 
     /**
@@ -137,7 +140,7 @@ trait Approvable
      */
     public function latestApprovalRequest(): MorphOne
     {
-        return $this->morphOne(ApprovalRequest::class, 'approvable')->latestOfMany();
+        return $this->morphOne(ApprovalModels::request(), 'approvable')->latestOfMany();
     }
 
     /**
@@ -152,7 +155,7 @@ trait Approvable
      * @param  array<string, mixed>  $metadata
      */
     public function submitForApproval(
-        ApprovalWorkflow|string|null $workflow = null,
+        ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null,
         ?array $newAttributes = null,
         ?Model $requester = null,
         ?string $comment = null,
@@ -212,7 +215,7 @@ trait Approvable
      */
     public function pendingApprovalApprovers(): Collection
     {
-        return $this->pendingApprovalRequest()?->pendingApprovers() ?? collect();
+        return $this->pendingApprovalRequest()?->pendingApprovers() ?? new Collection;
     }
 
     /**
@@ -223,7 +226,7 @@ trait Approvable
      */
     public function currentStageApprovers(): Collection
     {
-        return $this->pendingApprovalRequest()?->currentStageApprovers() ?? collect();
+        return $this->pendingApprovalRequest()?->currentStageApprovers() ?? new Collection;
     }
 
     /**
@@ -235,7 +238,7 @@ trait Approvable
      */
     public function latestApprovalTimeline(): Collection
     {
-        return $this->latestApprovalRequest()->first()?->timeline() ?? collect();
+        return $this->latestApprovalRequest()->first()?->timeline() ?? new Collection;
     }
 
     /**
@@ -457,7 +460,7 @@ trait Approvable
 
         $query->whereIn(
             $model->qualifyColumn($model->getKeyName()),
-            ApprovalRequest::query()
+            ApprovalModels::request()::query()
                 ->awaitingUser($user)
                 ->where('approvable_type', $model->getMorphClass())
                 ->select('approvable_id'),

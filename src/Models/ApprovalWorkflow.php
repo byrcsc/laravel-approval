@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalWorkflowFactory;
+use ByRcsc\LaravelApproval\Definitions\ApproverDefinition;
+use ByRcsc\LaravelApproval\Definitions\StageDefinition;
+use ByRcsc\LaravelApproval\Definitions\WorkflowDefinition;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -17,7 +22,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * Freely editable: requests already in flight run off their own snapshot, so
  * changes here only affect what is submitted next.
  */
-final class ApprovalWorkflow extends Model
+class ApprovalWorkflow extends Model
 {
     /** @use HasFactory<ApprovalWorkflowFactory> */
     use HasFactory;
@@ -41,8 +46,27 @@ final class ApprovalWorkflow extends Model
      */
     public function stages(): HasMany
     {
-        return $this->hasMany(ApprovalWorkflowStage::class, 'workflow_id')
+        return $this->hasMany(ApprovalModels::workflowStage(), 'workflow_id')
             ->orderBy('sequence');
+    }
+
+    /**
+     * An unsaved workflow with its stages and approvers loaded, for submitting
+     * against a definition that has no rows of its own. Submission snapshots it
+     * like any stored workflow, and the request records no `workflow_id`.
+     */
+    public static function fromDefinition(WorkflowDefinition $definition): self
+    {
+        $workflow = new (ApprovalModels::workflow())($definition->attributes());
+
+        return $workflow->setRelation('stages', new Collection(array_map(
+            fn (StageDefinition $stage): ApprovalWorkflowStage => (new (ApprovalModels::workflowStage())($stage->attributes()))
+                ->setRelation('approvers', new Collection(array_map(
+                    fn (ApproverDefinition $approver): ApprovalWorkflowStageApprover => new (ApprovalModels::workflowStageApprover())($approver->attributes()),
+                    $stage->approvers,
+                ))),
+            $definition->stages,
+        )));
     }
 
     /**
@@ -50,7 +74,7 @@ final class ApprovalWorkflow extends Model
      */
     public function requests(): HasMany
     {
-        return $this->hasMany(ApprovalRequest::class, 'workflow_id');
+        return $this->hasMany(ApprovalModels::request(), 'workflow_id');
     }
 
     /**

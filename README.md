@@ -19,7 +19,7 @@ its UI, users, roles, and organizational rules.
 
 ## Installation
 
-Install the package and publish its migration:
+Install the package and publish its migrations:
 
 ```bash
 composer require byrcsc/laravel-approval
@@ -27,16 +27,20 @@ php artisan vendor:publish --tag="approval-migrations"
 php artisan migrate
 ```
 
-Publish the configuration before the migration when you need custom table names
-or non-integer user identities:
+Publish the configuration before migrating when you need custom table names or
+non-integer keys:
 
 ```bash
 php artisan vendor:publish --tag="approval-config"
 ```
 
-Set `APPROVAL_USER_KEY_TYPE` to `uuid`, `ulid`, or `string` as needed. The
-approvable model key is independent; adjust `approvable_id` in the published
-migration when those models do not use integer keys.
+Set `APPROVAL_USER_KEY_TYPE` to `uuid`, `ulid`, or `string` for the models that
+submit and decide, and `APPROVAL_APPROVABLE_KEY_TYPE` for the models submitted
+for approval. Both default to `int`.
+
+Upgrading from 1.0 adds one migration for standing delegations. Publish and run
+it the same way. Until it has run, everything else keeps working and granting a
+delegation throws an exception that says what to run.
 
 Notification wording and its mail views publish separately, and only when you
 want to change them:
@@ -124,6 +128,22 @@ The new `amount` is not written to the order until the last required approval is
 recorded. Until then it is held on the request and readable through
 `$order->pendingDraft()->new`.
 
+A one-off approval does not need a stored workflow. Pass a definition instead,
+and it runs inline:
+
+```php
+use ByRcsc\LaravelApproval\Definitions\StageBuilder;
+use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
+
+$order->submitForApproval(
+    WorkflowBuilder::make('one-off-purchase')
+        ->stage('Finance', fn (StageBuilder $stage) => $stage->approver($financeUser)),
+    ['amount' => 10_000],
+);
+```
+
+The request snapshots the stages the same way and records no `workflow_id`.
+
 That is the whole loop. Approver resolvers, drafts, delegation, escalation,
 authorization, and the rest are in the
 [documentation](#documentation).
@@ -145,6 +165,13 @@ authorization, and the rest are in the
   revise-and-resubmit flows.
 - Eligibility read models, a Laravel policy, bulk decisions, delegation,
   reassignment, and administrative approver resynchronization.
+- Standing delegations for time away. `Approval::grantDelegation($approver,
+  $deputy, $from, $until)` routes the approver's undecided assignments to the
+  deputy for that window and hands them back when it closes.
+- Inline workflows passed straight to `submitForApproval()`, for approvals that
+  do not need a stored definition.
+- Swappable models through `approval.model_classes`, `@pendingApproval` and
+  `@canApprove` Blade directives, and a `php artisan about` section.
 - Optional automatic submission after creation, and guard mode for Eloquent
   writes touching attributes held in a pending draft.
 - SLA deadlines, reminders, configurable escalation strategies, stranded-stage
@@ -171,6 +198,14 @@ authorization, and the rest are in the
 - Guard mode covers ordinary Eloquent model writes. Query-builder updates,
   upserts, quiet saves, and raw SQL do not dispatch model events; the stale check
   before draft application is the backstop for those paths.
+- Standing delegations apply at once when granted or revoked, and when a stage
+  becomes active. A window that opens or closes later moves assignments only
+  when `approval:delegations` runs, so schedule it if you grant windows in
+  advance. A delegate who requested the approval, or already holds an
+  assignment on the stage, is skipped. Delegations do not chain.
+- An inline workflow cannot carry `settings`, because settings are read from
+  the stored workflow when a decision is made. Revising and resubmitting an
+  inline request needs the definition passed again.
 - SLA policies do nothing until `approval:escalate` is scheduled. The
   `record_only` default records the overdue state and emits an event; it sends
   nothing unless notifications are enabled.

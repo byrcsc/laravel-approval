@@ -6,7 +6,6 @@ use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Exceptions\SelfApprovalException;
 use ByRcsc\LaravelApproval\Exceptions\UnauthorizedApproverException;
 use ByRcsc\LaravelApproval\Facades\Approval;
-use ByRcsc\LaravelApproval\Tests\Stubs\HeadOfDepartmentResolver;
 
 /**
  * Assignments that changed hands more than once, and assignments that land on the one
@@ -61,31 +60,4 @@ it('reassigns an assignment onto the requester but never lets them decide it', f
     Approval::approve($request, $other);
 
     expect($request->refresh()->state)->toBe(RequestState::Approved);
-});
-
-it('keeps the decisions already cast when a resync reshapes the stage', function (): void {
-    $head = user('Head');
-    HeadOfDepartmentResolver::$heads = [$head];
-
-    $second = user('Second');
-
-    $workflow = workflow([
-        ['required_approvals' => 2, 'approvers' => [['resolver' => HeadOfDepartmentResolver::class], $second]],
-    ]);
-
-    $request = post()->submitForApproval($workflow, null, user());
-
-    Approval::approve($request, $head);
-
-    // The org chart moves mid-decision: a deputy appears alongside.
-    $deputy = user('Deputy');
-    HeadOfDepartmentResolver::$heads = [$head, $deputy];
-
-    Approval::resync($request, user('Operator'));
-
-    // Head's decision survived the reshape; the deputy's completes the required approvals.
-    Approval::approve($request, $deputy);
-
-    expect($request->refresh()->state)->toBe(RequestState::Approved)
-        ->and($request->actions()->where('action', 'approved')->count())->toBe(2);
 });

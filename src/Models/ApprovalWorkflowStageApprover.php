@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalWorkflowStageApproverFactory;
 use ByRcsc\LaravelApproval\Support\TableNames;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * class-string that produces approvers at submit time. Never both, never
  * neither - the engine enforces it, since no portable constraint expresses it.
  */
-final class ApprovalWorkflowStageApprover extends Model
+class ApprovalWorkflowStageApprover extends Model
 {
     /** @use HasFactory<ApprovalWorkflowStageApproverFactory> */
     use HasFactory;
@@ -38,7 +39,7 @@ final class ApprovalWorkflowStageApprover extends Model
      */
     public function stage(): BelongsTo
     {
-        return $this->belongsTo(ApprovalWorkflowStage::class, 'stage_id');
+        return $this->belongsTo(ApprovalModels::workflowStage(), 'stage_id');
     }
 
     /**

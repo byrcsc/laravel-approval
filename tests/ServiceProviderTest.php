@@ -5,7 +5,12 @@ declare(strict_types=1);
 use ByRcsc\LaravelApproval\ApprovalManager;
 use ByRcsc\LaravelApproval\Exceptions\InvalidConfigurationException;
 use ByRcsc\LaravelApproval\Facades\Approval;
+use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
+use ByRcsc\LaravelApproval\Support\TableNames;
+use ByRcsc\LaravelApproval\Tests\Stubs\CustomApprovalRequest;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 
 it('resolves the manager as a singleton behind the facade', function () {
@@ -15,15 +20,17 @@ it('resolves the manager as a singleton behind the facade', function () {
 });
 
 it('publishes a config file that holds every table name', function () {
-    expect(config('approval.table_names'))
-        ->toHaveKeys(['workflows', 'workflow_stages', 'workflow_stage_approvers', 'requests', 'request_stages', 'assignments', 'actions']);
+    expect(config('approval.table_names'))->toBe(TableNames::defaults());
 });
 
-it('refuses to boot when a table name is missing', function () {
-    $this->bootConfig = ['approval.table_names' => ['workflows' => 'approval_workflows']];
+it('boots with a table key the published config predates, using its default name', function () {
+    $names = config('approval.table_names');
+    unset($names['delegations']);
 
-    expect(fn () => $this->refreshApplication())
-        ->toThrow(InvalidConfigurationException::class, 'missing an entry for');
+    $this->bootConfig = ['approval.table_names' => $names];
+    $this->refreshApplication();
+
+    expect((new ApprovalDelegation)->getTable())->toBe('approval_delegations');
 });
 
 it('refuses to boot when a table name is blank', function () {
@@ -90,4 +97,29 @@ it('documents every publish tag it registers', function () {
     }
 
     expect($readme)->not->toContain('--tag="laravel-approval-');
+});
+
+it('answers the pending and can-approve questions in Blade', function () {
+    $approver = user('Approver');
+    $post = post();
+    $render = fn (Model $user): string => (string) preg_replace('/\s+/', ' ', trim(Blade::render(
+        '@pendingApproval($post) pending @endpendingApproval @canApprove($post, $user) can @else cannot @endcanApprove',
+        ['post' => $post, 'user' => $user],
+    )));
+
+    expect($render($approver))->toBe('cannot');
+
+    $post->submitForApproval(workflow([['approvers' => [$approver]]]), null, user());
+
+    expect($render($approver))->toBe('pending can')
+        ->and($render(user('Stranger')))->toBe('pending cannot');
+});
+
+it('reports engine settings in php artisan about', function () {
+    config()->set('approval.model_classes.requests', CustomApprovalRequest::class);
+
+    $this->artisan('about', ['--only' => 'laravel approval'])
+        ->expectsOutputToContain('Self-approval')
+        ->expectsOutputToContain('requests')
+        ->assertSuccessful();
 });

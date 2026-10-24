@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace ByRcsc\LaravelApproval\Commands;
 
 use ByRcsc\LaravelApproval\Actions\ScanActiveStageHealth;
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Data\StageHealth;
 use ByRcsc\LaravelApproval\Enums\RequestState;
 use ByRcsc\LaravelApproval\Enums\StageStatus;
-use ByRcsc\LaravelApproval\Models\ApprovalRequest;
-use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Support\Attributes;
 use Illuminate\Support\Facades\Date;
 
@@ -40,7 +39,7 @@ final class StatusCommand extends Command
         foreach (RequestState::cases() as $state) {
             $this->components->twoColumnDetail(
                 $state->value,
-                (string) ApprovalRequest::query()->where('state', $state->value)->count(),
+                (string) ApprovalModels::request()::query()->where('state', $state->value)->count(),
             );
         }
 
@@ -77,7 +76,7 @@ final class StatusCommand extends Command
 
     private function listOverdue(int $limit): void
     {
-        $stages = ApprovalRequestStage::query()
+        $stages = ApprovalModels::requestStage()::query()
             ->where('state', StageStatus::Active->value)
             ->whereNotNull('deadline_at')
             ->where('deadline_at', '<=', Date::now())
@@ -109,7 +108,7 @@ final class StatusCommand extends Command
 
     private function listConflicted(int $limit): void
     {
-        $requests = ApprovalRequest::query()
+        $requests = ApprovalModels::request()::query()
             ->where('state', RequestState::Conflicted->value)
             ->orderByDesc('completed_at')
             ->limit($limit)

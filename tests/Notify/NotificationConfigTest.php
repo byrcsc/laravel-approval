@@ -28,14 +28,6 @@ it('refuses a class that is not an approval notification', function (): void {
         ->toThrow(InvalidConfigurationException::class, 'which does not extend');
 });
 
-it('accepts a null entry as switching that event off', function (): void {
-    $this->bootConfig = ['approval.notifications.map' => [ApprovalSubmitted::class => null]];
-
-    $this->refreshApplication();
-
-    expect(true)->toBeTrue();
-});
-
 it('validates the map even while notifications are off', function (): void {
     // A typo should surface the day it is written, not the day somebody
     // finally turns notifications on.

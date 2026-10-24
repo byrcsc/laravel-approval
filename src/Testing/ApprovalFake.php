@@ -12,14 +12,18 @@ use ByRcsc\LaravelApproval\Data\BulkDecisionOutcome;
 use ByRcsc\LaravelApproval\Data\BulkDecisionResult;
 use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Data\WorkflowSyncResult;
+use ByRcsc\LaravelApproval\Definitions\WorkflowBuilder;
+use ByRcsc\LaravelApproval\Definitions\WorkflowDefinition;
 use ByRcsc\LaravelApproval\Enums\ConflictResolution;
 use ByRcsc\LaravelApproval\Enums\InteractionType;
 use ByRcsc\LaravelApproval\Enums\Verdict;
 use ByRcsc\LaravelApproval\Facades\Approval;
 use ByRcsc\LaravelApproval\Models\ApprovalAttachment;
+use ByRcsc\LaravelApproval\Models\ApprovalDelegation;
 use ByRcsc\LaravelApproval\Models\ApprovalRequest;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
+use DateTimeInterface;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\Assert;
@@ -77,7 +81,7 @@ final class ApprovalFake extends ApprovalManager
      */
     public function submit(
         Model $approvable,
-        ApprovalWorkflow|string|null $workflow = null,
+        ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null,
         ?array $newAttributes = null,
         ?Model $requester = null,
         ?string $comment = null,
@@ -186,11 +190,52 @@ final class ApprovalFake extends ApprovalManager
         ]);
     }
 
+    public function grantDelegation(
+        Model $delegator,
+        Model $delegate,
+        ?DateTimeInterface $startsAt = null,
+        ?DateTimeInterface $endsAt = null,
+        ?string $comment = null,
+    ): ApprovalDelegation {
+        $this->interactions[] = new ApprovalInteraction(
+            InteractionType::DelegationGranted,
+            $delegator,
+            $delegator,
+            comment: $comment,
+            metadata: ['starts_at' => $startsAt, 'ends_at' => $endsAt],
+            recipient: $delegate,
+        );
+
+        return new ApprovalDelegation([
+            'delegator_type' => $delegator->getMorphClass(),
+            'delegator_id' => $delegator->getKey(),
+            'delegate_type' => $delegate->getMorphClass(),
+            'delegate_id' => $delegate->getKey(),
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'comment' => $comment,
+        ]);
+    }
+
+    public function revokeDelegation(ApprovalDelegation $delegation): ApprovalDelegation
+    {
+        $this->interactions[] = new ApprovalInteraction(InteractionType::DelegationRevoked, $delegation);
+
+        return $delegation;
+    }
+
+    public function applyDelegations(): int
+    {
+        $this->interactions[] = new ApprovalInteraction(InteractionType::DelegationsApplied);
+
+        return 0;
+    }
+
     public function reviseAndResubmit(
         ApprovalRequest $request,
         RevisedDraft $draft,
         ?Model $requester = null,
-        ApprovalWorkflow|string|null $workflow = null,
+        ApprovalWorkflow|WorkflowDefinition|WorkflowBuilder|string|null $workflow = null,
     ): ApprovalRequest {
         $this->interactions[] = new ApprovalInteraction(
             InteractionType::Resubmitted,
@@ -409,6 +454,21 @@ final class ApprovalFake extends ApprovalManager
     public function assertDelegated(ApprovalRequest $request, ?callable $callback = null): void
     {
         $this->assertRecorded(InteractionType::Delegated, $request, $callback);
+    }
+
+    public function assertDelegationGranted(Model $delegator, ?callable $callback = null): void
+    {
+        $this->assertRecorded(InteractionType::DelegationGranted, $delegator, $callback);
+    }
+
+    public function assertDelegationRevoked(ApprovalDelegation $delegation, ?callable $callback = null): void
+    {
+        $this->assertRecorded(InteractionType::DelegationRevoked, $delegation, $callback);
+    }
+
+    public function assertDelegationsApplied(?callable $callback = null): void
+    {
+        $this->assertRecorded(InteractionType::DelegationsApplied, null, $callback);
     }
 
     public function assertReassigned(ApprovalRequest $request, ?callable $callback = null): void

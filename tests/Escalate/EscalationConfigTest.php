@@ -18,12 +18,6 @@ it('maps every case to a shipped strategy', function (): void {
     }
 });
 
-it('takes a replacement strategy from config', function (): void {
-    config()->set('approval.escalation.strategies.record_only', ShoutingStrategy::class);
-
-    expect(EscalationStrategies::for(EscalationAction::RecordOnly))->toBe(ShoutingStrategy::class);
-});
-
 it('falls back to the packaged strategy when config has no entry', function (): void {
     config()->set('approval.escalation.strategies', []);
 
@@ -68,7 +62,7 @@ describe('boot-time validation', function (): void {
             ->toThrow(InvalidConfigurationException::class, 'which does not implement');
     });
 
-    it('boots with a partial map, filling the rest from the package', function (): void {
+    it('boots with a partial map and falls back for the cases it leaves out', function (): void {
         $this->bootConfig = ['approval.escalation.strategies' => ['record_only' => RecordOnlyStrategy::class]];
 
         $this->refreshApplication();

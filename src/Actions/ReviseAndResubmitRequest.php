@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Data\RevisedDraft;
 use ByRcsc\LaravelApproval\Enums\ActionType;
 use ByRcsc\LaravelApproval\Enums\RequestState;
@@ -138,7 +139,7 @@ final class ReviseAndResubmitRequest
 
         if (is_string($given) && $given !== '') {
             /** @var ApprovalWorkflow|null $workflow */
-            $workflow = ApprovalWorkflow::query()->where('slug', $given)->first();
+            $workflow = ApprovalModels::workflow()::query()->where('slug', $given)->first();
 
             return $workflow ?? throw WorkflowNotFoundException::forSlug($given);
         }

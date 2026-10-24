@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Models;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Database\Factories\ApprovalRequestAssignmentFactory;
 use ByRcsc\LaravelApproval\Enums\ApproverSource;
 use ByRcsc\LaravelApproval\Support\TableNames;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * assignment, not per person, and delegating fills `delegated_to` without
  * clearing `approver` - who was asked is part of the record.
  */
-final class ApprovalRequestAssignment extends Model
+class ApprovalRequestAssignment extends Model
 {
     /** @use HasFactory<ApprovalRequestAssignmentFactory> */
     use HasFactory;
@@ -39,7 +40,7 @@ final class ApprovalRequestAssignment extends Model
      */
     public function stage(): BelongsTo
     {
-        return $this->belongsTo(ApprovalRequestStage::class, 'stage_id');
+        return $this->belongsTo(ApprovalModels::requestStage(), 'stage_id');
     }
 
     /**
@@ -59,6 +60,17 @@ final class ApprovalRequestAssignment extends Model
     public function delegatedTo(): MorphTo
     {
         return $this->morphTo(__FUNCTION__, 'delegated_to_type', 'delegated_to_id');
+    }
+
+    /**
+     * The standing delegation that routed this assignment to its delegate, if
+     * one did.
+     *
+     * @return BelongsTo<ApprovalDelegation, $this>
+     */
+    public function delegation(): BelongsTo
+    {
+        return $this->belongsTo(ApprovalModels::delegation(), 'delegation_id');
     }
 
     /**

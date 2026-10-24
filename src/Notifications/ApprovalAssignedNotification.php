@@ -9,6 +9,7 @@ use ByRcsc\LaravelApproval\Events\ApprovalEvent;
 use ByRcsc\LaravelApproval\Events\ApproverReassigned;
 use ByRcsc\LaravelApproval\Events\ApproversEscalated;
 use ByRcsc\LaravelApproval\Events\ApproversResynced;
+use ByRcsc\LaravelApproval\Events\DelegationEnded;
 use ByRcsc\LaravelApproval\Models\ApprovalRequestAssignment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -17,8 +18,9 @@ use Illuminate\Notifications\Messages\MailMessage;
  * Tells an approver that an assignment is now theirs.
  *
  * Sent to whoever an assignment change makes responsible: the delegate of a
- * delegation, the replacement of a reassignment, and the approvers added by
- * resynchronization or escalation. Recipients are read from the event after the
+ * delegation, the approver an ended delegation hands back to, the replacement
+ * of a reassignment, and the approvers added by resynchronization or
+ * escalation. Recipients are read from the event after the
  * assignment exists, so the previous holder is never addressed.
  */
 final class ApprovalAssignedNotification extends ApprovalNotification
@@ -30,6 +32,7 @@ final class ApprovalAssignedNotification extends ApprovalNotification
     {
         return match (true) {
             $event instanceof ApprovalDelegated => [$event->delegate],
+            $event instanceof DelegationEnded => array_filter([$event->approver]),
             $event instanceof ApproverReassigned => [$event->to],
             $event instanceof ApproversEscalated => self::holdersOf($event->assignments),
             $event instanceof ApproversResynced => self::holdersOf($event->addedAssignments),

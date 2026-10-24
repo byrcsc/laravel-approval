@@ -7,6 +7,7 @@ use ByRcsc\LaravelApproval\Actions\RecordAction;
 use ByRcsc\LaravelApproval\Actions\VerifyActionChain;
 use ByRcsc\LaravelApproval\Actions\VerifyAttachments;
 use ByRcsc\LaravelApproval\ApprovalManager;
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Commands\Command;
 use ByRcsc\LaravelApproval\Contracts\ApproverResolver;
 use ByRcsc\LaravelApproval\Contracts\EscalationStrategy;
@@ -46,10 +47,10 @@ arch('only the base exception is extendable')
     ->toBeFinal()
     ->ignoring(ApprovalException::class);
 
-arch('models are final Eloquent models')
+// Not final: `approval.model_classes` lets a host swap in a subclass.
+arch('models are Eloquent models')
     ->expect('ByRcsc\LaravelApproval\Models')
-    ->toExtend(Model::class)
-    ->toBeFinal();
+    ->toExtend(Model::class);
 
 arch('the facade is final')
     ->expect('ByRcsc\LaravelApproval\Facades')
@@ -118,7 +119,7 @@ arch('resolvers implement the resolver contract')
     ->toBeFinal()
     ->toImplement(ApproverResolver::class);
 
-arch('events carry a request and nothing else')
+arch('events extend the base approval event')
     ->expect('ByRcsc\LaravelApproval\Events')
     ->toExtend(ApprovalEvent::class)
     ->ignoring(ApprovalEvent::class);
@@ -136,6 +137,7 @@ arch('only actions write the audit trail')
         VerifyAttachments::class,
         AttachmentEvidence::class,
         AttachmentException::class,
+        ApprovalModels::class,
         ApprovalAction::class,
         ApprovalAttachment::class,
         ApprovalRequest::class,
@@ -152,6 +154,7 @@ arch('only actions write attachments')
         VerifyAttachments::class,
         ApprovalManager::class,
         Approval::class,
+        ApprovalModels::class,
         ApprovalAction::class,
         ApprovalAttachment::class,
         ApprovalRequest::class,
@@ -160,22 +163,31 @@ arch('only actions write attachments')
     ]);
 
 it('keeps evidence creation behind its designated actions', function (): void {
-    $files = glob(__DIR__.'/../src/Actions/*.php');
+    // Every shipped file, not just the actions: ApprovalModels resolves the
+    // model class, so code anywhere in src could create through it without
+    // naming ApprovalAction or ApprovalAttachment.
+    $root = __DIR__.'/../src';
+    $files = [
+        ...(glob($root.'/*.php') ?: []),
+        ...(glob($root.'/*/*.php') ?: []),
+        ...(glob($root.'/*/*/*.php') ?: []),
+    ];
 
-    $writers = function (string $creation) use ($files): array {
-        return collect($files === false ? [] : $files)
-            ->filter(fn (string $file): bool => str_contains(
-                (string) file_get_contents($file),
-                $creation,
-            ))
+    $writers = function (array $creations) use ($files): array {
+        return collect($files)
+            ->filter(function (string $file) use ($creations): bool {
+                $source = (string) file_get_contents($file);
+
+                return collect($creations)->contains(fn (string $creation): bool => str_contains($source, $creation));
+            })
             ->map(fn (string $file): string => basename($file))
             ->sort()
             ->values()
             ->all();
     };
 
-    expect($writers('ApprovalAction::create('))->toBe(['RecordAction.php'])
-        ->and($writers('ApprovalAttachment::create('))->toBe(['AttachFile.php']);
+    expect($writers(['ApprovalModels::action()::create(', '->actions()->create(']))->toBe(['RecordAction.php'])
+        ->and($writers(['ApprovalModels::attachment()::create(', '->attachments()->create(']))->toBe(['AttachFile.php']);
 });
 
 // Models describe the schema. Transactions and dispatching belong to the

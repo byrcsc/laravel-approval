@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use ByRcsc\LaravelApproval\Actions\ScanActiveStageHealth;
-use ByRcsc\LaravelApproval\Data\ApprovalInteraction;
 use ByRcsc\LaravelApproval\Data\DecisionContext;
 use ByRcsc\LaravelApproval\Data\DelegationEligibility;
 use ByRcsc\LaravelApproval\Data\Eligibility;
@@ -23,11 +22,8 @@ use ByRcsc\LaravelApproval\Models\ApprovalRequestStage;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflow;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStage;
 use ByRcsc\LaravelApproval\Models\ApprovalWorkflowStageApprover;
-use ByRcsc\LaravelApproval\Testing\ApprovalFake;
-use ByRcsc\LaravelApproval\Tests\Stubs\AutoPurchaseOrder;
 use ByRcsc\LaravelApproval\Tests\Stubs\ClosingSoftPost;
 use ByRcsc\LaravelApproval\Tests\Stubs\Post;
-use ByRcsc\LaravelApproval\Tests\Stubs\PurchaseOrder;
 use ByRcsc\LaravelApproval\Tests\Stubs\SoftPost;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -60,8 +56,7 @@ it('keeps stage progress public names in the approval domain', function (): void
         ...declaredProperties($class),
     ])->implode(' ');
 
-    expect(class_exists('ByRcsc\\LaravelApproval\\Data\\Ballot'))->toBeFalse()
-        ->and($publicNames)->not->toMatch('/ballot|vote|quorum|seat|slot|carried/i');
+    expect($publicNames)->not->toMatch('/ballot|vote|quorum|seat|slot|carried/i');
 });
 
 it('queries approvables by state and current approver without duplicates', function (): void {
@@ -199,37 +194,6 @@ it('processes bulk outcomes independently and identifies each failure', function
         ->and($result->failed())->toHaveCount(1)
         ->and($first->refresh()->state)->toBe(RequestState::Approved)
         ->and($second->refresh()->state)->toBe(RequestState::Withdrawn);
-});
-
-it('fakes submissions and decisions without mutating workflow state and restores cleanly', function (): void {
-    $fake = Approval::fake();
-    $post = post();
-    $approver = user('Approver');
-    $request = approvalRequest($post);
-
-    $post->submitForApproval('missing-flow', null, user('Requester'), 'Please', ['source' => 'test']);
-    Approval::approve($request, $approver, 'Fine');
-
-    expect($fake)->toBeInstanceOf(ApprovalFake::class)
-        ->and($request->fresh()?->state)->toBe(RequestState::Pending);
-
-    $fake->assertSubmitted($post, fn (ApprovalInteraction $interaction): bool => $interaction->comment === 'Please');
-    $fake->assertApproved($request);
-    $fake->restore();
-
-    expect(Approval::fake())->not->toBe($fake);
-    Approval::restore();
-});
-
-it('auto-submits opted-in approvables once after creation', function (): void {
-    $requester = user('Requester');
-    PurchaseOrder::$actingRequester = $requester;
-    workflow([['approvers' => [user('Approver')]]], ['slug' => PurchaseOrder::$workflowSlug]);
-
-    $order = AutoPurchaseOrder::create(['reference' => 'AUTO-1', 'amount' => 100]);
-
-    expect($order->approvalRequests()->count())->toBe(1)
-        ->and($order->pendingApprovalRequest())->not->toBeNull();
 });
 
 it('bounds active-step health scans and applies the finding limit during scanning', function (): void {

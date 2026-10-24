@@ -18,8 +18,8 @@ return [
     | same values, so nothing else has to change. Set them before migrating.
     | Renaming a table that already holds history requires your own migration.
     |
-    | Every key must be present. A missing key fails at boot rather than on the
-    | first submission.
+    | A missing key uses the default name shown here, so a config published
+    | before a table was added keeps working.
     |
     */
 
@@ -32,6 +32,22 @@ return [
         'assignments' => 'approval_request_assignments',
         'actions' => 'approval_actions',
         'attachments' => 'approval_attachments',
+        'delegations' => 'approval_delegations',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Model classes
+    |--------------------------------------------------------------------------
+    |
+    | Replace any package model with your own subclass, keyed like the table
+    | names above. Each class must extend the package model it replaces. The
+    | package uses the configured class for every query and relation.
+    |
+    */
+
+    'model_classes' => [
+        // 'requests' => App\Models\ApprovalRequest::class,
     ],
 
     /*
@@ -161,6 +177,7 @@ return [
             Events\ApprovalRejected::class => Notifications\ApprovalRejectedNotification::class,
             Events\ApprovalReturned::class => Notifications\ApprovalReturnedNotification::class,
             Events\ApprovalDelegated::class => Notifications\ApprovalAssignedNotification::class,
+            Events\DelegationEnded::class => Notifications\ApprovalAssignedNotification::class,
             Events\ApproverReassigned::class => Notifications\ApprovalAssignedNotification::class,
             Events\ApproversResynced::class => Notifications\ApprovalAssignedNotification::class,
             Events\ApproversEscalated::class => Notifications\ApprovalAssignedNotification::class,

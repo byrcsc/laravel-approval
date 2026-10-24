@@ -19,6 +19,9 @@ enum InteractionType: string
     case Withdrawn = 'withdrawn';
     case Cancelled = 'cancelled';
     case Delegated = 'delegated';
+    case DelegationGranted = 'delegation_granted';
+    case DelegationRevoked = 'delegation_revoked';
+    case DelegationsApplied = 'delegations_applied';
     case Reassigned = 'reassigned';
     case Resynced = 'resynced';
     case ConflictResolved = 'conflict_resolved';
@@ -42,6 +45,9 @@ enum InteractionType: string
             self::Withdrawn => 'assertWithdrawn',
             self::Cancelled => 'assertCancelled',
             self::Delegated => 'assertDelegated',
+            self::DelegationGranted => 'assertDelegationGranted',
+            self::DelegationRevoked => 'assertDelegationRevoked',
+            self::DelegationsApplied => 'assertDelegationsApplied',
             self::Reassigned => 'assertReassigned',
             self::Resynced => 'assertResynced',
             self::ConflictResolved => 'assertConflictResolved',

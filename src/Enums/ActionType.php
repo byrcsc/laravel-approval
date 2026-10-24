@@ -14,6 +14,7 @@ enum ActionType: string
     case Approved = 'approved';
     case Rejected = 'rejected';
     case Delegated = 'delegated';
+    case DelegationEnded = 'delegation_ended';
     case Reassigned = 'reassigned';
     case Escalated = 'escalated';
     case Commented = 'commented';

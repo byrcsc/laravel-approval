@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ByRcsc\LaravelApproval\Actions;
 
+use ByRcsc\LaravelApproval\ApprovalModels;
 use ByRcsc\LaravelApproval\Data\AssignmentSnapshot;
 use ByRcsc\LaravelApproval\Data\StageSnapshot;
 use ByRcsc\LaravelApproval\Enums\ActionType;
@@ -72,7 +73,7 @@ final class SubmitForApproval
             $this->lockApprovable($approvable);
             $this->guardAgainstOpenRequest($approvable);
 
-            $request = ApprovalRequest::create([
+            $request = ApprovalModels::request()::create([
                 'approvable_type' => $approvable->getMorphClass(),
                 'approvable_id' => $approvable->getKey(),
                 'workflow_id' => $workflow->getKey(),
@@ -170,7 +171,11 @@ final class SubmitForApproval
             throw InvalidWorkflowException::inactive($slug);
         }
 
-        $stages = $workflow->stages()->with(ResolveStageApprovers::ordered())->get();
+        // An inline workflow arrives with its stages loaded and has no rows to
+        // read them from.
+        $stages = $workflow->relationLoaded('stages')
+            ? $workflow->stages
+            : $workflow->stages()->with(ResolveStageApprovers::ordered())->get();
 
         if ($stages->isEmpty()) {
             throw InvalidWorkflowException::hasNoStages($slug);
@@ -247,7 +252,7 @@ final class SubmitForApproval
     private function guardAgainstOpenRequest(Model $approvable): void
     {
         /** @var ApprovalRequest|null $open */
-        $open = ApprovalRequest::query()
+        $open = ApprovalModels::request()::query()
             ->forApprovable($approvable)
             ->unresolved()
             ->first();

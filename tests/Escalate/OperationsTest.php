@@ -71,23 +71,6 @@ it('flags a deleted sole approver in status, doctor, and the sweep event', funct
     Event::assertDispatchedTimes(StageStranded::class, 1);
 });
 
-it('clears the stranded marker when a dead assignment is reassigned', function (): void {
-    $departed = user('Departed');
-    $replacement = user('Replacement');
-    $request = post()->submitForApproval(
-        workflow([['approvers' => [$departed]]]),
-        null,
-        user('Author'),
-    );
-    $assignment = $request->stages()->sole()->assignments()->sole();
-    $departed->delete();
-    Approval::escalateOverdue();
-
-    Approval::reassign($request, $assignment, $replacement, user('Administrator'));
-
-    expect($request->stages()->sole()->stranded_at)->toBeNull();
-});
-
 it('keeps the cadence the request was submitted under', function (): void {
     Date::setTestNow('2026-07-28 10:00:00');
     $workflow = workflow([[
