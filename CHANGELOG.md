@@ -7,41 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Upgrade note:** standing delegations need a second migration. Run
-`php artisan vendor:publish --tag="approval-migrations"` and then
-`php artisan migrate`. Until it has run, the rest of the engine works as it did
-in 1.0, and `Approval::grantDelegation()` throws an exception that says what to
-run. A config published for 1.0 keeps booting; the new keys fall back to their
+## [1.1.0] - 2026-10-24
+
+Standing delegations, inline workflows, and swappable models. Apps built on
+1.0 keep working without changes.
+
+### Upgrade
+
+Standing delegations need a second migration. Publish and run it:
+
+```bash
+php artisan vendor:publish --tag="approval-migrations"
+php artisan migrate
+```
+
+Until you run it, everything else works as it did in 1.0, and
+`Approval::grantDelegation()` throws an exception that names these commands.
+A config file published for 1.0 still boots, and the new keys use their
 defaults.
 
 ### Added
 
-- **Standing delegations.** `Approval::grantDelegation($approver, $deputy, $from,
-  $until)` routes the approver's undecided assignments to the deputy for a
-  window of time, and `Approval::revokeDelegation()` ends it early. Assignments
-  move when the delegation is granted or revoked and when a stage becomes
-  active. Schedule `approval:delegations` to move them when a window opens or
-  closes later. Each move is recorded in the request's audit trail as
-  `delegated` or `delegation_ended`. Returned assignments fire
-  `DelegationEnded`, which notifies the approver when notifications are on.
+- **Standing delegations.** `Approval::grantDelegation($approver, $deputy,
+  $from, $until)` moves the approver's undecided assignments to the deputy for
+  a time window. `Approval::revokeDelegation()` ends a delegation early, and
+  `Approval::delegationsFrom()` lists an approver's delegations. The package
+  moves assignments when you grant or revoke a delegation and when a stage
+  becomes active. To move them when a window opens or closes later, schedule
+  `approval:delegations`. The audit trail records each move as `delegated` or
+  `delegation_ended`. When an assignment returns to the approver, the package
+  fires `DelegationEnded`, which notifies the approver if notifications are on.
+  `ApprovalFake` records grants, revocations, and runs of `applyDelegations()`.
 - **Inline workflows.** `submit()`, `submitForApproval()`, `workflowFor()`, and
-  `reviseAndResubmit()` accept a `WorkflowDefinition` or `WorkflowBuilder`. The
-  definition is snapshotted like a stored workflow, and the request records no
-  `workflow_id`. Inline definitions cannot carry `settings`.
-- **Swappable models.** `approval.model_classes` names a subclass for any
-  package model, keyed like `approval.table_names`. The package models are no
-  longer `final`.
-- **`approval.approvable_key_type`** sets the type of `approvable_id` in the
-  first migration, so UUID, ULID, and string-keyed approvables no longer need a
-  hand-edited migration.
-- `@pendingApproval` and `@canApprove` Blade directives, and a section in
-  `php artisan about`.
+  `reviseAndResubmit()` accept a `WorkflowDefinition` or a `WorkflowBuilder`.
+  The package snapshots an inline definition the same way it snapshots a
+  stored workflow, and the request has no `workflow_id`. An inline definition
+  cannot have `settings`.
+- **Swappable models.** `approval.model_classes` sets your own subclass for any
+  package model, with the same keys as `approval.table_names`. Each class must
+  extend the model it replaces. The package models are no longer `final`.
+- **`approval.approvable_key_type`.** This key sets the type of the
+  `approvable_id` column in the first migration to `int`, `uuid`, `ulid`, or
+  `string`. Apps with non-integer keys no longer need to edit the migration.
+- The `@pendingApproval` and `@canApprove` Blade directives.
+- A `Laravel Approval` section in `php artisan about`.
 
 ### Changed
 
-- A missing key in `approval.table_names` now falls back to its default instead
-  of refusing to boot, so a config published before a table existed still
-  boots. A key that is present must still name a table.
+- A missing key in `approval.table_names` now uses its default table name
+  instead of failing at boot. A key that is present must still name a table.
+- `InvalidConfigurationException::invalidKeyType()` replaces
+  `invalidUserKeyType()`, and `missingTableNames()` is removed. The package
+  throws these exceptions itself, so only code that calls the factories
+  directly needs a change.
 
 ## [1.0.0] - 2026-08-01
 
@@ -129,5 +147,6 @@ First release. The complete approval engine and its installation schema.
   `workbench/README.md`. Development tooling only — it is excluded from the
   Composer dist archive and is not covered by CI.
 
-[Unreleased]: https://github.com/byrcsc/laravel-approval/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/byrcsc/laravel-approval/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/byrcsc/laravel-approval/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/byrcsc/laravel-approval/releases/tag/v1.0.0
